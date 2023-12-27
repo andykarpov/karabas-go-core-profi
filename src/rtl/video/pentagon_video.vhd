@@ -9,9 +9,9 @@ use IEEE.std_logic_unsigned.all;
 
 entity pentagon_video is
 	port (
-		CLK2X 	: in std_logic; -- 28 MHz
-		CLK		: in std_logic; -- 14 MHz
-		ENA		: in std_logic; -- 7 MHz 
+		CLK_BUS 	: in std_logic; -- 28 MHz
+		ENA_14	: in std_logic; -- 14 MHz
+		ENA_7		: in std_logic; -- 7 MHz 
 		BORDER	: in std_logic_vector(2 downto 0);	-- bordr color (port #xxFE)
 		DI			: in std_logic_vector(7 downto 0);	-- video data from memory
 		TURBO 	: in std_logic_vector := "00"; -- 01 = turbo 2x mode, 10 - turbo 4x mode, 11 - turbo 8x mode, 00 = normal mode
@@ -31,10 +31,9 @@ entity pentagon_video is
 		BLINK 	: out std_logic;
 		SCREEN_MODE : in std_logic_vector(1 downto 0) := "00"; -- screen mode: 00 = pentagon, 01 - 128 classic, 10, 11 - reserver
 		COUNT_BLOCK : out std_logic;
-		
-		-- sram vram
-		VBUS_MODE : in std_logic := '0'; -- 1 = video bus, 2 = cpu bus
-		VID_RD : in std_logic -- 1 = read attribute, 0 = read pixel data
+
+		VID_AT : out std_logic;
+		VID_RD : out std_logic 
 	);
 end entity;
 
@@ -67,15 +66,17 @@ architecture rtl of pentagon_video is
 	signal VIDEO_I 	: std_logic;	
 		
 	signal int_sig : std_logic;
+	
+	signal cnt_vread : std_logic_vector(3 downto 0) := "0000";
 		
 begin
 
 	-- sync, counters
-	process( CLK2X, CLK, ENA, chr_col_cnt, hor_cnt, chr_row_cnt, ver_cnt, TURBO, INTA)
+	process( CLK_BUS, ENA_14, ENA_7, chr_col_cnt, hor_cnt, chr_row_cnt, ver_cnt, TURBO, INTA)
 	begin
-		if CLK2X'event and CLK2X = '1' then
+		if rising_edge(CLK_BUS) then
 		
-			if CLK = '1' and ENA = '1' then
+			if ENA_14 = '1' and ENA_7 = '1' then
 			
 				if chr_col_cnt = 7 then
 				
@@ -179,10 +180,10 @@ begin
 	end process;
 
 	-- r/g/b/i
-	process( CLK2X, CLK, ENA, paper_r, shift_r, attr_r, invert, blank_r, BORDER )
+	process( CLK_BUS, ENA_14, ENA_7, paper_r, shift_r, attr_r, invert, blank_r, BORDER )
 	begin
-		if CLK2X'event and CLK2X = '1' then
-		if CLK = '1' and ENA = '1' then
+		if rising_edge(CLK_BUS) then
+		if ENA_14 = '1' and ENA_7 = '1' then
 			if paper_r = '0' then -- paper
 					-- standard RGB
 					if( shift_r(7) xor ( attr_r(7) and invert(4) ) ) = '1' then -- fg pixel
@@ -215,11 +216,11 @@ begin
 	end process;
 
 	-- paper, blank
-	process( CLK2X, CLK, ENA, chr_col_cnt, hor_cnt, ver_cnt, shift_hr_r, attr, bitmap, paper, shift_r )
+	process( CLK_BUS, ENA_14, ENA_7, chr_col_cnt, hor_cnt, ver_cnt, shift_hr_r, attr, bitmap, paper, shift_r )
 	begin
-		if CLK2X'event and CLK2X = '1' then
-			if CLK = '1' then		
-				if ENA = '1' then
+		if rising_edge(CLK_BUS) then
+			if ENA_14 = '1' then		
+				if ENA_7 = '1' then
 					if chr_col_cnt = 7 then
 						-- PENTAGON blank
 						if SCREEN_MODE = "00" and ((hor_cnt(5 downto 0) > 38 and hor_cnt(5 downto 0) < 48) or ((ver_cnt(5 downto 1) = 15 and MODE60 = '0') or (ver_cnt(5 downto 1) = 14 and MODE60 = '1'))) then	-- 15 = for 320 lines, 13 = for 264 lines
@@ -238,13 +239,13 @@ begin
 	end process;	
 	
 	-- bitmap shift registers
-	process( CLK2X, CLK, ENA, chr_col_cnt, hor_cnt, ver_cnt, shift_hr_r, attr, bitmap, paper, shift_r )
+	process( CLK_BUS, ENA_14, ENA_7, chr_col_cnt, hor_cnt, ver_cnt, shift_hr_r, attr, bitmap, paper, shift_r )
 	begin
-		if CLK2X'event and CLK2X = '1' then
+		if rising_edge(CLK_BUS) then
 
-			if CLK = '1' then
+			if ENA_14 = '1' then
 					-- standard shift register 
-					if ENA = '1' then
+					if ENA_7 = '1' then
 						if chr_col_cnt = 7 then
 							attr_r <= attr;
 							shift_r <= bitmap;
@@ -258,26 +259,28 @@ begin
 	end process;
 	
 	-- video mem read cycle
-	process (CLK2X, CLK, chr_col_cnt, VBUS_MODE, VID_RD)
+	process (CLK_BUS, ENA_14, chr_col_cnt)
 	begin 
-		if (CLK2X'event and CLK2X = '1') then 
-			if (chr_col_cnt(0) = '1' and CLK = '0') then
-				if VBUS_MODE = '1' then
-					if VID_RD = '0' then 
-						bitmap <= DI;
-					else 
-						attr <= DI;
-					end if;
-				end if;
+		if rising_edge(CLK_BUS) then 
+			VID_RD <= '0';
+			VID_AT <= '0';
+			if (ENA_14 = '0') then
+				case chr_col_cnt is
+					when "000" => VID_RD <= '1'; A <= std_logic_vector( '0' & ver_cnt(4 downto 3) & chr_row_cnt & ver_cnt(2 downto 0) & hor_cnt(4 downto 0));
+					when "001" => VID_RD <= '0'; bitmap <= DI;
+					when "010" => VID_AT <= '1'; VID_RD <= '1'; A <= std_logic_vector( '0' & "110" & ver_cnt(4 downto 0) & hor_cnt(4 downto 0));
+					when "011" => VID_RD <= '0'; attr <= DI;
+					when others => VID_RD <= '0';
+				end case;
 			end if;
 		end if;
 	end process;
 	
-	A <= 
-		-- data address
-		std_logic_vector( '0' & ver_cnt(4 downto 3) & chr_row_cnt & ver_cnt(2 downto 0) & hor_cnt(4 downto 0)) when VBUS_MODE = '1' and VID_RD = '0' else 
-		-- standard attribute address
-		std_logic_vector( '0' & "110" & ver_cnt(4 downto 0) & hor_cnt(4 downto 0));
+--	A <= 
+--		-- data address
+--		std_logic_vector( '0' & ver_cnt(4 downto 3) & chr_row_cnt & ver_cnt(2 downto 0) & hor_cnt(4 downto 0)) when VBUS_MODE = '1' and VID_RD = '0' else 
+--		-- standard attribute address
+--		std_logic_vector( '0' & "110" & ver_cnt(4 downto 0) & hor_cnt(4 downto 0));
 	
 	paper <= '0' when hor_cnt(5) = '0' and ver_cnt(5) = '0' and ( ver_cnt(4) = '0' or ver_cnt(3) = '0' ) else '1';
 	

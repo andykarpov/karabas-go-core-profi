@@ -9,9 +9,9 @@ use IEEE.std_logic_unsigned.all;
 
 entity video is
 	port (
-		CLK2X 	: in std_logic; -- 28 MHz
-		CLK		: in std_logic; -- 14 MHz
-		ENA		: in std_logic; -- 7 MHz 
+		CLK_BUS 	: in std_logic; -- 28 MHz
+		ENA_14	: in std_logic; -- 14 MHz
+		ENA_7		: in std_logic; -- 7 MHz 
 		RESET 	: in std_logic := '0';
 
 		BORDER	: in std_logic_vector(7 downto 0);	-- bordr color (port #xxFE)
@@ -46,9 +46,8 @@ entity video is
 		ISPAPER : out std_logic;
 		BLINK : out std_logic;
 		
-		-- sram vram
-		VBUS_MODE : in std_logic := '0'; -- 1 = video bus, 2 = cpu bus
-		VID_RD : in std_logic -- 1 = read attribute, 0 = read pixel data
+		VID_AT : out std_logic;
+		VID_RD : out std_logic
 	);
 end entity;
 
@@ -101,14 +100,19 @@ architecture rtl of video is
 	signal hcnt_spec : std_logic_vector(9 downto 0);
 	signal vcnt_spec : std_logic_vector(8 downto 0);
 	signal ispaper_spec : std_logic;
+	
+	signal vid_at_profi : std_logic;
+	signal vid_rd_profi : std_logic;
+	signal vid_at_spec : std_logic;
+	signal vid_rd_spec : std_logic;
 
 begin
 
 	U_PENT: entity work.pentagon_video 
 	port map (
-		CLK => CLK, -- 14
-		CLK2x => CLK2x, -- 28
-		ENA => ENA, -- 7
+		CLK_BUS => CLK_BUS, -- 28
+		ENA_14 => ENA_14, -- 14
+		ENA_7 => ENA_7, -- 7
 		BORDER => BORDER(2 downto 0),
 		DI => DI,
 		TURBO => TURBO,
@@ -132,17 +136,17 @@ begin
 		
 		SCREEN_MODE => SCREEN_MODE,
 		
-		VBUS_MODE => VBUS_MODE,
-		VID_RD => VID_RD,
+		VID_AT => VID_AT_spec,
+		VID_RD => VID_RD_spec,
 		
 		COUNT_BLOCK => COUNT_BLOCK
 	);
 
 	U_PROFI: entity work.profi_video 
 	port map (
-		CLK => CLK, -- 14
-		CLK2x => CLK2x, -- 28
-		ENA => ENA, -- 7
+		CLK_BUS => CLK_BUS, -- 28
+		ENA_14 => ENA_14, -- 14
+		ENA_7 => ENA_7, -- 7
 		TURBO => TURBO,
 		BORDER => BORDER(3 downto 0),
 		DI => DI,
@@ -165,8 +169,8 @@ begin
 		VCNT => vcnt_profi,
 		ISPAPER => ispaper_profi,
 		
-		VBUS_MODE => VBUS_MODE,
-		VID_RD => VID_RD
+		VID_AT => VID_AT_profi,
+		VID_RD => VID_RD_profi
 	);
 
 	A <= vid_a_profi when ds80 = '1' else vid_a_spec;
@@ -186,15 +190,18 @@ begin
 	ATTR_O <= attr_o_profi when ds80 = '1' else attr_o_spec;
 	pFF_CS <= pFF_CS_profi when ds80 = '1' else pFF_CS_spec;
 	
-	-- Палитра profi:
+	VID_AT <= vid_at_profi when ds80 = '1' else vid_at_spec;
+	VID_RD <= vid_rd_profi when ds80 = '1' else vid_rd_spec;
+	
+	--  profi:
 
-	-- 1) палитра - это память на 16 ячеек. каждая ячейка - 8-битное значение цвета в виде GGGRRRBB
-	-- 2) в палитру пишется инвертированное значение старшей половины адреса ША по адресу, заданному в порту #FE (тоже инвертированное значение)
-	-- 3) строб записи по схеме формируется при обращении к порту палитры #7E в режиме DS80
-	-- 4) при чтении адресом выступает код цвета от видеоконтроллера - YGRB
+	-- 1)  -    16 .   - 8-     GGGRRRBB
+	-- 2)           ,    #FE (  )
+	-- 3)           #7E   DS80
+	-- 4)         - YGRB
 			
-	-- запись палитры
-	process(CLK2x, CLK, reset, palette_wr, palette_a, palette_wr_data, palette)
+	--  
+	process(CLK_BUS, ENA_14, ENA_7, reset, palette_wr, palette_a, palette_wr_data, palette)
 	begin
 		if reset = '1' then 
 			-- set default palette on reset
@@ -202,8 +209,8 @@ begin
 				0 => "000000000", 1 => "000000100", 2 =>  "000100000", 3 =>  "000100100", 4 =>  "100000000", 5 =>  "100000100", 6 =>  "100100000", 7 =>  "100100100",
 				8 => "000000000", 9 => "000000110", 10 => "000110000", 11 => "000110110", 12 => "110000000", 13 => "110000110", 14 => "110110000", 15 => "110110110"
 			);
-		elsif rising_edge(CLK2x) then 
-			if CLK = '1' and palette_wr = '1' then
+		elsif rising_edge(CLK_BUS) then 
+			if ENA_14 = '1' and palette_wr = '1' then
 					palette(to_integer(unsigned(BORDER(3 downto 0) xor X"F"))) <= (not BUS_A) & BORDER(7);
 			end if;
 		end if;
@@ -212,14 +219,14 @@ begin
 	palette_a <= i & rgb(1) & rgb(2) & rgb(0);
    palette_wr <= '1' when CS7E = '1' and BUS_WR_N = '0' and ds80 = '1' and reset = '0' else '0';
 
-	-- чтение из палитры
+	--   
 	palette_grb <= palette(to_integer(unsigned(palette_a)));
 	
-	-- возвращаем наверх (top level) значение младшего разряда зеленого компонента палитры, это служит для отпределения наличия палитры в системе
+	--   (top level)      ,        
 	GX0 <= palette_grb(6) xor palette_grb(0) when ds80 = '1' else '1';
 	
-	-- применяем blank для профи, ибо в видеоконтроллере он после палитры
-	process(CLK2x, CLK, blank_profi, palette_grb, ds80) 
+	--  blank  ,      
+	process(CLK_BUS, ENA_14, blank_profi, palette_grb, ds80) 
 	begin 
 		if (blank_profi = '1' and ds80='1') then
 			palette_grb_reg <= (others => '0');

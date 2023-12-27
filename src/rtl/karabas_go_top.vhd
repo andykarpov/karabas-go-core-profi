@@ -301,24 +301,18 @@ signal saa_out_l		: std_logic_vector(7 downto 0);
 signal saa_out_r		: std_logic_vector(7 downto 0);
 
 -- CLOCK
-signal clk_112			: std_logic := '0';
-signal clk_84 			: std_logic := '0';
-signal clk_72 			: std_logic := '0';
 signal clk_28 			: std_logic := '0';
 signal clk_24 			: std_logic := '0';
 signal clk_16 			: std_logic := '0';
 signal clk_8			: std_logic := '0';
 signal clk_bus			: std_logic := '0';
-signal clk_div2		: std_logic := '0';
-signal clk_div4		: std_logic := '0';
-signal clk_div8		: std_logic := '0';
-signal clk_div16		: std_logic := '0';
-signal clk_i2s 		: std_logic := '0';
+signal clk_vid 		: std_logic := '0';
 
 signal ena_div2	: std_logic := '0';
 signal ena_div4	: std_logic := '0';
 signal ena_div8	: std_logic := '0';
 signal ena_div16	: std_logic := '0';
+signal ena_cpu 	: std_logic := '0';
 signal ena_cnt		: std_logic_vector(3 downto 0) := "0000";
 
 -- System
@@ -326,16 +320,14 @@ signal reset			: std_logic;
 signal areset			: std_logic;
 signal locked_tri 	: std_logic := '0';
 signal dos_act			: std_logic := '1';
-signal clk_cpu			: std_logic;
 signal selector		: std_logic_vector(7 downto 0);
 signal mux				: std_logic_vector(3 downto 0);
 signal speaker 		: std_logic := '0';
 signal ram_ext 		: std_logic_vector(2 downto 0) := "000";
 signal ram_do_bus 	: std_logic_vector(7 downto 0);
 signal ram_oe_n 		: std_logic := '1';
-signal vbus_mode 		: std_logic := '0';
 signal vid_rd 			: std_logic := '0';
-signal vid_rd2 		: std_logic := '0';
+signal vid_at 			: std_logic := '0';
 signal ext_rom_bank  : std_logic_vector(1 downto 0) := "00";
 signal ext_rom_bank_pq	: std_logic_vector(1 downto 0) := "00";
 signal max_turbo 		: std_logic_vector(1 downto 0) := "11";
@@ -484,7 +476,7 @@ port map (
 	CLK_OUT1			=> clk_28,
 	CLK_OUT2 		=> clk_24,
 	CLK_OUT3 		=> clk_16,
-	LOCKED			=> open
+	LOCKED			=> locked_tri
 	);
 	
 -- clock switch
@@ -500,8 +492,8 @@ port map (
 U3: entity work.T80a
 port map (
 	RESET_n			=> cpu_reset_n,
-	CLK_n				=> clk_cpu,
-	CEN				=> '1',
+	CLK_n				=> clk_bus,
+	CEN				=> ena_cpu,
 	WAIT_n			=> cpu_wait_n,
 	INT_n				=> cpu_int_n and serial_ms_int,
 	NMI_n				=> cpu_nmi_n,
@@ -522,9 +514,10 @@ port map (
 -- memory manager
 U4: entity work.memory 
 port map ( 
-	CLK2X 			=> clk_bus,
-	CLKX 				=> clk_div2,
-	CLK_CPU 			=> clk_cpu,
+	CLK 				=> clk_bus,
+	ENA_14			=> ena_div2,
+	ENA_7 			=> ena_div4,
+	CHR0				=> vid_hcnt(0),
 	-- cpu signals
 	A 					=> cpu_a_bus,
 	D 					=> cpu_do_bus,
@@ -559,10 +552,8 @@ port map (
 	VA 				=> vid_a_bus,
 	VID_PAGE 		=> port_7ffd_reg(3), -- seg A0 - seg A2
 	VID_DO 			=> vid_do_bus,
-	
-	-- sram vram
-	VBUS_MODE_O 	=> vbus_mode, 	-- video bus mode: 0 - ram, 1 - vram
-	VID_RD_O 		=> vid_rd, 		-- read attribute or pixel	
+	VID_RD   		=> vid_rd,
+	VID_AT 			=> vid_at,
 
 	DS80 				=> ds80,
 	CPM 				=> cpm,
@@ -589,9 +580,9 @@ port map (
 -- Video Spectrum/Pentagon
 U5: entity work.video
 port map (
-	CLK 				=> clk_div2, 	-- 14 / 12
-	CLK2x 			=> clk_bus, 	-- 28 / 24
-	ENA 				=> clk_div4, 	-- 7 / 6
+	CLK_BUS 			=> clk_bus, 	-- 28 / 24
+	ENA_14 			=> ena_div2, 	-- 14 / 12
+	ENA_7 			=> ena_div4, 	-- 7 / 6
 	RESET 			=> reset,	
 	BORDER 			=> port_xxfe_reg(7 downto 0),
 	DI 				=> vid_do_bus,
@@ -613,8 +604,8 @@ port map (
 	VIDEO_B 			=> vid_rgb(2 downto 0),	
 	HSYNC 			=> vid_hsync,
 	VSYNC 			=> vid_vsync,
-	VBUS_MODE 		=> vbus_mode,
 	VID_RD 			=> vid_rd,
+	VID_AT 			=> vid_at,
 	HCNT 				=> vid_hcnt,
 	VCNT 				=> vid_vcnt,
 	ISPAPER 			=> vid_ispaper,
@@ -627,8 +618,8 @@ port map (
 U6: entity work.overlay
 port map (
 	CLK 				=> clk_bus,
-	CLK2 				=> clk_div2,
-	CLK4 				=> clk_div4,
+	ENA_14 			=> ena_div2,
+	ENA_7 			=> ena_div4,
 	DS80				=> ds80,
 	RGB_I 			=> vid_rgb,
 	RGB_O 			=> vid_rgb_osd,
@@ -651,8 +642,8 @@ port map (
 	RGB_IN 			=> vid_rgb_osd,
 	KSI_IN 			=> vid_vsync,
 	SSI_IN 			=> vid_hsync,
-	CLK 				=> clk_div2,
-	CLK2 				=> clk_bus,
+	ENA_14 			=> ena_div2,
+	CLK_BUS 			=> clk_bus,
 	EN 				=> vid_scandoubler_enable,
 	DS80				=> ds80,		
 	RGB_O(8 downto 6)	=> VGA_R(7 downto 5),
@@ -850,7 +841,7 @@ port map (
 U20: entity work.serial_mouse
 port map(
 	CLK 				=> clk_bus,
-	CLKEN 			=> clk_cpu,
+	CLKEN 			=> ena_cpu,
 	N_RESET 			=> not(reset),
 	A 					=> cpu_a_bus,
 	DI					=> cpu_do_bus,
@@ -935,34 +926,6 @@ ESP_BOOT_N <= 'Z';
 -- clocks
 
 process (clk_bus)
-begin 
-	if (clk_bus'event and clk_bus = '1') then 
-		clk_div2 <= not(clk_div2);
-	end if;
-end process;
-
-process (clk_div2)
-begin 
-	if (clk_div2'event and clk_div2 = '1') then 
-		clk_div4 <= not(clk_div4);
-	end if;
-end process;
-
-process (clk_div4)
-begin 
-	if (clk_div4'event and clk_div4 = '1') then 
-		clk_div8 <= not(clk_div8);
-	end if;
-end process;
-
-process (clk_div8)
-begin 
-	if (clk_div8'event and clk_div8 = '1') then 
-		clk_div16 <= not(clk_div16);
-	end if;
-end process;
-
-process (clk_bus)
 begin
 	if clk_bus'event and clk_bus = '0' then
 		ena_cnt <= ena_cnt + 1;
@@ -977,18 +940,7 @@ ena_div16 <= ena_cnt(3) and ena_cnt(2) and ena_cnt(1) and ena_cnt(0);
 -------------------------------------------------------------------------------
 -- Global signals
 
-process(clk_bus)
-begin
-	if rising_edge(clk_bus) then
-		if (locked_tri = '0') then 
-			locked_tri <= '1';
-			areset <= '1';
-		else 
-			areset <= '0';
-		end if;			
-	end if;
-end process;
-
+areset <= not locked_tri;
 reset <= areset or kb_reset or loader_act; -- hot reset
 
 -- CPU reset
@@ -1008,37 +960,39 @@ cpu_nmi_n <= mapcond when kb_nmi = '1' and divmmc_en = '1' else
 cpu_wait_n <= '1';
 
 -- max turbo = 28 MHz
-max_turbo <= "10";
+max_turbo <= "11";
 
 --OCH: automap = '0' and cs_nemo_ports = '0' - not contend DIVMMC and NEMO ports in CLASSIC screen mode
-clk_cpu <= '0' when kb_pause = '1' or  (kb_screen_mode = "01" and memory_contention = '1' and automap = '0' and cs_nemo_ports = '0' and DS80 = '0') or WAIT_IO = '0' else 
+ena_cpu <= '0' when kb_pause = '1' or  (kb_screen_mode = "01" and memory_contention = '1' and automap = '0' and cs_nemo_ports = '0' and DS80 = '0') else 
 	clk_bus when turbo_mode = "11" and turbo_mode <= max_turbo else 
 --	-- OCH: disable turbo in trdos to be sure what all programming delays are original
 --	-- 06.09.2023:OCH: fixed turbo mode by adding all condition when it can be enabled, i'm not sure about ds80 = 1 but let it be
-	clk_bus and ena_div2 when turbo_mode = "10" and turbo_mode <= max_turbo and (dos_act='0' or DIVMMC_EN = '1' or cpm = '1' or onrom = '1' or ds80 = '1') else 
-	clk_bus and ena_div4 when turbo_mode = "01" and turbo_mode <= max_turbo and (dos_act='0' or DIVMMC_EN = '1' or cpm = '1' or onrom = '1' or ds80 = '1') else 
-	clk_bus and ena_div8;
+	ena_div2 when turbo_mode = "10" and turbo_mode <= max_turbo and (dos_act='0' or DIVMMC_EN = '1' or cpm = '1' or onrom = '1' or ds80 = '1') else 
+	ena_div4 when turbo_mode = "01" and turbo_mode <= max_turbo and (dos_act='0' or DIVMMC_EN = '1' or cpm = '1' or onrom = '1' or ds80 = '1') else 
+	ena_div8;
 
 --  -   /IORQ  400   
 --           
 
-WAIT_IO <= WAIT_C(1);
-WAIT_C_STOP <=WAIT_C(1) and not WAIT_C(0);
-WAIT_EN <= reset or not turbo_mode(1);
-process (ena_div2, cpu_mreq_n, WAIT_EN, WAIT_C_STOP) 	
-	begin					
-		if ena_div2'event and ena_div2='0' then
-			if WAIT_EN = '1' then	
-				WAIT_C <= "11";
-			elsif cpu_mreq_n='1' then
-				WAIT_C <= "11"; --WAIT MREQ = 0
-			elsif WAIT_C_STOP='0' then
-				WAIT_C <= WAIT_C + "01"; --COUNT
-			elsif WAIT_C_STOP='1' then
-				WAIT_C <= WAIT_C; --STOP
-			end if;
-		end if;
-	end process;
+--WAIT_IO <= WAIT_C(1);
+--WAIT_C_STOP <=WAIT_C(1) and not WAIT_C(0);
+--WAIT_EN <= reset or not turbo_mode(1);
+--process (clk_bus, ena_div2, cpu_mreq_n, WAIT_EN, WAIT_C_STOP) 	
+--	begin				
+--		if falling_edge(CLK_BUS) then
+--		if ena_div2='0' then
+--			if WAIT_EN = '1' then	
+--				WAIT_C <= "11";
+--			elsif cpu_mreq_n='1' then
+--				WAIT_C <= "11"; --WAIT MREQ = 0
+--			elsif WAIT_C_STOP='0' then
+--				WAIT_C <= WAIT_C + "01"; --COUNT
+--			elsif WAIT_C_STOP='1' then
+--				WAIT_C <= WAIT_C; --STOP
+--			end if;
+--		end if;
+--		end if;
+--	end process;
 
 -------------------------------------------------------------------------------
 -- SD
@@ -1421,7 +1375,7 @@ port map(
 	DI				=> cpu_do_bus,
 	START			=> zc_spi_start,
 	WR_EN			=> zc_wr_en,
-	CLC     		=> clk_bus, --clk_cpu,
+	CLC     		=> clk_bus, 
 	MISO    		=> SD_DO,
 	DO				=> zc_do_bus,
 	SCK     		=> zc_sclk,

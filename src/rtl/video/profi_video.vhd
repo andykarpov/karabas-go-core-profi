@@ -9,9 +9,9 @@ use IEEE.std_logic_unsigned.all;
 
 entity profi_video is
 	port (
-		CLK2X		: in std_logic; -- 24
-		CLK		: in std_logic; -- 12					
-		ENA		: in std_logic; -- 6
+		CLK_BUS	: in std_logic; -- 24
+		ENA_14	: in std_logic; -- 12					
+		ENA_7		: in std_logic; -- 6
 		TURBO 	: in std_logic_vector := "00";
 		INTA		: in std_logic;
 		INT		: out std_logic;
@@ -30,21 +30,19 @@ entity profi_video is
 		VCNT 		: out std_logic_vector(8 downto 0);	
 		ISPAPER  : out std_logic := '0';
 		DS80 		: in std_logic;
-
-		-- sram vram
-		VBUS_MODE : in std_logic := '0';
-		VID_RD : in std_logic		
+		VID_AT : out std_logic;
+		VID_RD : out std_logic		
 	);
 end entity;
 
 architecture rtl of profi_video is
 -- Profi-CPM screen mode
 	constant pcpm_scr_h			: natural := 512;
-	constant pcpm_brd_right		: natural :=  48;	-- 32 для выравнивания из-за задержки на чтение vid_reg и attr_reg задано на 8 точек больше
+	constant pcpm_brd_right		: natural :=  48;	-- 32   -    vid_reg  attr_reg   8  
 	constant pcpm_blk_front		: natural :=  32; -- 48
 	constant pcpm_sync_h			: natural :=  64; -- 64
 	constant pcpm_blk_back		: natural :=  64; -- 80
-	constant pcpm_brd_left		: natural :=  48;	-- 32 для выравнивания из-за задержки на чтение vid_reg и attr_reg задано на 8 точек меньше
+	constant pcpm_brd_left		: natural :=  48;	-- 32   -    vid_reg  attr_reg   8  
 
 	constant pcpm_scr_v			: natural := 240;
 	constant pcpm_brd_bot		: natural :=  16;--16
@@ -108,10 +106,10 @@ architecture rtl of profi_video is
 begin
 
 -- sync, counters
-process (CLK2X, CLK)
+process (CLK_BUS, ENA_14)
 begin
-	if (CLK2X'event and CLK2X = '1') then
-			if (CLK = '1') then		-- 12MHz			
+	if rising_edge(CLK_BUS) then
+			if (ENA_14 = '1') then		-- 12MHz			
 				if (h_cnt = pcpm_h_end) then
 					h_cnt <= (others => '0');
 				else
@@ -157,10 +155,10 @@ begin
 end process;
 
 -- pixel / attr registers
-process( CLK2X, CLK, h_cnt )
+process( CLK_BUS, ENA_14, h_cnt )
 	begin
-		if CLK2X'event and CLK2X = '1' then
-			if CLK = '1' then
+		if rising_edge(CLK_BUS) then
+			if ENA_14 = '1' then
 				if h_cnt(2 downto 0) = 7 then
 					pixel_reg <= vid_reg;
 					attr_reg <= at_reg;
@@ -172,27 +170,27 @@ process( CLK2X, CLK, h_cnt )
 	end process;
 
 -- memory read
-process(CLK2X, CLK, ENA, h_cnt, VBUS_MODE, VID_RD)
+process(CLK_BUS, ENA_14, ENA_7, h_cnt)
 begin
-	if CLK2X'event and CLK2X='1' then 
-		if (CLK = '0' and h_cnt(2 downto 0) < 7) then -- 12 mhz falling edge
-			if (VBUS_MODE = '1') then
-				if VID_RD = '0' then 
-					vid_reg <= DI;
-				else 
-					at_reg <= DI;
-				end if;
-			end if;				
+	if rising_edge(CLK_BUS) then 
+		VID_RD <= '0';
+		VID_AT <= '0';
+		if (ENA_14 = '0') then -- 12 mhz falling edge
+			case h_cnt(2 downto 0) is
+				when "000" => VID_RD <= '1'; A <= std_logic_vector((not h_cnt(3)) & v_cnt(7 downto 6)) & std_logic_vector(v_cnt(2 downto 0)) & std_logic_vector(v_cnt(5 downto 3)) & std_logic_vector(h_cnt(8 downto 4));
+				when "001" => VID_RD <= '0'; vid_reg <= DI;
+				when "010" => VID_AT <= '1'; VID_RD <= '1'; A <= std_logic_vector((not h_cnt(3)) & v_cnt(7 downto 6)) & std_logic_vector(v_cnt(2 downto 0)) & std_logic_vector(v_cnt(5 downto 3)) & std_logic_vector(h_cnt(8 downto 4));
+				when "011" => VID_RD <= '0'; at_reg <= DI;
+				when others => VID_RD <= '0';
+			end case;
 		end if;
 	end if;
 end process;
 
-A <= std_logic_vector((not h_cnt(3)) & v_cnt(7 downto 6)) & std_logic_vector(v_cnt(2 downto 0)) & std_logic_vector(v_cnt(5 downto 3)) & std_logic_vector(h_cnt(8 downto 4));		
-
-process (CLK2X, CLK, blank_sig, paper1, pixel_reg, h_cnt, attr_reg, BORDER)
+process (CLK_BUS, ENA_14, blank_sig, paper1, pixel_reg, h_cnt, attr_reg, BORDER)
 begin 
-	if CLK2X'event and CLK2X='1' then 
-		if CLK = '1' then
+	if rising_edge(CLK_BUS) then 
+		if ENA_14 = '1' then
 			if (blank1 = '1') then 
 				rgbi <= "0000";
 			elsif paper1 = '1' and (pixel_reg(7 - to_integer(h_cnt(2 downto 0)))) = '0' then 

@@ -31,8 +31,8 @@ RGB_IN 		: in std_logic_vector(8 downto 0); -- RRRGGGBBB
 DS80			: in std_logic := '0';
 KSI_IN      : in std_logic := '1'; --  
 SSI_IN      : in std_logic := '1'; --  
-CLK         : in std_logic := '1'; --    14 / 12 
-CLK2       	: in std_logic := '1'; --  CLK
+ENA_14      : in std_logic := '1'; --    14 / 12 
+CLK_BUS     : in std_logic := '1'; --  28/24
 EN 			: in std_logic := '1'; --       
                                       
 --------------------------------------------------------------------------------
@@ -170,7 +170,7 @@ begin
 --    ,   .
 --    
 --------------------------------------------------------------------------------
-RGBI_CLK <= not CLK2 when inverse_f else CLK2; --   
+RGBI_CLK <= not CLK_BUS when inverse_f else CLK_BUS; --   
 --------------------------------------------------------------------------------
 process (RGBI_CLK, RGB_IN)   
 begin
@@ -182,16 +182,18 @@ end process;
 --------------------------------------------------------------------------------
 --                              091223  --
 --------------------------------------------------------------------------------
-process (CLK, SSI_IN, SSI)
+process (CLK_BUS, ENA_14, SSI_IN, SSI)
 begin
 
-  if (rising_edge(CLK)) then  --    ,   0  1
+  if (rising_edge(CLK_BUS)) then  --    ,   0  1
+	 if ENA_14 = '1' then
 		if (inverse_ssi) then
 			SSI   <= not SSI_IN;
 		else 
 			SSI   <= SSI_IN;
 		end if;
       SSI_2 <= not SSI;       --     
+	 end if;
   end if;
 end process;
 
@@ -219,7 +221,7 @@ VIDEO_V_CLK <= (VIDEO_H(8) or VIDEO_H(9));
 --------------------------------------------------------------------------------
 --                                  091220  --
 --------------------------------------------------------------------------------
-process (CLK, DS80, RESET_H, RESET_ZONE, VGA_H_MAX, VGA_H, VIDEO_H)
+process (CLK_BUS, ENA_14, DS80, RESET_H, RESET_ZONE, VGA_H_MAX, VGA_H, VIDEO_H)
 begin  
   --     VGA 
   if (DS80 = '0') then
@@ -228,7 +230,8 @@ begin
 	   VGA_H_MAX <= "101111111"; -- 383 (767/2) profi
   end if;
 
-  if (falling_edge(CLK)) then          -- ,    :
+  if (rising_edge(CLK_BUS)) then          -- ,    :
+	if ENA_14 = '0' then
 
     --           -:
     --      
@@ -248,8 +251,8 @@ begin
         VIDEO_H <= (others => '0');    --    VGA
       else
         VIDEO_H <= VIDEO_H + 1;        --  -   
-      end if;    
-
+      end if;  
+	 end if;
    end if;   
   end if;   
 end process;
@@ -430,7 +433,7 @@ VGA_KGI  <= '0' when (VGA_V <= VGA_KGI1_END)
 LINEBUF: entity work.linebuf
 port map (
 	addra => VIDEO_V(0) & VIDEO_H(9 downto 0),
-	clka 	 => CLK2,
+	clka 	 => CLK_BUS,
 	dina 	 => RGB,
 	wea 	 => "1",
 	
@@ -449,9 +452,10 @@ end process;
 --------------------------------------------------------------------------------
 --      
 
-process (CLK, VGA_KGI, VGA_SGI, VGA_KSI, VGA_SSI, EN) 
+process (CLK_BUS, ENA_14, VGA_KGI, VGA_SGI, VGA_KSI, VGA_SSI, EN) 
 begin
-if (rising_edge(CLK)) then  --    ,   0  1
+if (rising_edge(CLK_BUS)) then  --    ,   0  1
+	if ENA_14 = '1' then
       --    VGA
       VGA_BLANK   <= VGA_KGI and VGA_SGI;
 
@@ -462,11 +466,12 @@ if (rising_edge(CLK)) then  --    ,   0  1
 			VSYNC_VGA <= KSI_IN;
 			HSYNC_VGA <= SSI_IN xor (not KSI_IN);
 		end if;
+	end if;
   end if;
 end process;
 
 --      
-VGA_RBGI_CLK <= CLK2; 
+VGA_RBGI_CLK <= CLK_BUS; 
       
 --------------------------------------------------------------------------------
 --                       RGBI   VGA                      091024  --
