@@ -1,21 +1,19 @@
 {
     "id": "profi",
-    "name": "Profi 1024",
-    "build": "23122422",
+    "name": "Profi Debug",
+    "build": "24011522",
     "bitstream": "karabas_go.bin",
     "visible": true,
     "type": "osd",
     "order": 2,
-    "eeprom_bank": 0,
+    "eeprom_bank": 1,
     "roms": [
-        {"filename": "roms/ROMain_fatall_ramdisk_D.rom", "address": 1048576},
-        {"filename": "roms/bios_pqdos.rom", "address": 1114112},
-        {"filename": "roms/FDImage.rom", "address": 1179648},
-        {"filename": "roms/DiagROM.v50", "address": 1245184},
+        {"filename": "roms/DiagROM.v50", "address": 1048576},
+        {"filename": "roms/ROMain_fatall_ramdisk_D.rom", "address": 1114112},
         {"filename": "roms/esxdos089.bin", "address": 1310720}
     ],
     "osd": [
-        {"type": "S", "bits": 2, "name": "Rombank", "options": ["Default", "PQ-DOS", "FDImage", "DiagROM"], "default": 0, "hotkey": "Menu+F1"},
+        {"type": "S", "bits": 2, "name": "Rombank", "options": ["DIAGROM", "ROMAIN"], "default": 0, "hotkey": "Menu+F1"},
         {"type": "S", "bits": 1, "name": "TurboFDC", "options": ["Off", "On"], "default": 0, "hotkey": "Menu+F5"},
         {"type": "S", "bits": 1, "name": "Covox", "options": ["Off", "On"], "default": 0, "hotkey": "Menu+F6"},
         {"type": "S", "bits": 2, "name": "PSG Mix", "options": ["ABC", "ACB", "Mono"], "default": 0, "hotkey": "Menu+F7"},

@@ -9,6 +9,9 @@ use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.STD_LOGIC_ARITH.ALL;
 use IEEE.STD_LOGIC_UNSIGNED.ALL;
 
+library unisim;
+use unisim.vcomponents.all;
+
 entity divmmc is
 port (
 	I_CLK				 : in std_logic;
@@ -160,7 +163,15 @@ begin
 	end if;
 end process;
 
-O_SCLK  <= I_CLK and not cnt(3);
+U_SCK : BUFGMUX_1
+port map (
+ I0      => I_CLK,
+ I1      => '0',
+ O       => O_SCLK,
+ S       => cnt(3)
+);
+
+--O_SCLK  <= I_CLK and not cnt(3);
 O_MOSI  <= shift_out(7);
 O_DATA  <= shift_in;
 

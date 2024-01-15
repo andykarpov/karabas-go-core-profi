@@ -1,7 +1,7 @@
 ##############################################################
 #
 # Xilinx Core Generator version 14.7
-# Date: Sat Dec  2 13:43:20 2023
+# Date: Thu Jan  4 14:28:19 2024
 #
 ##############################################################
 #
@@ -52,7 +52,7 @@ CSET buser_width=1
 CSET clock_enable_type=Slave_Interface_Clock_Enable
 CSET clock_type_axi=Common_Clock
 CSET component_name=queue
-CSET data_count=false
+CSET data_count=true
 CSET data_count_width=9
 CSET disable_timing_violations=false
 CSET disable_timing_violations_axi=false
@@ -210,4 +210,4 @@ CSET wuser_width=1
 MISC pkg_timestamp=2012-11-19T12:39:56Z
 # END Extra information
 GENERATE
-# CRC: 5652df74
+# CRC: 5027953b

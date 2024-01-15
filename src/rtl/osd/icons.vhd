@@ -6,8 +6,7 @@ use IEEE.std_logic_unsigned.all;
 entity icons is
 	port (
 		CLK		: in std_logic;
-		ENA_14 	: in std_logic;
-		ENA_7 	: in std_logic;
+		ENA2 		: in std_logic;
 		RGB_I 	: in std_logic_vector(8 downto 0);
 		RGB_O 	: out std_logic_vector(8 downto 0);
 		DS80		: in std_logic;
@@ -108,10 +107,10 @@ begin
 	 icon_addr <= icon_y(3) & icon_pos &  not(icon_x(3)) & icon_y(2 downto 0) & icon_x(2 downto 0) when DS80='1' else 
 					  icon_y(3) & icon_pos &  icon_x(3) & icon_y(2 downto 0) & icon_x(2 downto 0); --spectrum pos shifter 8 px
 
-	 process(CLK, ENA_14, STATUS_FD, STATUS_SD, STATUS_CF)
+	 process(CLK, ENA2, STATUS_FD, STATUS_SD, STATUS_CF)
 	 begin 
 		if (rising_edge(CLK)) then
-			if (ENA_14 = '0') then
+			if (ENA2 = '1') then
 				if (STATUS_FD = '1') then 
 					cnt_icon_fd <= (others => '0');
 				elsif (cnt_icon_fd < "111111111111111111111") then 

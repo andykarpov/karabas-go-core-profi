@@ -6,8 +6,8 @@ use IEEE.std_logic_unsigned.all;
 entity overlay is
 	port (
 		CLK		: in std_logic;
-		ENA_14 	: in std_logic;
-		ENA_7 	: in std_logic;
+		CLK2 		: in std_logic;
+		ENA2		: in std_logic;
 		RGB_I 	: in std_logic_vector(8 downto 0);
 		RGB_O 	: out std_logic_vector(8 downto 0);
 		DS80		: in std_logic;
@@ -75,15 +75,14 @@ begin
 	 U_FONT: entity work.rom_font
     port map (
         addra  => rom_addr,
-        clka   => CLK and ENA_14,
+        clka   => CLK2,
         douta  => font_word
     );
 
 	 U_ICONS: entity work.icons
     port map (
 		CLK		=> CLK,
-		ENA_14 	=> CLK and ENA_14,
-		ENA_7 	=> CLK and ENA_7,
+		ENA2  => ENA2,
 		RGB_I 	=> RGB_I,
 		RGB_O 	=> rgb,
 		DS80		=> DS80,
@@ -104,7 +103,7 @@ begin
         wea    => vram_wr,
 
         addrb  => addr_read,
-        clkb   => CLK and ENA_14,
+        clkb   => CLK2,
         doutb  => vram_do
     );
 
@@ -121,10 +120,10 @@ begin
 	 
 	 --         
 	 --    
-	 process (CLK, ENA_14, vram_do)
+	 process (CLK, ENA2, vram_do)
 	 begin
 		if (rising_edge(CLK)) then 
-			if (ENA_14 = '0') then 
+			if (ENA2 = '1') then 
 			
 				if (OSD_POPUP = '1') then 
 					case (hcnt(3 downto 0)) is
@@ -182,10 +181,10 @@ begin
                 font_reg(1) when bit_addr = "110" else
                 font_reg(0) when bit_addr = "111";
 
-	 process(CLK, ENA_14)
+	 process(CLK, ENA2)
 	 begin 
 		if (rising_edge(CLK)) then
-			if (ENA_14 = '0') then
+			if (ENA2 = '1') then
 				pixel_reg <= pixel;
 			end if;
 		end if;

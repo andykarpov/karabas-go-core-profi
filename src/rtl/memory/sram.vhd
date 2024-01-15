@@ -58,6 +58,7 @@ signal prev_loader_wr : std_logic := '0';
 signal prev_ram_wr : std_logic := '0';
 signal prev_ram_rd : std_logic := '0';
 signal prev_vram_rd : std_logic := '0';
+signal prev_vram_a : std_logic_vector(21 downto 0);
 
 begin
 
@@ -74,23 +75,30 @@ end process;
 process(CLK) 
 begin 
 
-	if rising_edge(CLK) then 
+	if falling_edge(CLK) then 
 		case qstate is 
 
 			when idle => 
-				if LOADER_ACT = '1' and LOADER_WR = '1' and prev_loader_wr = '0' then 
+				if LOADER_ACT = '1' then 
 					BUSY <= '1';
-					wr_addr <= LOADER_A;
-					wr_data <= LOADER_DI;
-					MA <= LOADER_A(20 downto 0);
-					if (LOADER_A(21) = '1') then 
-						N_MWR <= "01";	
-						MD(15 downto 8) <= LOADER_DI;
+					if LOADER_WR = '1' then 
+						wr_addr <= LOADER_A;
+						wr_data <= LOADER_DI;
+						MA <= LOADER_A(20 downto 0);
+						if (LOADER_A(21) = '1') then 
+							N_MWR <= "01";	
+							MD(15 downto 8) <= LOADER_DI;
+						else 
+							N_MWR <= "10";
+							MD(7 downto 0) <= LOADER_DI;
+						end if;
+						qstate <= wr_done;
 					else 
-						N_MWR <= "10";
-						MD(7 downto 0) <= LOADER_DI;
+						N_MWR <= "11";
+						MD <= (others => 'Z');
+						qstate <= idle;
 					end if;
-					qstate <= wr_done;
+					
 				elsif RAM_WR = '1' and prev_ram_wr = '0' then 
 					BUSY <= '1';				
 					wr_addr <= RAM_A;
@@ -104,24 +112,28 @@ begin
 						MD(7 downto 0) <= RAM_DI;
 					end if;
 					qstate <= wr_done;
+					
 				elsif RAM_RD = '1' and prev_ram_rd = '0' then 
 					BUSY <= '1';
 					rd_addr <= RAM_A;
 					MA <= RAM_A(20 downto 0);
 					MD <= (others => 'Z');
 					if RAM_A(21) = '1' then 
-					N_MRD <= "01";
-				else 
-					N_MRD <= "10";
-				end if;
+						N_MRD <= "01";
+					else 
+						N_MRD <= "10";
+					end if;
 					qstate <= rd_done;
-				elsif VRAM_RD = '1' and prev_vram_rd = '0' then 
+					
+				elsif VRAM_RD = '1' and (prev_vram_rd /= vram_rd or prev_vram_a /= VRAM_A) then 
 					BUSY <= '1';					
 					rd_addr <= VRAM_A;
+					prev_vram_a <= VRAM_A;
 					MA <= VRAM_A(20 downto 0);
 					MD <= (others => 'Z');
 					N_MRD <= "10";		
 					qstate <= vid_rd_done;
+					
 				else 
 					BUSY <= '0';				
 					qstate <= idle;

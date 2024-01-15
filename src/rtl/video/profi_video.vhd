@@ -11,13 +11,15 @@ entity profi_video is
 	port (
 		CLK_BUS	: in std_logic; -- 24
 		ENA_14	: in std_logic; -- 12					
-		ENA_7		: in std_logic; -- 6
 		TURBO 	: in std_logic_vector := "00";
 		INTA		: in std_logic;
 		INT		: out std_logic;
 		BORDER	: in std_logic_vector(3 downto 0);	
-		A			: out std_logic_vector(13 downto 0);
+		
 		DI			: in std_logic_vector(7 downto 0);
+		A			: out std_logic_vector(13 downto 0);
+		VID_RD 	: out std_logic;
+		
 		RGB		: out std_logic_vector(2 downto 0);	-- RGB
 		I 			: out std_logic;
 		MODE60	: in std_logic := '0'; -- 
@@ -29,20 +31,19 @@ entity profi_video is
 		HCNT 		: out std_logic_vector(9 downto 0);
 		VCNT 		: out std_logic_vector(8 downto 0);	
 		ISPAPER  : out std_logic := '0';
-		DS80 		: in std_logic;
-		VID_AT : out std_logic;
-		VID_RD : out std_logic		
+		DS80 		: in std_logic
+
 	);
 end entity;
 
 architecture rtl of profi_video is
 -- Profi-CPM screen mode
 	constant pcpm_scr_h			: natural := 512;
-	constant pcpm_brd_right		: natural :=  48;	-- 32   -    vid_reg  attr_reg   8  
+	constant pcpm_brd_right		: natural :=  48;	-- 32 для выравнивания из-за задержки на чтение vid_reg и attr_reg задано на 8 точек больше
 	constant pcpm_blk_front		: natural :=  32; -- 48
 	constant pcpm_sync_h			: natural :=  64; -- 64
 	constant pcpm_blk_back		: natural :=  64; -- 80
-	constant pcpm_brd_left		: natural :=  48;	-- 32   -    vid_reg  attr_reg   8  
+	constant pcpm_brd_left		: natural :=  48;	-- 32 для выравнивания из-за задержки на чтение vid_reg и attr_reg задано на 8 точек меньше
 
 	constant pcpm_scr_v			: natural := 240;
 	constant pcpm_brd_bot		: natural :=  16;--16
@@ -170,18 +171,16 @@ process( CLK_BUS, ENA_14, h_cnt )
 	end process;
 
 -- memory read
-process(CLK_BUS, ENA_14, ENA_7, h_cnt)
+process(CLK_BUS, ENA_14, h_cnt)
 begin
 	if rising_edge(CLK_BUS) then 
-		VID_RD <= '0';
-		VID_AT <= '0';
-		if (ENA_14 = '0') then -- 12 mhz falling edge
-			case h_cnt(2 downto 0) is
-				when "000" => VID_RD <= '1'; A <= std_logic_vector((not h_cnt(3)) & v_cnt(7 downto 6)) & std_logic_vector(v_cnt(2 downto 0)) & std_logic_vector(v_cnt(5 downto 3)) & std_logic_vector(h_cnt(8 downto 4));
-				when "001" => VID_RD <= '0'; vid_reg <= DI;
-				when "010" => VID_AT <= '1'; VID_RD <= '1'; A <= std_logic_vector((not h_cnt(3)) & v_cnt(7 downto 6)) & std_logic_vector(v_cnt(2 downto 0)) & std_logic_vector(v_cnt(5 downto 3)) & std_logic_vector(h_cnt(8 downto 4));
-				when "011" => VID_RD <= '0'; at_reg <= DI;
-				when others => VID_RD <= '0';
+		if (ENA_14 = '1') then 
+			case h_cnt(2 downto 0) is 
+				when "001" => VID_RD <= '0'; A <= std_logic_vector((not h_cnt(3)) & v_cnt(7 downto 6)) & std_logic_vector(v_cnt(2 downto 0)) & std_logic_vector(v_cnt(5 downto 3)) & std_logic_vector(h_cnt(8 downto 4));
+				when "010" => vid_reg <= DI;
+				when "011" => VID_RD <= '1'; A <= std_logic_vector((not h_cnt(3)) & v_cnt(7 downto 6)) & std_logic_vector(v_cnt(2 downto 0)) & std_logic_vector(v_cnt(5 downto 3)) & std_logic_vector(h_cnt(8 downto 4));
+				when "100" => at_reg <= DI;
+				when others => null;
 			end case;
 		end if;
 	end if;

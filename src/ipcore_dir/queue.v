@@ -22,7 +22,7 @@
 *     devices, or systems.  Use in such applications are expressly             *
 *     prohibited.                                                              *
 *                                                                              *
-*     (c) Copyright 1995-2023 Xilinx, Inc.                                     *
+*     (c) Copyright 1995-2024 Xilinx, Inc.                                     *
 *     All rights reserved.                                                     *
 *******************************************************************************/
 // You must compile the wrapper file queue.v when simulating
@@ -43,7 +43,8 @@ module queue(
   rd_en,
   dout,
   full,
-  empty
+  empty,
+  data_count
 );
 
 input clk;
@@ -53,6 +54,7 @@ input rd_en;
 output [23 : 0] dout;
 output full;
 output empty;
+output [8 : 0] data_count;
 
 // synthesis translate_off
 
@@ -122,7 +124,7 @@ output empty;
     .C_HAS_AXIS_TSTRB(0),
     .C_HAS_AXIS_TUSER(0),
     .C_HAS_BACKUP(0),
-    .C_HAS_DATA_COUNT(0),
+    .C_HAS_DATA_COUNT(1),
     .C_HAS_DATA_COUNTS_AXIS(0),
     .C_HAS_DATA_COUNTS_RACH(0),
     .C_HAS_DATA_COUNTS_RDCH(0),
@@ -255,6 +257,7 @@ output empty;
     .DOUT(dout),
     .FULL(full),
     .EMPTY(empty),
+    .DATA_COUNT(data_count),
     .BACKUP(),
     .BACKUP_MARKER(),
     .RST(),
@@ -278,7 +281,6 @@ output empty;
     .ALMOST_EMPTY(),
     .VALID(),
     .UNDERFLOW(),
-    .DATA_COUNT(),
     .RD_DATA_COUNT(),
     .WR_DATA_COUNT(),
     .PROG_FULL(),

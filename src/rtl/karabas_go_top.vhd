@@ -77,7 +77,6 @@ architecture Behavioral of karabas_go is
 
 -- CPU
 signal cpu_reset_n	: std_logic;
-signal cpu_clk			: std_logic;
 signal cpu_a_bus		: std_logic_vector(15 downto 0);
 signal cpu_do_bus		: std_logic_vector(7 downto 0);
 signal cpu_di_bus		: std_logic_vector(7 downto 0);
@@ -89,12 +88,12 @@ signal cpu_int_n		: std_logic;
 signal cpu_inta_n		: std_logic;
 signal cpu_m1_n		: std_logic;
 signal cpu_rfsh_n		: std_logic;
-signal cpu_ena			: std_logic;
 signal cpu_mult		: std_logic_vector(1 downto 0);
 signal cpu_mem_wr		: std_logic;
 signal cpu_mem_rd		: std_logic;
 signal cpu_nmi_n		: std_logic;
 signal cpu_wait_n 	: std_logic := '1';
+signal cpu_wait 		: std_logic;
 
 -- Port
 signal port_xxfe_reg	: std_logic_vector(7 downto 0) := "00000000";
@@ -153,6 +152,7 @@ signal ms_x				: std_logic_vector(7 downto 0);
 signal ms_y				: std_logic_vector(7 downto 0);
 signal ms_z				: std_logic_vector(3 downto 0);
 signal ms_b				: std_logic_vector(2 downto 0);
+signal ms_upd 			: std_logic;
 signal ms_present 	: std_logic := '0';
 signal ms_event		: std_logic := '0';
 signal ms_delta_x		: signed(7 downto 0);
@@ -162,6 +162,8 @@ signal ms_delta_y		: signed(7 downto 0);
 signal vid_a_bus		: std_logic_vector(13 downto 0);
 signal vid_di_bus		: std_logic_vector(7 downto 0);
 signal vid_do_bus 	: std_logic_vector(7 downto 0);
+signal vid_rd 			: std_logic := '0';
+
 signal vid_hsync		: std_logic;
 signal vid_vsync		: std_logic;
 signal vid_int			: std_logic;
@@ -301,24 +303,20 @@ signal saa_out_l		: std_logic_vector(7 downto 0);
 signal saa_out_r		: std_logic_vector(7 downto 0);
 
 -- CLOCK
-signal clk_28 			: std_logic := '0';
-signal clk_24 			: std_logic := '0';
-signal clk_16 			: std_logic := '0';
-signal clk_8			: std_logic := '0';
-signal clk_bus			: std_logic := '0';
-signal clk_vid 		: std_logic := '0';
+signal clk_bus			: std_logic;
+signal clk_mem 		: std_logic;
+signal clk_div2		: std_logic;
+signal clk_16 			: std_logic;
 
 signal ena_div2	: std_logic := '0';
 signal ena_div4	: std_logic := '0';
 signal ena_div8	: std_logic := '0';
 signal ena_div16	: std_logic := '0';
 signal ena_cpu 	: std_logic := '0';
-signal ena_cnt		: std_logic_vector(3 downto 0) := "0000";
 
 -- System
 signal reset			: std_logic;
 signal areset			: std_logic;
-signal locked_tri 	: std_logic := '0';
 signal dos_act			: std_logic := '1';
 signal selector		: std_logic_vector(7 downto 0);
 signal mux				: std_logic_vector(3 downto 0);
@@ -326,8 +324,6 @@ signal speaker 		: std_logic := '0';
 signal ram_ext 		: std_logic_vector(2 downto 0) := "000";
 signal ram_do_bus 	: std_logic_vector(7 downto 0);
 signal ram_oe_n 		: std_logic := '1';
-signal vid_rd 			: std_logic := '0';
-signal vid_at 			: std_logic := '0';
 signal ext_rom_bank  : std_logic_vector(1 downto 0) := "00";
 signal ext_rom_bank_pq	: std_logic_vector(1 downto 0) := "00";
 signal max_turbo 		: std_logic_vector(1 downto 0) := "11";
@@ -399,9 +395,10 @@ signal hid_kb_dat2 : std_logic_vector(7 downto 0);
 signal hid_kb_dat3 : std_logic_vector(7 downto 0);
 signal hid_kb_dat4 : std_logic_vector(7 downto 0);
 signal hid_kb_dat5 : std_logic_vector(7 downto 0);
-signal joy_l : std_logic_vector(7 downto 0);
-signal joy_r : std_logic_vector(7 downto 0);
-signal joy_usb: std_logic_vector(7 downto 0);
+signal joy_l : std_logic_vector(11 downto 0);
+signal joy_r : std_logic_vector(11 downto 0);
+signal joy_usb: std_logic_vector(11 downto 0);
+
 signal kb_vsync : std_logic := '0';
 signal kb_joy_type_l : std_logic_vector(2 downto 0) := "000";
 signal kb_joy_type_r : std_logic_vector(2 downto 0) := "000";
@@ -416,76 +413,31 @@ signal kb_swap_fdd : std_logic := '0';
 signal kb_divmmc_en : std_logic := '0';
 signal kb_nemoide_en : std_logic := '0';
 signal kb_type : std_logic := '0';
-
-component zxunoregs
-port (
-	clk: in std_logic;
-	rst_n : in std_logic;
-	a : in std_logic_vector(15 downto 0);
-	iorq_n : in std_logic;
-	rd_n : in std_logic;
-	wr_n : in std_logic;
-	din : in std_logic_vector(7 downto 0);
-	dout : out std_logic_vector(7 downto 0);
-	oe_n : out std_logic;
-	addr : out std_logic_vector(7 downto 0);
-	read_from_reg: out std_logic;
-	write_to_reg: out std_logic;
-	regaddr_changed: out std_logic);
-end component;
-
-component zxunouart
-generic (
-	UARTDATA : std_logic_vector(7 downto 0) := x"C6";
-	UARTSTAT : std_logic_vector(7 downto 0) := x"C7"
-);
-port (
-	clk_bus : in std_logic;
-	ds80 : in std_logic;
-	zxuno_addr : in std_logic_vector(7 downto 0);
-	zxuno_regrd : in std_logic;
-	zxuno_regwr : in std_logic;
-	din : in std_logic_vector(7 downto 0);
-	dout : out std_logic_vector(7 downto 0);
-	oe_n : out std_logic;
-	uart_tx : out std_logic;
-	uart_rx : in std_logic;
-	uart_rts : out std_logic);
-end component;
-
-component uart 
-port ( 
-	clk_bus: in std_logic;
-	txdata: in std_logic_vector(7 downto 0);
-	txbegin: in std_logic;
-	txbusy : out std_logic;
-	rxdata : out std_logic_vector(7 downto 0);
-	rxrecv : out std_logic;
-	data_read : in std_logic;
-	rx : in std_logic;
-	tx : out std_logic;
-	rts: out std_logic);
-end component;
+signal mcu_busy : std_logic := '1';
 
 begin
 
--- PLL1
-U1: entity work.pll
-port map (
-	CLK_IN1			=> CLK_50MHZ,
-	CLK_OUT1			=> clk_28,
-	CLK_OUT2 		=> clk_24,
-	CLK_OUT3 		=> clk_16,
-	LOCKED			=> locked_tri
-	);
+U1: entity work.clock
+port map(
+	CLK => CLK_50MHZ,	
+	ARESET => areset,
 	
--- clock switch
-U2 : BUFGMUX_1
-port map (
- I0      => clk_28,
- I1      => clk_24,
- O       => clk_bus,
- S       => ds80
+	DS80 => ds80,
+	
+	CLK_BUS => clk_bus,
+	CLK_MEM => clk_mem,
+	CLK_DIV2 => clk_div2,
+	CLK_FLOPPY => clk_16,
+	
+	ENA_DIV2 => ena_div2,
+	ENA_DIV4 => ena_div4,
+	ENA_DIV8 => ena_div8,
+	ENA_DIV16 => ena_div16,
+	ENA_CPU => ena_cpu,
+	
+	TURBO => turbo_mode,
+	WAIT_CPU => cpu_wait
+	
 );
 
 -- Zilog Z80A CPU
@@ -514,10 +466,9 @@ port map (
 -- memory manager
 U4: entity work.memory 
 port map ( 
-	CLK 				=> clk_bus,
-	ENA_14			=> ena_div2,
-	ENA_7 			=> ena_div4,
-	CHR0				=> vid_hcnt(0),
+	CLK_BUS 			=> clk_bus,
+	ENA_CPU 			=> ena_cpu,
+
 	-- cpu signals
 	A 					=> cpu_a_bus,
 	D 					=> cpu_do_bus,
@@ -529,7 +480,7 @@ port map (
 	
 	-- loader signals
 	loader_act 		=> loader_act,
-	loader_ram_a 	=> loader_ram_a,
+	loader_ram_a 	=> loader_ram_a(20 downto 0),
 	loader_ram_do 	=> loader_ram_do,
 	loader_ram_wr 	=> loader_ram_wr,
 
@@ -552,8 +503,7 @@ port map (
 	VA 				=> vid_a_bus,
 	VID_PAGE 		=> port_7ffd_reg(3), -- seg A0 - seg A2
 	VID_DO 			=> vid_do_bus,
-	VID_RD   		=> vid_rd,
-	VID_AT 			=> vid_at,
+	VID_RD 			=> vid_rd, 		-- read attribute or pixel	
 
 	DS80 				=> ds80,
 	CPM 				=> cpm,
@@ -585,13 +535,16 @@ port map (
 	ENA_7 			=> ena_div4, 	-- 7 / 6
 	RESET 			=> reset,	
 	BORDER 			=> port_xxfe_reg(7 downto 0),
-	DI 				=> vid_do_bus,
 	TURBO 			=> turbo_mode,	-- turbo signal for int length
 	INTA 				=> cpu_inta_n,
 	INT 				=> cpu_int_n,
 	pFF_CS			=> vid_pff_cs, -- port FF select
 	ATTR_O 			=> vid_attr,  -- attribute register output
-	A 					=> vid_a_bus,	
+
+	A 					=> vid_a_bus,
+	VID_RD 			=> vid_rd,
+	DI 				=> vid_do_bus,
+	
 	MODE60			=> kb_vsync,
 	DS80 				=> ds80,
 	CS7E				=> cs_xx7e,
@@ -604,8 +557,6 @@ port map (
 	VIDEO_B 			=> vid_rgb(2 downto 0),	
 	HSYNC 			=> vid_hsync,
 	VSYNC 			=> vid_vsync,
-	VID_RD 			=> vid_rd,
-	VID_AT 			=> vid_at,
 	HCNT 				=> vid_hcnt,
 	VCNT 				=> vid_vcnt,
 	ISPAPER 			=> vid_ispaper,
@@ -618,8 +569,8 @@ port map (
 U6: entity work.overlay
 port map (
 	CLK 				=> clk_bus,
-	ENA_14 			=> ena_div2,
-	ENA_7 			=> ena_div4,
+	CLK2 				=> clk_div2,
+	ENA2 				=> ena_div2,
 	DS80				=> ds80,
 	RGB_I 			=> vid_rgb,
 	RGB_O 			=> vid_rgb_osd,
@@ -637,25 +588,28 @@ port map (
 );
 
 -- Scandoubler	
-U7: entity work.vga_pal 
-port map (
-	RGB_IN 			=> vid_rgb_osd,
-	KSI_IN 			=> vid_vsync,
-	SSI_IN 			=> vid_hsync,
-	ENA_14 			=> ena_div2,
-	CLK_BUS 			=> clk_bus,
-	EN 				=> vid_scandoubler_enable,
-	DS80				=> ds80,		
-	RGB_O(8 downto 6)	=> VGA_R(7 downto 5),
-	RGB_O(5 downto 3)	=> VGA_G(7 downto 5),
-	RGB_O(2 downto 0)	=> VGA_B(7 downto 5),
-	VSYNC_VGA		=> VGA_VS,
-	HSYNC_VGA		=> VGA_HS
+U7: entity work.vga_scandoubler
+port map(
+	clk => clk_bus,
+	clk14en => ena_div2,
+	enable_scandoubling => vid_scandoubler_enable,
+	disable_scaneffect => '1',
+	ri => vid_rgb_osd(8 downto 6),
+	gi => vid_rgb_osd(5 downto 3),
+	bi => vid_rgb_osd(2 downto 0),
+	hsync_ext_n => vid_hsync,
+	vsync_ext_n => vid_vsync,
+	csync_ext_n => vid_hsync xor vid_vsync,
+	ro => VGA_R(7 downto 2),
+	go => VGA_G(7 downto 2),
+	bo => VGA_B(7 downto 2),
+	hsync => VGA_HS,
+	vsync => VGA_VS
 );
--- TODO
-VGA_R(4 downto 0) <= (others => '0');
-VGA_G(4 downto 0) <= (others => '0');
-VGA_B(4 downto 0) <= (others => '0');
+
+VGA_R(1 downto 0) <= (others => '0');
+VGA_G(1 downto 0) <= (others => '0');
+VGA_B(1 downto 0) <= (others => '0');
 
 -- MCU
 U8: entity work.mcu
@@ -671,7 +625,8 @@ port map(
 	MS_X => ms_x,
 	MS_Y => ms_y,
 	MS_Z => ms_z,
-	MS_BTNS => ms_b,
+	MS_B => ms_b,
+	MS_UPD => ms_upd,
 	
 	KB_STATUS => hid_kb_status,
 	KB_DAT0 => hid_kb_dat0,
@@ -697,7 +652,10 @@ port map(
 	ROMLOAD_WR => loader_ram_wr,
 	
 	SOFTSW_COMMAND => softsw_command,	
-	OSD_COMMAND => osd_command
+	OSD_COMMAND => osd_command,
+	
+	BUSY => mcu_busy
+	
 );
 
 U9: entity work.hid_parser
@@ -722,6 +680,9 @@ port map (
 	
 	-- cpu a
 	A => cpu_a_bus(15 downto 8),	
+	
+	-- keyboard type Profi XT = '0' / Spectrum = '1'
+	KB_TYPE => kb_type,
 	
 	-- outputs
 	JOY_DO => joy_bus,
@@ -754,18 +715,6 @@ port map (
 	NMI => kb_nmi,
 	RESET => kb_reset	
 );
-
---U11: entity work.pcm5102a
---port map (
---	RESET				=> reset,
---	CLK_BUS 			=> clk_bus,
---	CS 				=> '1',
---	DATA_L 			=> audio_l,
---	DATA_R 			=> audio_r,
---	BCK 				=> DAC_BCK,
---	LRCK  			=> DAC_LRCK,
---	DATA 				=> DAC_DAT
---);
 
 U11: entity work.PCM5102
 port map (
@@ -864,38 +813,6 @@ port map(
 	OE_N 				=> serial_ms_oe_n
 );
 
-U21: zxunoregs 
-port map(
-	clk => clk_bus,
-	rst_n => not(reset),
-	a => cpu_a_bus,
-	iorq_n => cpu_iorq_n,
-	rd_n => cpu_rd_n,
-	wr_n => cpu_wr_n,
-	din => cpu_do_bus,
-	dout => zxuno_addr_to_cpu,
-	oe_n => zxuno_addr_oe_n,
-	addr => zxuno_addr,
-	read_from_reg => zxuno_regrd,
-	write_to_reg => zxuno_regwr,
-	regaddr_changed => zxuno_regaddr_changed
-);
-
-U22: zxunouart 
-port map(
-	clk_bus => clk_bus,
-	ds80 => ds80,
-	zxuno_addr => zxuno_addr,
-	zxuno_regrd => zxuno_regrd,
-	zxuno_regwr => zxuno_regwr,
-	din => cpu_do_bus,
-	dout => zxuno_uart_do_bus,
-	oe_n => zxuno_uart_oe_n,
-	uart_tx => zxuno_uart_tx,
-	uart_rx => UART_RX,
-	uart_rts => zxuno_uart_cts
-);	
-
 U_ZIFI: entity work.zifi 
 port map (
 	CLK    => clk_bus,
@@ -917,31 +834,15 @@ port map (
 	UART_CTS  => zifi_uart_cts	
 );
 
-UART_TX <= zifi_uart_tx when zifi_api_enabled = '1' else zxuno_uart_tx;
-UART_CTS <= zifi_uart_cts when zifi_api_enabled = '1' else zxuno_uart_cts;
+UART_TX <= zifi_uart_tx; -- when zifi_api_enabled = '1' else zxuno_uart_tx;
+UART_CTS <= zifi_uart_cts; -- when zifi_api_enabled = '1' else zxuno_uart_cts;
 ESP_RESET_N <= 'Z';
 ESP_BOOT_N <= 'Z';
 
 -------------------------------------------------------------------------------
--- clocks
-
-process (clk_bus)
-begin
-	if clk_bus'event and clk_bus = '0' then
-		ena_cnt <= ena_cnt + 1;
-	end if;
-end process;
-
-ena_div2 <= ena_cnt(0);
-ena_div4 <= ena_cnt(1) and ena_cnt(0);
-ena_div8 <= ena_cnt(2) and ena_cnt(1) and ena_cnt(0);
-ena_div16 <= ena_cnt(3) and ena_cnt(2) and ena_cnt(1) and ena_cnt(0);
-
--------------------------------------------------------------------------------
 -- Global signals
 
-areset <= not locked_tri;
-reset <= areset or kb_reset or loader_act; -- hot reset
+reset <= areset or kb_reset or loader_act or mcu_busy; -- hot reset
 
 -- CPU reset
 process (clk_bus)
@@ -959,40 +860,8 @@ cpu_nmi_n <= mapcond when kb_nmi = '1' and divmmc_en = '1' else
 	'1';
 cpu_wait_n <= '1';
 
--- max turbo = 28 MHz
-max_turbo <= "11";
-
---OCH: automap = '0' and cs_nemo_ports = '0' - not contend DIVMMC and NEMO ports in CLASSIC screen mode
-ena_cpu <= '0' when kb_pause = '1' or  (kb_screen_mode = "01" and memory_contention = '1' and automap = '0' and cs_nemo_ports = '0' and DS80 = '0') else 
-	clk_bus when turbo_mode = "11" and turbo_mode <= max_turbo else 
---	-- OCH: disable turbo in trdos to be sure what all programming delays are original
---	-- 06.09.2023:OCH: fixed turbo mode by adding all condition when it can be enabled, i'm not sure about ds80 = 1 but let it be
-	ena_div2 when turbo_mode = "10" and turbo_mode <= max_turbo and (dos_act='0' or DIVMMC_EN = '1' or cpm = '1' or onrom = '1' or ds80 = '1') else 
-	ena_div4 when turbo_mode = "01" and turbo_mode <= max_turbo and (dos_act='0' or DIVMMC_EN = '1' or cpm = '1' or onrom = '1' or ds80 = '1') else 
-	ena_div8;
-
---  -   /IORQ  400   
---           
-
---WAIT_IO <= WAIT_C(1);
---WAIT_C_STOP <=WAIT_C(1) and not WAIT_C(0);
---WAIT_EN <= reset or not turbo_mode(1);
---process (clk_bus, ena_div2, cpu_mreq_n, WAIT_EN, WAIT_C_STOP) 	
---	begin				
---		if falling_edge(CLK_BUS) then
---		if ena_div2='0' then
---			if WAIT_EN = '1' then	
---				WAIT_C <= "11";
---			elsif cpu_mreq_n='1' then
---				WAIT_C <= "11"; --WAIT MREQ = 0
---			elsif WAIT_C_STOP='0' then
---				WAIT_C <= WAIT_C + "01"; --COUNT
---			elsif WAIT_C_STOP='1' then
---				WAIT_C <= WAIT_C; --STOP
---			end if;
---		end if;
---		end if;
---	end process;
+-- cpu wait condition
+cpu_wait <= '1' when kb_pause = '1' or  (kb_screen_mode = "01" and memory_contention = '1' and automap = '0' and cs_nemo_ports = '0' and DS80 = '0') else '0';
 
 -------------------------------------------------------------------------------
 -- SD
@@ -1370,17 +1239,17 @@ process (port77_wr, loader_act, reset, clk_bus)
 		end if;
 end process;
 
-U_ZC_SPI: entity work.zc_spi     -- SD
-port map(
-	DI				=> cpu_do_bus,
-	START			=> zc_spi_start,
-	WR_EN			=> zc_wr_en,
-	CLC     		=> clk_bus, 
-	MISO    		=> SD_DO,
-	DO				=> zc_do_bus,
-	SCK     		=> zc_sclk,
-	MOSI    		=> zc_mosi
-);
+--U_ZC_SPI: entity work.zc_spi     -- SD
+--port map(
+--	DI				=> cpu_do_bus,
+--	START			=> zc_spi_start,
+--	WR_EN			=> zc_wr_en,
+--	CLC     		=> clk_bus, 
+--	MISO    		=> SD_DO,
+--	DO				=> zc_do_bus,
+--	SCK     		=> zc_sclk,
+--	MOSI    		=> zc_mosi
+--);
 
 ------------------------ divmmc-----------------------------
 -- Engineer:   Mario Prato
@@ -1524,16 +1393,13 @@ FT_SPI_SCK <= '0';
 FT_OE_N <= '1';
 
 -- V_CLK buf
-ODDR2_inst: ODDR2
+VCLK_buf: ODDR2
 port map(
 	Q => V_CLK, -- pixel clock for video dac
 	C0 => clk_bus,
-	C1 => not(clk_bus),
-	CE => '1',
+	C1 => not clk_bus,
 	D0 => '1',
-	D1 => '0',
-	R => '0',
-	S => '0'
+	D1 => '0'
 );
 
 ext_rom_bank <= kb_rom_bank;

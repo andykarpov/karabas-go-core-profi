@@ -154,7 +154,7 @@ begin
 			new_data <= '0';
 			cnt_byte <= "00";
 
-		elsif CLKEN'event and CLKEN = '1' then 
+		elsif rising_edge(CLK) and CLKEN = '1' then 
 
 			vv51_read_after <= vv51_read;
 		

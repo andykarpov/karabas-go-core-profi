@@ -13,14 +13,17 @@ entity pentagon_video is
 		ENA_14	: in std_logic; -- 14 MHz
 		ENA_7		: in std_logic; -- 7 MHz 
 		BORDER	: in std_logic_vector(2 downto 0);	-- bordr color (port #xxFE)
-		DI			: in std_logic_vector(7 downto 0);	-- video data from memory
 		TURBO 	: in std_logic_vector := "00"; -- 01 = turbo 2x mode, 10 - turbo 4x mode, 11 - turbo 8x mode, 00 = normal mode
 		INTA		: in std_logic := '0'; -- int request for turbo mode
 		INT		: out std_logic; -- int output
 		MODE60	: in std_logic := '0'; -- '0'
 		pFF_CS	: out std_logic; -- port FF select
 		ATTR_O	: out std_logic_vector(7 downto 0); -- attribute register output
+
+		DI			: in std_logic_vector(7 downto 0);	-- video data from memory
 		A			: out std_logic_vector(13 downto 0); -- video address
+		VID_RD 	: out std_logic;
+		
 		RGB		: out std_logic_vector(2 downto 0);	-- RGB
 		I			: out std_logic; -- brightness
 		HSYNC		: out std_logic;
@@ -30,10 +33,7 @@ entity pentagon_video is
 		ISPAPER 	: out std_logic := '0';
 		BLINK 	: out std_logic;
 		SCREEN_MODE : in std_logic_vector(1 downto 0) := "00"; -- screen mode: 00 = pentagon, 01 - 128 classic, 10, 11 - reserver
-		COUNT_BLOCK : out std_logic;
-
-		VID_AT : out std_logic;
-		VID_RD : out std_logic 
+		COUNT_BLOCK : out std_logic		
 	);
 end entity;
 
@@ -66,8 +66,6 @@ architecture rtl of pentagon_video is
 	signal VIDEO_I 	: std_logic;	
 		
 	signal int_sig : std_logic;
-	
-	signal cnt_vread : std_logic_vector(3 downto 0) := "0000";
 		
 begin
 
@@ -262,25 +260,17 @@ begin
 	process (CLK_BUS, ENA_14, chr_col_cnt)
 	begin 
 		if rising_edge(CLK_BUS) then 
-			VID_RD <= '0';
-			VID_AT <= '0';
-			if (ENA_14 = '0') then
-				case chr_col_cnt is
-					when "000" => VID_RD <= '1'; A <= std_logic_vector( '0' & ver_cnt(4 downto 3) & chr_row_cnt & ver_cnt(2 downto 0) & hor_cnt(4 downto 0));
-					when "001" => VID_RD <= '0'; bitmap <= DI;
-					when "010" => VID_AT <= '1'; VID_RD <= '1'; A <= std_logic_vector( '0' & "110" & ver_cnt(4 downto 0) & hor_cnt(4 downto 0));
-					when "011" => VID_RD <= '0'; attr <= DI;
-					when others => VID_RD <= '0';
+			if ENA_14 = '1' and ENA_7 = '1' then
+				case chr_col_cnt is 
+					when "001" => VID_RD <= '0'; A <= std_logic_vector( '0' & ver_cnt(4 downto 3) & chr_row_cnt & ver_cnt(2 downto 0) & hor_cnt(4 downto 0));
+					when "010" => bitmap <= DI;
+					when "011" => VID_RD <= '1'; A <= std_logic_vector( '0' & "110" & ver_cnt(4 downto 0) & hor_cnt(4 downto 0));
+					when "100" => attr <= DI;
+					when others => null;
 				end case;
 			end if;
 		end if;
 	end process;
-	
---	A <= 
---		-- data address
---		std_logic_vector( '0' & ver_cnt(4 downto 3) & chr_row_cnt & ver_cnt(2 downto 0) & hor_cnt(4 downto 0)) when VBUS_MODE = '1' and VID_RD = '0' else 
---		-- standard attribute address
---		std_logic_vector( '0' & "110" & ver_cnt(4 downto 0) & hor_cnt(4 downto 0));
 	
 	paper <= '0' when hor_cnt(5) = '0' and ver_cnt(5) = '0' and ( ver_cnt(4) = '0' or ver_cnt(3) = '0' ) else '1';
 	

@@ -22,7 +22,7 @@
 *     devices, or systems.  Use in such applications are expressly             *
 *     prohibited.                                                              *
 *                                                                              *
-*     (c) Copyright 1995-2023 Xilinx, Inc.                                     *
+*     (c) Copyright 1995-2024 Xilinx, Inc.                                     *
 *     All rights reserved.                                                     *
 *******************************************************************************/
 
@@ -59,14 +59,14 @@
 //----------- Begin Cut here for INSTANTIATION Template ---// INST_TAG
 fifo2 your_instance_name (
   .clk(clk), // input clk
-  .rst(rst), // input rst
+  .srst(srst), // input srst
   .din(din), // input [7 : 0] din
   .wr_en(wr_en), // input wr_en
   .rd_en(rd_en), // input rd_en
   .dout(dout), // output [7 : 0] dout
   .full(full), // output full
   .empty(empty), // output empty
-  .data_count(data_count) // output [11 : 0] data_count
+  .data_count(data_count) // output [10 : 0] data_count
 );
 // INST_TAG_END ------ End INSTANTIATION Template ---------
 
