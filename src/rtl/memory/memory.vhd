@@ -99,10 +99,10 @@ begin
 		doutb => VID_DO
 	);
 
-	-- video mem write
-	vid_wr <= "1" when DS80 = '0' and N_MREQ = '0' and N_WR = '0' and (ram_page = "000000101" or ram_page = "000000111") else -- spectrum pix / att
-				 "1" when DS80 = '1' and N_MREQ = '0' and N_WR = '0' and (ram_page = "000000100" or ram_page = "000000110") else -- profi pix
-				 "1" when DS80 = '1' and N_MREQ = '0' and N_WR = '0' and (ram_page = "000111000" or ram_page = "000111010") else -- profi att
+	-- video mem write: 
+	vid_wr <= "1" when ENA_CPU = '1' and DS80 = '0' and N_MREQ = '0' and N_WR = '0' and A(13) = '0' and (ram_page = "000000101" or ram_page = "000000111") else -- spectrum pix / att
+				 "1" when ENA_CPU = '1' and DS80 = '1' and N_MREQ = '0' and N_WR = '0' and (ram_page = "000000100" or ram_page = "000000110") else -- profi pix
+				 "1" when ENA_CPU = '1' and DS80 = '1' and N_MREQ = '0' and N_WR = '0' and (ram_page = "000111000" or ram_page = "000111010") else -- profi att
 				 "0";
 
 	-- detect profi attr write
