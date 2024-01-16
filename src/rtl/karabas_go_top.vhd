@@ -1239,17 +1239,17 @@ process (port77_wr, loader_act, reset, clk_bus)
 		end if;
 end process;
 
---U_ZC_SPI: entity work.zc_spi     -- SD
---port map(
---	DI				=> cpu_do_bus,
---	START			=> zc_spi_start,
---	WR_EN			=> zc_wr_en,
---	CLC     		=> clk_bus, 
---	MISO    		=> SD_DO,
---	DO				=> zc_do_bus,
---	SCK     		=> zc_sclk,
---	MOSI    		=> zc_mosi
---);
+U_ZC_SPI: entity work.zc_spi     -- SD
+port map(
+	DI				=> cpu_do_bus,
+	START			=> zc_spi_start,
+	WR_EN			=> zc_wr_en,
+	CLC     		=> clk_bus, 
+	MISO    		=> SD_DO,
+	DO				=> zc_do_bus,
+	SCK     		=> zc_sclk,
+	MOSI    		=> zc_mosi
+);
 
 ------------------------ divmmc-----------------------------
 -- Engineer:   Mario Prato
