@@ -569,8 +569,7 @@ port map (
 U6: entity work.overlay
 port map (
 	CLK 				=> clk_bus,
-	CLK2 				=> clk_div2,
-	ENA2 				=> ena_div2,
+	ENA_14 			=> ena_div2,
 	DS80				=> ds80,
 	RGB_I 			=> vid_rgb,
 	RGB_O 			=> vid_rgb_osd,

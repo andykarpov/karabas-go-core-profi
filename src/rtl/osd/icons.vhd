@@ -6,7 +6,7 @@ use IEEE.std_logic_unsigned.all;
 entity icons is
 	port (
 		CLK		: in std_logic;
-		ENA2 		: in std_logic;
+		ENA_14 	: in std_logic;
 		RGB_I 	: in std_logic_vector(8 downto 0);
 		RGB_O 	: out std_logic_vector(8 downto 0);
 		DS80		: in std_logic;
@@ -79,38 +79,13 @@ begin
 					 "010" when paper_icon_cf = '1' else 
 					 icon_pos;
 	 
-	 --    
-	 -- 0-1: 0...63,      0-2: 64...127,    1-1: 128...191,   1-2: 192...255,   2-1: 256...319,   2-2: 320...384,
-	 -- 0-3: 1024...1087, 0-4: 1088...1151, 1-3: 1152...1215, 1-4: 1216...1279, 2-3: 1280...1343, 2-4: 1344...1408
-
-	 -- icon:
-	 --      y3 pos x3 y2-y0 x2-x0
-	 
-	 -- icon 0:
-	 -- 0:    0 000 0 000 000
-	 -- 64:   0 000 1 000 000
-	 -- 1024: 1 000 0 000 000
-	 -- 1088: 1 000 1 000 000
-	 
-	 -- icon 1:
-	 -- 128:  0 001 0 000 000
-	 -- 192:  0 001 1 000 000
-	 -- 1152: 1 001 0 000 000
-	 -- 1216: 1 001 1 000 000
-	 
-	 -- icon 2:
-	 -- 256:  0 010 0 000 000
-	 -- 320:  0 010 1 000 000
-	 -- 1280: 1 010 0 000 000
-	 -- 1344: 1 010 1 000 000
-	 
 	 icon_addr <= icon_y(3) & icon_pos &  not(icon_x(3)) & icon_y(2 downto 0) & icon_x(2 downto 0) when DS80='1' else 
 					  icon_y(3) & icon_pos &  icon_x(3) & icon_y(2 downto 0) & icon_x(2 downto 0); --spectrum pos shifter 8 px
 
-	 process(CLK, ENA2, STATUS_FD, STATUS_SD, STATUS_CF)
+	 process(CLK, ENA_14, STATUS_FD, STATUS_SD, STATUS_CF)
 	 begin 
 		if (rising_edge(CLK)) then
-			if (ENA2 = '1') then
+			if (ENA_14 = '1') then
 				if (STATUS_FD = '1') then 
 					cnt_icon_fd <= (others => '0');
 				elsif (cnt_icon_fd < "111111111111111111111") then 
