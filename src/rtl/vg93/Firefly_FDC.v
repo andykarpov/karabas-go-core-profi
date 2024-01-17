@@ -108,7 +108,7 @@ always @( posedge clk )
 				r_drq_r_dreg <= 1'b0;
 
 // output data
-always @( vg_reset_n, bdi_intrq, bdi_drq, bdi_do, ior, a[14], cs_n )     
+always @( vg_reset_n, bdi_intrq, bdi_drq, bdi_do, ior, csff_n, cs_n )     
 	if ( (ior == 1'b1) )
 	begin
 		outdata = 8'hFF;
