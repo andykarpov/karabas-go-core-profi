@@ -41,7 +41,6 @@ module firefly_fdc (
 	output wire	[1:0]	FDC_DS
 );
 
-reg				r_iow, r_iow0;
 reg	[4:0]		r_bdi_ff;
 reg				r_drq_r_dreg, r_intrq_r_sreg, r_bdi_drq, r_bdi_drq0, r_bdi_intrq, r_bdi_intrq0;
 wire				ior, vfoe, wg, rawr, rclk, sync, start, byte_2_read, byte_2_write, translate, reset_crc, vg_reset_n, tr43, next_byte;
@@ -70,11 +69,9 @@ assign ior = iorq_n | rd_n;
 assign bdi_wr_en = ~( cs_n | wr_n );
 assign vg_reset_n = r_bdi_ff[2];
 
+// bdi_drq, bdi_intrq crossing clock domain
 always @( posedge clk )
 begin
-	r_iow0 <= iorq_n | wr_n;
-	r_iow <= ~r_iow0;
-
 	r_bdi_drq0 <= bdi_drq;
 	r_bdi_drq <= r_bdi_drq0;
 	
