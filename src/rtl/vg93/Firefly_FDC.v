@@ -1,319 +1,208 @@
 //------------------------------------------------------------
 // Firefly FDC Top Level
 //------------------------------------------------------------
-//     Firefly
-// IanPo, 2020-23
-`default_nettype wire
+// Grabbed from original project Firefly by IanPo (c) 2020-2023
+// Refactored by Andy Karpov (c) 2024
+`default_nettype none
 
-module Firefly_FDC (
-// clocks
-input          iCLK,
-input          iCLK16,
-input          iRESET,
+module firefly_fdc (
+	// clocks
+	input wire          clk,
+	input wire         clk_16,
+	input wire         reset,
 
-// cpu signals
-input	[15:0]	iADDR,
-input	[7:0]		iDATA,
-input				iM1,
-input				iWR,
-input				iRD,
-input				iIORQ,
+	// cpu signals
+	input	wire [15:0] 	a,
+	input	wire [7:0]		d,
+	input	wire			m1_n,
+	input	wire			wr_n,
+	input	wire			rd_n,
+	input	wire			iorq_n,
 
-// DOS
-input           iDOS,
-input 			 iVDOS,
-input           iCSn,
-input           iWRFF,
+	// decoded ports
+	input wire          cs_n,
+	input wire          csff_n,
 
-// controller output signals
-output          oCS,
-output  [7:0]   oDATA,
+	// controller output signals
+	output wire         oe_n,
+	output wire [7:0]   dout,
 
-// Floppy signals
-output			oFDC_SIDE1,
-input				iFDC_RDATA,
-input				iFDC_WPRT,
-input				iFDC_TR00,
-input				iFDC_INDEX,
-output			oFDC_WG,
-output			oFDC_WR_DATA,
-output			oFDC_STEP,
-output			oFDC_DIR,
-output			oFDC_MOTOR,
-output	[1:0]	oFDC_DS
-
+	// physical floppy signals
+	output wire			FDC_SIDE1,
+	input	wire			FDC_RDATA,
+	input	wire			FDC_WPRT,
+	input	wire			FDC_TR00,
+	input	wire			FDC_INDEX,
+	output wire			FDC_WG,
+	output wire			FDC_WR_DATA,
+	output wire			FDC_STEP,
+	output wire			FDC_DIR,
+	output wire			FDC_MOTOR,
+	output wire	[1:0]	FDC_DS
 );
 
-  localparam VGCOM  = 8'h1F;
-  localparam VGTRK  = 8'h3F;
-  localparam VGSEC  = 8'h5F;
-  localparam VGDAT  = 8'h7F;
-  localparam VGSYS  = 8'hFF;
+reg				r_iow, r_iow0;
+reg	[4:0]		r_bdi_ff;
+reg				r_drq_r_dreg, r_intrq_r_sreg, r_bdi_drq, r_bdi_drq0, r_bdi_intrq, r_bdi_intrq0;
+wire				ior, vfoe, wg, rawr, rclk, sync, start, byte_2_read, byte_2_write, translate, reset_crc, vg_reset_n, tr43, next_byte;
 
-/////////////////////////////////////////////////////////////
+wire	[3:0]		ip_cnt;
+wire 	[47:0]	words;
+wire	[7:0]		byte_2_main;
+wire	[7:0]		main_2_byte;
+wire	[10:0]	byte_cnt;
+wire	[15:0]	crc16_d8;
 
-reg				rIOW, rIOW0;
-//
-wire rTRDOS;
-//
-reg		[7:0]	wOUTDATA;		//  
-//
-//
-reg		[4:0]	r_BDI_FF;		//   TR-DOS () : D0,D1 -  , D2 - wVG_RESET_n, D3 - iHRDY, D4 - /SIDE1
-//
-reg				rDRQ_R_DREG;	//  DRQ     
-reg				r2RQ_R_SREG;	//  INTRQ  DRQ    
-//
-reg				r_BDI_DRQ, r_BDI_DRQ0;
-reg				r_BDI_INTRQ, r_BDI_INTRQ0;
-//
-wire			wROMADR;
-//
-wire			wIOR;
-//
-wire	[4:0]	wPORTSBits;
-//
-////////////////////////////////////////////////////////////////
-wire			wVFOE;		// 1 -  , 0 - 
-wire			wWG;		// write gate
-//
-wire	[3:0]	wIP_CNT;
-wire			wRAWR;
-wire			wRCLK;
-wire 	[47:0]	w3WORDS;
-wire			wSYNC;
-wire			wSTART;
-wire	[7:0]	wBYTE_2_MAIN;
-wire			wBYTE_2_READ;
-wire	[7:0]	wMAIN_2_BYTE;
-wire			wBYTE_2_WRITE;
-wire			wTRANSLATE;
-wire			wRESET_CRC;		// 1 - , 0 - 
-wire	[10:0]	wBYTE_CNT;		//  ,   CRC16_D8
-wire	[15:0]	wCRC16_D8;
-//
-wire 	[7:0]	wDATA_IN;
-wire			wNEW_DAT;
-//
-wire	[11:0]	wSEC_LEN;
-wire	[3:0]	wBIN0, wBIN1, wBIN2, wBIN3;
-//
-wire			wVG_RESET_n;
-//
-wire			wTG43;
-wire			wNEXT_BYTE;
-//
-wire	[7:0]	w_BDI_DO;
-wire			w_BDI_DRQ;
-wire			w_BDI_INTRQ;
-//
-wire			w_BDI_WR_EN;
-//
+wire	[7:0]		bdi_do;
+wire				bdi_drq, bdi_intrq, bdi_wr_en;
+
 /////////////////////////////////////////////////////////////////
 
-//
-assign wROMADR = iADDR[15] | iADDR[14];
-//
-assign oDATA = wOUTDATA;
-reg vgREQ;
-assign oCS = (~wIOR) & vgREQ;
-//
-assign wIOR = iIORQ | iRD;
-//
-assign oFDC_SIDE1 = !r_BDI_FF[4];
-assign oFDC_DS[0] = r_BDI_FF[1:0] == 2'b00;
-assign oFDC_DS[1] = r_BDI_FF[1:0] == 2'b01;
+assign FDC_SIDE1 = !r_bdi_ff[4];
+assign FDC_DS[0] = r_bdi_ff[1:0] == 2'b00;
+assign FDC_DS[1] = r_bdi_ff[1:0] == 2'b01;
+assign FDC_WG = wg;
 
-//
-assign wPORTSBits = { iADDR[15], iADDR[13], iADDR[7], iADDR[1], iADDR[0] };
-//
-//    BDI #1F-7F
-assign w_BDI_WR_EN = ( iCSn | iWR ) == 1'b0;
-//
-assign oFDC_WG = wWG;
-//
-assign wVG_RESET_n = r_BDI_FF[2];
-//
-assign rTRDOS = iDOS;
-//
-always @( posedge iCLK )
-begin
-	rIOW0 <= iIORQ | iWR;
-	rIOW <= ~rIOW0;
-	//
-	r_BDI_DRQ0 <= w_BDI_DRQ;
-	r_BDI_DRQ <= r_BDI_DRQ0;
-	//
-	r_BDI_INTRQ0 <= w_BDI_INTRQ;
-	r_BDI_INTRQ <= r_BDI_INTRQ0;
-	//
-end
-//
-always @( posedge iCLK )
-if ( wVG_RESET_n == 1'b0 )
-	r2RQ_R_SREG <= 1'b0;
-else
-	if ( r2RQ_R_SREG == 1'b0 )
-		if ( wIOR == 1'b0 && (iCSn == 1'b0) && (iADDR[7:0] == VGCOM) )	//    BDI (STATUS register)
-			r2RQ_R_SREG <= 1'b1;
-		else	;
-	else
-		if ( r_BDI_INTRQ == 1'b0 )
-			r2RQ_R_SREG <= 1'b0;
-//
-always @( posedge iCLK )
-if ( wVG_RESET_n == 1'b0 )
-	rDRQ_R_DREG <= 1'b0;
-else
-	if ( rDRQ_R_DREG == 1'b0 )
-		if ( ( iIORQ | ( iWR & iRD ) ) == 1'b0 && (iCSn == 1'b0) && (iADDR[7:0] == VGDAT) )	// -   BDI (DATA register)
-			rDRQ_R_DREG <= 1'b1;
-		else	;
-	else
-		if ( r_BDI_DRQ == 1'b0 )
-			rDRQ_R_DREG <= 1'b0;
-//
-always @( wVG_RESET_n, w_BDI_INTRQ, w_BDI_DRQ, w_BDI_DO, rTRDOS, wIOR, wPORTSBits, iADDR[14], iCSn )	//     
-if ( (wIOR == 1'b1) || (iVDOS == 1'b1) )
-begin
-	wOUTDATA = 8'hFF;
-    vgREQ = 1'b0;
-end
-else
-begin
+assign ior = iorq_n | rd_n;
 
-	if ((iADDR[7:0] == VGSYS))
-	begin
-		wOUTDATA = { w_BDI_INTRQ, w_BDI_DRQ, 6'b111111 };
-		vgREQ = 1'b1;
-	end
-	else if ( (iCSn == 1'b0) && ((iADDR[7:0] == VGCOM) || (iADDR[7:0] == VGTRK) || (iADDR[7:0] == VGSEC) || (iADDR[7:0] == VGDAT)) ) begin
-		wOUTDATA = w_BDI_DO;
-      vgREQ = 1'b1;
-	end
-	else 
-		vgREQ = 1'b0;
+assign bdi_wr_en = ~( cs_n | wr_n );
+assign vg_reset_n = r_bdi_ff[2];
+
+always @( posedge clk )
+begin
+	r_iow0 <= iorq_n | wr_n;
+	r_iow <= ~r_iow0;
+
+	r_bdi_drq0 <= bdi_drq;
+	r_bdi_drq <= r_bdi_drq0;
 	
-/*	casez ( wPORTSBits )
-		5'b??111:	begin 
-            if (rTRDOS == 1'b0) begin
-              wOUTDATA = { w_BDI_INTRQ, w_BDI_DRQ, 6'h3F }; 
-              vgREQ = 1'b1; 
-				end
-				else
-					vgREQ = 1'b0;
-        end
-		5'b??011:	begin 
-            if (iCSn == 1'b0) begin
-                wOUTDATA = w_BDI_DO; 
-                vgREQ = 1'b1; 
-				end
-				else
-					vgREQ = 1'b0;
-			end
-		default: vgREQ = 1'b0;
-	endcase*/
+	r_bdi_intrq0 <= bdi_intrq;
+	r_bdi_intrq <= r_bdi_intrq0;
 end
-//
-always @( posedge iCLK )	//    #FF (TR-DOS)
-if ( iRESET )
-	begin
-		r_BDI_FF <= 5'b0;
-	end
-else
-	if (iWRFF) 
-	begin
-		r_BDI_FF <= iDATA[4:0];
-	end
-//
-//
-//
+
+// bdi status register
+always @(posedge clk)
+	if (~vg_reset_n)
+		r_intrq_r_sreg <= 1'b0;
+	else
+		if (~r_intrq_r_sreg)
+			if ( (~ior) && (~cs_n) && (a[7:0] == 8'h1F) )	//    BDI (STATUS register)
+				r_intrq_r_sreg <= 1'b1;
+			else	;
+		else
+			if ( ~r_bdi_intrq )
+				r_intrq_r_sreg <= 1'b0;
+
+// bdi data register
+always @( posedge clk )
+	if (~vg_reset_n)
+		r_drq_r_dreg <= 1'b0;
+	else
+		if (~r_drq_r_dreg)
+			if (  (~( iorq_n | ( wr_n & rd_n ) )) && (~cs_n ) && (a[7:0] == 8'h7f) )	// -   BDI (DATA register)
+				r_drq_r_dreg <= 1'b1;
+			else	;
+		else
+			if ( ~r_bdi_drq )
+				r_drq_r_dreg <= 1'b0;
+
+// data output
+assign dout = ((~cs_n) & (~rd_n)) ? bdi_do : ( ((~csff_n) & (~rd_n)) ? { bdi_intrq, bdi_drq, 6'b111111 } : 8'hFF );
+assign oe_n = ((~rd_n) & ((~cs_n) | (~csff_n))) ? 1'b0 : 1'b1;
+
+// port ff
+always @( posedge clk )	//    #FF (TR-DOS)
+	if ( reset )
+		r_bdi_ff <= 5'b0;
+	else if ( (~csff_n) & (~wr_n) & (~iorq_n) ) 
+		r_bdi_ff <= d[4:0];
+	
 Main_CTRL U14 (
-	.iCLK ( iCLK16 ),
-	.iRESETn ( wVG_RESET_n ),
-	.iWR_EN ( w_BDI_WR_EN ),
-	.iADR ( iADDR[6:5] ),
-	.iDATA ( iDATA ),
-	.oDATA ( w_BDI_DO ),
+	.iCLK ( clk_16 ),
+	.iRESETn ( vg_reset_n ),
+	.iWR_EN ( bdi_wr_en ),
+	.iADR ( a[6:5] ),
+	.iDATA ( d ),
+	.oDATA ( bdi_do ),
 //
-	.oSTEP ( oFDC_STEP ),
-	.oDIRC ( oFDC_DIR ),
-	.oHLD ( oFDC_MOTOR ),
-	.iHRDY ( r_BDI_FF[3] ),
-	.iTR00 ( iFDC_TR00 ),
-	.iIP ( iFDC_INDEX ),
-	.iWRPT ( iFDC_WPRT ),
-	.oWG ( wWG ),
-	.oDRQ ( w_BDI_DRQ ),
-	.oINTRQ ( w_BDI_INTRQ ),
+	.oSTEP ( FDC_STEP ),
+	.oDIRC ( FDC_DIR ),
+	.oHLD ( FDC_MOTOR ),
+	.iHRDY ( r_bdi_ff[3] ),
+	.iTR00 ( FDC_TR00 ),
+	.iIP ( FDC_INDEX ),
+	.iWRPT ( FDC_WPRT ),
+	.oWG ( wg ),
+	.oDRQ ( bdi_drq ),
+	.oINTRQ ( bdi_intrq ),
 //
-	.iSYNC			( wSYNC ),
-	.iBYTE_CNT		( wBYTE_CNT ),
-	.iCRC16_D8		( wCRC16_D8 ),
-	.oRESET_CRC		( wRESET_CRC ),
-	.oVFOE			( wVFOE ),
-	.oIP_CNT		( wIP_CNT ),
-	.iBYTE_2_MAIN	( wBYTE_2_MAIN ),
-	.iBYTE_2_READ	( wBYTE_2_READ ),
-	.oMAIN_2_BYTE	( wMAIN_2_BYTE ),
-	.oBYTE_2_WRITE	( wBYTE_2_WRITE ),
-	.oTRANSLATE		( wTRANSLATE ),
-	.iNEXT_BYTE		( wNEXT_BYTE ),
+	.iSYNC			( sync ),
+	.iBYTE_CNT		( byte_cnt ),
+	.iCRC16_D8		( crc16_d8 ),
+	.oRESET_CRC		( reset_crc ),
+	.oVFOE			( vfoe ),
+	.oIP_CNT		( ip_cnt ),
+	.iBYTE_2_MAIN	( byte_2_main ),
+	.iBYTE_2_READ	( byte_2_read ),
+	.oMAIN_2_BYTE	( main_2_byte ),
+	.oBYTE_2_WRITE	( byte_2_write ),
+	.oTRANSLATE		( translate ),
+	.iNEXT_BYTE		( next_byte ),
 //
-	.iDRQ_R_DREG	( rDRQ_R_DREG ),	//  DRQ     
-	.i2RQ_R_SREG	( r2RQ_R_SREG )		//  INTRQ  DRQ    
+	.iDRQ_R_DREG	( r_drq_r_dreg ),			//  DRQ     
+	.i2RQ_R_SREG	( r_intrq_r_sreg )		//  INTRQ  DRQ    
 );
-//
+
 DPLL U15 (
-	.iCLK	( iCLK16 ),
-	.iRDDT	( iFDC_RDATA ),
-	.oRCLK	( wRCLK ),
-	.oRAWR	( wRAWR ),
-	.iVFOE	( wVFOE )
+	.iCLK	( clk_16 ),
+	.iRDDT	( FDC_RDATA ),
+	.oRCLK	( rclk ),
+	.oRAWR	( rawr ),
+	.iVFOE	( vfoe )
 );
-//
+
 AMD U16 (
-	.iCLK		( iCLK16 ),
-	.iRCLK		( wRCLK ),
-	.iRAWR		( wRAWR ),
-	.iVFOE		( wVFOE ),
-	.iIP_CNT	( wIP_CNT ),
-	.o3WORDS	( w3WORDS ),
-	.oSTART		( wSTART ),
-	.oSYNC		( wSYNC )
+	.iCLK		( clk_16 ),
+	.iRCLK		( rclk ),
+	.iRAWR		( rawr ),
+	.iVFOE		( vfoe ),
+	.iIP_CNT	( ip_cnt ),
+	.o3WORDS	( words ),
+	.oSTART		( start ),
+	.oSYNC		( sync )
 );
-//
+
 MFMDEC U17 (
-	.iCLK			( iCLK16 ),
-	.iRCLK			( wRCLK ),
-	.iVFOE			( wVFOE ),
-	.iSTART			( wSTART ),
-	.iSYNC			( wSYNC ),
-	.i3WORDS		( w3WORDS ),
-	.oBYTE_2_MAIN	( wBYTE_2_MAIN ),
-	.oBYTE_2_READ	( wBYTE_2_READ )
+	.iCLK			( clk_16 ),
+	.iRCLK			( rclk ),
+	.iVFOE			( vfoe ),
+	.iSTART			( start ),
+	.iSYNC			( sync ),
+	.i3WORDS		( words ),
+	.oBYTE_2_MAIN	( byte_2_main ),
+	.oBYTE_2_READ	( byte_2_read )
 );
-//
+
 CRC16_D8 U19 (
-	.iCLK			( iCLK16 ),
-	.iRESET_CRC		( wRESET_CRC ),
-	.iBYTE_2_MAIN	( wBYTE_2_MAIN ),
-	.iMAIN_2_BYTE	( wMAIN_2_BYTE ),
-	.iBYTE_2_READ	( wBYTE_2_READ ),
-	.iBYTE_2_WRITE	( wBYTE_2_WRITE ),
-	.oBYTE_CNT		( wBYTE_CNT ),
-	.oCRC16_D8		( wCRC16_D8 )
+	.iCLK			( clk_16 ),
+	.iRESET_CRC		( reset_crc ),
+	.iBYTE_2_MAIN	( byte_2_main ),
+	.iMAIN_2_BYTE	( main_2_byte ),
+	.iBYTE_2_READ	( byte_2_read ),
+	.iBYTE_2_WRITE	( byte_2_write ),
+	.oBYTE_CNT		( byte_cnt ),
+	.oCRC16_D8		( crc16_d8 )
 );
-//
+
 MFMCDR U20 (
-	.iCLK			( iCLK16 ),
-	.iRESETn		( wVG_RESET_n ),
-	.iWG			( wWG ),
-	.iMAIN_2_BYTE	( wMAIN_2_BYTE ),
-	.iBYTE_2_WRITE	( wBYTE_2_WRITE ),
-	.iTRANSLATE		( wTRANSLATE ),
-	.oNEXT_BYTE		( wNEXT_BYTE ),
-	.oWDATA			( oFDC_WR_DATA )
+	.iCLK			( clk_16 ),
+	.iRESETn		( vg_reset_n ),
+	.iWG			( wg ),
+	.iMAIN_2_BYTE	( main_2_byte ),
+	.iBYTE_2_WRITE	( byte_2_write ),
+	.iTRANSLATE		( translate ),
+	.oNEXT_BYTE		( next_byte ),
+	.oWDATA			( FDC_WR_DATA )
 );
 
 endmodule

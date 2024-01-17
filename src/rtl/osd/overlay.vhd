@@ -120,6 +120,7 @@ begin
 	 paper <= '1' when hcnt >= paper_start_h + 8 and hcnt < paper_end_h + 8 and vcnt >= paper_start_v and vcnt < paper_end_v else '0'; --        (8 px)
     video_on <= '1' when (OSD_OVERLAY = '1' or OSD_POPUP = '1') else '0';
 	 
+	 -- mem read character / attribute
 	 process (CLK, ENA_14, vram_do)
 	 begin
 		if (rising_edge(CLK)) then 
@@ -154,7 +155,7 @@ begin
 		end if;
 	 end process;
 	 
-	 -- pixel
+	 -- pixel 
 	 process (CLK, ENA_14, OSD_POPUP, hcnt, char_x, char_y)
 	 begin
 		if rising_edge(CLK) then

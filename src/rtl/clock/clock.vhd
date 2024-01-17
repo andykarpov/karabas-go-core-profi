@@ -17,9 +17,8 @@ port (
 	DS80			: in std_logic;
 	
 	CLK_BUS		: buffer std_logic; -- 28 / 24
-	CLK_MEM 		: buffer std_logic; -- 100
-	CLK_DIV2		: out std_logic; -- 14 / 12
-	CLK_FLOPPY	: out std_logic; -- 16
+	CLK_16 		: out std_logic; -- 16
+	CLK_8			: out std_logic; -- 8
 	
 	ENA_DIV2		: buffer std_logic;
 	ENA_DIV4		: buffer std_logic;
@@ -72,14 +71,12 @@ port map (
 	CLKIN				=> CLK,
 	SRDY 				=> open,
 	CLK0OUT 			=> CLK_BUS, -- 28 / 24
-	CLK1OUT 			=> CLK_MEM, -- 100
-	CLK2OUT 			=> open,
+	CLK1OUT 			=> CLK_16,  -- 16
+	CLK2OUT 			=> CLK_8,   -- 8
 	CLK3OUT 			=> open
 );
 	
 ARESET 		<= not locked;
---CLK_BUS_N   <= not CLK_BUS;
-CLK_FLOPPY 	<= '0'; -- TODO another PLL ?
 
 -- ena counters
 process (clk_bus)
@@ -106,11 +103,11 @@ begin
 	end if;
 end process;
 
-U_BUFG_DIV2: BUFGCE
-port map (
-	O => CLK_DIV2,
-	I => clk_bus,
-	CE => ena_div2
-);
+--U_BUFG_DIV2: BUFGCE
+--port map (
+--	O => CLK_DIV2,
+--	I => clk_bus,
+--	CE => ena_div2
+--);
 
 end rtl;

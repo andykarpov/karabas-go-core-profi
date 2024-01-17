@@ -23,8 +23,8 @@ port(
 	 DOS 			: in std_logic := '0';
 	 ROM14 		: in std_logic := '0';
 	 
-	 MS_X 	 	: in signed(7 downto 0) := "00000000";
-	 MS_Y 	 	: in signed(7 downto 0) := "00000000";
+	 MS_X 	 	: in std_logic_vector(7 downto 0) := "00000000";
+	 MS_Y 	 	: in std_logic_vector(7 downto 0) := "00000000";
 	 MS_BTNS 	: in std_logic_vector(2 downto 0) := "000";
 	 MS_PRESET  : in std_logic := '0';
 	 MS_EVENT 	: in std_logic := '0';
@@ -176,8 +176,8 @@ begin
 					-- capture mouse buffer
 					when st_prepare =>
 						status_reg(1) <= '0';
-						if (new_data = '1' and ms_buf /= MS_BTNS(0) & MS_BTNS(1) & std_logic_vector(MS_Y(7 downto 6)) & std_logic_vector(MS_X(7 downto 6)) & std_logic_vector(MS_X(5 downto 0)) & std_logic_vector(MS_Y(5 downto 0))) then 
-							ms_buf <= MS_BTNS(0) & MS_BTNS(1) & std_logic_vector(MS_Y(7 downto 6)) & std_logic_vector(MS_X(7 downto 6)) & std_logic_vector(MS_X(5 downto 0)) & std_logic_vector(MS_Y(5 downto 0));
+						if (new_data = '1' and ms_buf /= MS_BTNS(0) & MS_BTNS(1) & MS_Y(7 downto 6) & MS_X(7 downto 6) & MS_X(5 downto 0) & MS_Y(5 downto 0)) then 
+							ms_buf <= MS_BTNS(0) & MS_BTNS(1) & MS_Y(7 downto 6) & MS_X(7 downto 6) & MS_X(5 downto 0) & MS_Y(5 downto 0);
 							state <= st_byte0;
 							new_data <= '0';
 						else 

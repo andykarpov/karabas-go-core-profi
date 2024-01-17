@@ -1,3 +1,42 @@
+-------------------------------------------------------------------------------------------------------------------
+-- 
+-- 
+-- #       #######                                                 #                                               
+-- #                                                               #                                               
+-- #                                                               #                                               
+-- ############### ############### ############### ############### ############### ############### ############### 
+-- #             #               # #                             # #             #               # #               
+-- #             # ############### #               ############### #             # ############### ############### 
+-- #             # #             # #               #             # #             # #             #               # 
+-- #             # ############### #               ############### ############### ############### ############### 
+--                                                                                                                 
+--         ####### ####### ####### #######                                         ############### ############### 
+--                                                                                 #               #             # 
+--                                                                                 #   ########### #             # 
+--                                                                                 #             # #             # 
+-- https://github.com/andykarpov/karabas-go                                        ############### ############### 
+--
+-- FPGA Profi (Karabas Pro) core for Karabas-Go
+--
+-- @author Andy Karpov <https://github.com/andykarpov>
+-- @author Oleh Starychenko <https://github.com/solegstar>
+-- @author Oleh Chastukhin <https://github.com/Caasper911>
+-- @author Alexander Sharihin <https://github.com/nihirash>
+-- @author Doctor Max <https://github.com/drmax-gc>
+-- EU, 2024
+
+-- TODO:
+-- 1. mouse + serial mouse refactoring
+-- 2. NMI button (hotkey + button)
+-- 3. UNO UART, ZIFI, CTS
+-- 4. Fix OSD Menu+ESC (don't send ESC 200ms after release)
+-- 5. OSD popups (implement on MCU side)
+-- 6. GS
+-- 7. Turbo 56 MHz (system clock 56 or 112 ?)
+-- 8. Fix make_core.py to use default value as pre-filled switch value instead of 0
+-- 9. Fill build number automatically
+------------------------------------------------------------------------------------------------------------------
+
 library IEEE; 
 use IEEE.std_logic_1164.all; 
 use IEEE.std_logic_unsigned.all;
@@ -43,17 +82,19 @@ entity karabas_go is
            SD_DO : inout  STD_LOGIC;
            SD_CLK : out  STD_LOGIC;
            SD_DET_N : in  STD_LOGIC;
-           FDC_INDEX : inout  STD_LOGIC;
+
+           FDC_INDEX : in  STD_LOGIC;
            FDC_DRIVE : out  STD_LOGIC_VECTOR (1 downto 0);
            FDC_MOTOR : out  STD_LOGIC;
-           FDC_DIR : inout  STD_LOGIC;
-           FDC_STEP : inout  STD_LOGIC;
-           FDC_WDATA : inout  STD_LOGIC;
-           FDC_WGATE : inout  STD_LOGIC;
-           FDC_TR00 : inout  STD_LOGIC;
-           FDC_WPRT : inout  STD_LOGIC;
-           FDC_RDATA : inout  STD_LOGIC;
-           FDC_SIDE_N : inout  STD_LOGIC;
+           FDC_DIR : out  STD_LOGIC;
+           FDC_STEP : out  STD_LOGIC;
+           FDC_WDATA : out  STD_LOGIC;
+           FDC_WGATE : out  STD_LOGIC;
+           FDC_TR00 : in  STD_LOGIC;
+           FDC_WPRT : in  STD_LOGIC;
+           FDC_RDATA : in  STD_LOGIC;
+           FDC_SIDE_N : out  STD_LOGIC;
+
            FT_SPI_CS_N : out  STD_LOGIC;
            FT_SPI_SCK : out  STD_LOGIC;
            FT_SPI_MISO : inout  STD_LOGIC;
@@ -131,6 +172,7 @@ signal hdd_type		: std_logic;
 signal fdc_swap		: std_logic;
 signal turbo_fdc_off	: std_logic;
 signal hdd_off			: std_logic;
+signal hdd_active		: std_logic;
 
 -- Keyboard
 signal kb_do_bus		: std_logic_vector(5 downto 0);
@@ -152,11 +194,13 @@ signal ms_x				: std_logic_vector(7 downto 0);
 signal ms_y				: std_logic_vector(7 downto 0);
 signal ms_z				: std_logic_vector(3 downto 0);
 signal ms_b				: std_logic_vector(2 downto 0);
-signal ms_upd 			: std_logic;
+
+signal hid_ms_x 		: std_logic_vector(7 downto 0);
+signal hid_ms_y		: std_logic_vector(7 downto 0);
+signal hid_ms_z		: std_logic_vector(3 downto 0);
+signal hid_ms_b		: std_logic_vector(2 downto 0);
+signal hid_ms_upd 	: std_logic;
 signal ms_present 	: std_logic := '0';
-signal ms_event		: std_logic := '0';
-signal ms_delta_x		: signed(7 downto 0);
-signal ms_delta_y		: signed(7 downto 0);
 
 -- Video
 signal vid_a_bus		: std_logic_vector(13 downto 0);
@@ -201,6 +245,8 @@ signal zc_sclk			: std_logic;
 signal zc_mosi			: std_logic;
 signal zc_miso			: std_logic;
 
+signal nemoide_en 		: std_logic;
+
 --- DivMMC
 signal divmmc_en		: std_logic;
 signal automap			: std_logic;
@@ -241,27 +287,6 @@ signal cs_rtc_as 		: std_logic := '0';
 signal cs_008b			: std_logic := '0';
 signal cs_018b			: std_logic := '0';
 signal cs_028b			: std_logic := '0';
-
--- Profi HDD ports
-signal hdd_profi_ebl_n	:std_logic;
-signal hdd_wwc_n			:std_logic; -- Write High byte from Data bus to "Write register"
-signal hdd_wwe_n			:std_logic; -- Read High byte from "Write register" to HDD bus
-signal hdd_rww_n			:std_logic; -- Selector Low byte Data bus Buffer Direction: 1 - to HDD bus, 0 - to Data bus
-signal hdd_rwe_n			:std_logic; -- Read High byte from "Read register" to Data bus
-signal hdd_cs3fx_n		:std_logic;
-signal hdd_active 		:std_logic;
-
--- Nemo HDD ports
-signal nemoide_en 		: std_logic;
-signal cs_nemo_ports		: std_logic;
-signal nemo_ebl_n			: std_logic;
-signal IOW					: std_logic;
-signal WRH 					: std_logic;
-signal IOR 					: std_logic;
-signal RDH 					: std_logic;
-signal nemo_cs0			: std_logic;
-signal nemo_cs1			: std_logic;
-signal nemo_ior			: std_logic;
 
 -- Profi FDD ports
 signal RT_F2_1			:std_logic;
@@ -304,9 +329,8 @@ signal saa_out_r		: std_logic_vector(7 downto 0);
 
 -- CLOCK
 signal clk_bus			: std_logic;
-signal clk_mem 		: std_logic;
-signal clk_div2		: std_logic;
 signal clk_16 			: std_logic;
+signal clk_8 			: std_logic;
 
 signal ena_div2	: std_logic := '0';
 signal ena_div4	: std_logic := '0';
@@ -376,11 +400,6 @@ signal gx0 				: std_logic := '0';
 signal count_block 		: std_logic := '0';
 signal memory_contention : std_logic := '0';
 
--- debug 
-signal fdd_oe_n 		: std_logic := '1';
-signal hdd_oe_n 		: std_logic := '1';
-signal port_nreset 	: std_logic := '1';
-
 -- wait signal
 signal WAIT_C			:std_logic_vector(1 downto 0);
 signal WAIT_IO			:std_logic;
@@ -404,6 +423,8 @@ signal kb_joy_type_l : std_logic_vector(2 downto 0) := "000";
 signal kb_joy_type_r : std_logic_vector(2 downto 0) := "000";
 signal kb_keycode : std_logic_vector(7 downto 0) := x"FF";
 signal kb_rom_bank : std_logic_vector(1 downto 0) := "00";
+signal prev_kb_rom_bank : std_logic_vector(1 downto 0) := "00";
+signal rom_bank_reset : std_logic := '0';
 signal kb_turbofdc : std_logic := '0';
 signal kb_covox : std_logic := '0';
 signal kb_psg_mix : std_logic_vector(1 downto 0) := "00";
@@ -415,6 +436,12 @@ signal kb_nemoide_en : std_logic := '0';
 signal kb_type : std_logic := '0';
 signal mcu_busy : std_logic := '1';
 
+signal ide_do_bus : std_logic_vector(7 downto 0);
+signal ide_oe_n	: std_logic := '1';
+
+signal fdd_do_bus : std_logic_vector(7 downto 0);
+signal fdd_oe_n : std_logic := '1';
+
 begin
 
 U1: entity work.clock
@@ -425,9 +452,8 @@ port map(
 	DS80 => ds80,
 	
 	CLK_BUS => clk_bus,
-	CLK_MEM => clk_mem,
-	CLK_DIV2 => clk_div2,
-	CLK_FLOPPY => clk_16,
+	CLK_16 	=> clk_16,
+	CLK_8 	=> clk_8,
 	
 	ENA_DIV2 => ena_div2,
 	ENA_DIV4 => ena_div4,
@@ -441,7 +467,7 @@ port map(
 );
 
 -- Zilog Z80A CPU
-U3: entity work.T80a
+U2: entity work.T80a
 port map (
 	RESET_n			=> cpu_reset_n,
 	CLK_n				=> not clk_bus,
@@ -464,7 +490,7 @@ port map (
 );
 
 -- memory manager
-U4: entity work.memory 
+U3: entity work.memory 
 port map ( 
 	CLK_BUS 			=> clk_bus,
 	ENA_CPU 			=> ena_cpu,
@@ -528,7 +554,7 @@ port map (
 );
 
 -- Video Spectrum/Pentagon
-U5: entity work.video
+U4: entity work.video
 port map (
 	CLK_BUS 			=> clk_bus, 	-- 28 / 24
 	ENA_14 			=> ena_div2, 	-- 14 / 12
@@ -566,7 +592,7 @@ port map (
 );
 
 -- osd overlay
-U6: entity work.overlay
+U5: entity work.overlay
 port map (
 	CLK 				=> clk_bus,
 	ENA_14 			=> ena_div2,
@@ -587,7 +613,7 @@ port map (
 );
 
 -- Scandoubler	
-U7: entity work.vga_scandoubler
+U6: entity work.vga_scandoubler
 port map(
 	clk => clk_bus,
 	clk14en => ena_div2,
@@ -611,7 +637,7 @@ VGA_G(1 downto 0) <= (others => '0');
 VGA_B(1 downto 0) <= (others => '0');
 
 -- MCU
-U8: entity work.mcu
+U7: entity work.mcu
 port map(
 	CLK => clk_bus,
 	N_RESET => not areset,
@@ -621,11 +647,11 @@ port map(
 	MCU_SCK => MCU_SCK,
 	MCU_SS => MCU_CS_N,
 	
-	MS_X => ms_x,
-	MS_Y => ms_y,
-	MS_Z => ms_z,
-	MS_B => ms_b,
-	MS_UPD => ms_upd,
+	MS_X => hid_ms_x,
+	MS_Y => hid_ms_y,
+	MS_Z => hid_ms_z,
+	MS_B => hid_ms_b,
+	MS_UPD => hid_ms_upd,
 	
 	KB_STATUS => hid_kb_status,
 	KB_DAT0 => hid_kb_dat0,
@@ -657,7 +683,7 @@ port map(
 	
 );
 
-U9: entity work.hid_parser
+U8: entity work.hid_parser
 port map (
 	CLK => clk_bus,
 	RESET => areset,	
@@ -689,7 +715,7 @@ port map (
 	KEYCODE => kb_keycode
 );
 
-U10: entity work.soft_switches
+U9: entity work.soft_switches
 port map (
 	CLK => clk_bus,
 	
@@ -714,6 +740,28 @@ port map (
 	NMI => kb_nmi,
 	RESET => kb_reset	
 );
+
+U10: entity work.cursor
+port map(
+	CLK => clk_bus,
+	RESET => areset,
+	
+	-- inputs from usb hid mouse
+	MS_X => hid_ms_x,
+	MS_Y => hid_ms_y,
+	MS_Z => hid_ms_z,
+	MS_B => hid_ms_b,
+	MS_UPD => hid_ms_upd,
+	
+	-- output delta
+	OUT_X => ms_x,
+	OUT_Y => ms_y,
+	OUT_Z => ms_z,
+	OUT_B => ms_b
+	
+);
+
+ms_present <= '1';
 
 U11: entity work.PCM5102
 port map (
@@ -772,21 +820,21 @@ port map (
 	O_FB 				=> covox_fb
 );
 
---U14: saa1099
---port map(
---	clk_sys			=> clk_8,
---	ce					=> '1',
---	rst_n				=> not reset,
---	cs_n				=> '0',
---	a0					=> cpu_a_bus(8),		-- 0=data, 1=address
---	wr_n				=> saa_wr_n,
---	din				=> cpu_do_bus,
---	out_l				=> saa_out_l,
---	out_r				=> saa_out_r);
+U14: entity work.saa1099
+port map(
+	clk				=> clk_8,
+	rst_n				=> not reset,
+	cs_n				=> '0',
+	a0					=> cpu_a_bus(8),		-- 0=data, 1=address
+	wr_n				=> saa_wr_n,
+	din				=> cpu_do_bus,
+	out_l				=> saa_out_l,
+	out_r				=> saa_out_r
+);
 
 	
 -- Serial mouse emulation
-U20: entity work.serial_mouse
+U15: entity work.serial_mouse
 port map(
 	CLK 				=> clk_bus,
 	CLKEN 			=> ena_cpu,
@@ -801,18 +849,18 @@ port map(
 	DOS 				=> dos_act,
 	ROM14 			=> rom14,
 	
-	MS_X 				=> ms_delta_x,
-	MS_Y				=> -ms_delta_y,
+	MS_X 				=> ms_x,
+	MS_Y				=> ms_y,
 	MS_BTNS 			=> ms_b,
 	MS_PRESET 		=> ms_present,
-	MS_EVENT 		=> ms_event,
+	MS_EVENT 		=> hid_ms_upd,
 	
 	DO 				=> serial_ms_do_bus,
 	INT_N 			=> serial_ms_int,
 	OE_N 				=> serial_ms_oe_n
 );
 
-U_ZIFI: entity work.zifi 
+U16: entity work.zifi 
 port map (
 	CLK    => clk_bus,
 	RESET  => areset,
@@ -838,10 +886,75 @@ UART_CTS <= zifi_uart_cts; -- when zifi_api_enabled = '1' else zxuno_uart_cts;
 ESP_RESET_N <= 'Z';
 ESP_BOOT_N <= 'Z';
 
+U17: entity work.ide_controller
+port map(
+	CLK 		=> clk_bus,
+	ENA_CPU	=> ena_cpu,
+	RESET 	=> reset,
+	
+	NEMOIDE_EN => nemoide_en,
+
+	A 			=> cpu_a_bus,
+	DI 		=> cpu_do_bus,
+	IORQ_N 	=> cpu_iorq_n,
+	MREQ_N 	=> cpu_mreq_n,
+	M1_N 		=> cpu_m1_n,
+	RD_N 		=> cpu_rd_n,
+	WR_N 		=> cpu_wr_n,
+	
+	CPM		=> cpm,
+	ROM14		=> rom14,
+	DOS		=> dos_act,
+	HDD_OFF	=> hdd_off,
+
+	DO 		=> ide_do_bus,
+	ACTIVE	=> hdd_active,
+	OE_N 		=> ide_oe_n,
+
+	IDE_A 	=> WA,
+	IDE_D 	=> WD,
+	IDE_CS_N => WCS_N,
+	IDE_RD_N => WRD_N,
+	IDE_WR_N => WWR_N,
+	IDE_RESET_N => WRESET_N
+);
+
+U18: entity work.firefly_fdc
+port map(
+	clk => clk_bus,
+	clk_16 => clk_16,
+	reset => reset,
+
+	a => cpu_a_bus,
+	d => cpu_do_bus,
+	m1_n => cpu_m1_n,
+	wr_n => cpu_wr_n,
+	rd_n => cpu_rd_n,
+	iorq_n => cpu_iorq_n,
+
+	cs_n => fdd_cs_n,
+	csff_n => fdd_cs_pff_n,
+
+	oe_n => fdd_oe_n,
+	dout => fdd_do_bus,
+	
+	FDC_SIDE1 => FDC_SIDE_N,
+	FDC_RDATA => FDC_RDATA,
+	FDC_WPRT => FDC_WPRT,
+	FDC_TR00 => FDC_TR00,
+	FDC_INDEX => FDC_INDEX,
+	FDC_WG => FDC_WGATE,
+	FDC_WR_DATA => FDC_WDATA,
+	FDC_STEP => FDC_STEP,
+	FDC_DIR => FDC_DIR,
+	FDC_MOTOR => FDC_MOTOR,
+	FDC_DS => FDC_DRIVE
+);
+
 -------------------------------------------------------------------------------
 -- Global signals
 
-reset <= areset or kb_reset or loader_act or mcu_busy; -- hot reset
+reset <= areset or kb_reset or loader_act or mcu_busy or rom_bank_reset; -- hot reset
 
 -- CPU reset
 process (clk_bus)
@@ -860,7 +973,7 @@ cpu_nmi_n <= mapcond when kb_nmi = '1' and divmmc_en = '1' else
 cpu_wait_n <= '1';
 
 -- cpu wait condition
-cpu_wait <= '1' when kb_pause = '1' or  (kb_screen_mode = "01" and memory_contention = '1' and automap = '0' and cs_nemo_ports = '0' and DS80 = '0') else '0';
+cpu_wait <= '1' when kb_pause = '1' or  (kb_screen_mode = "01" and memory_contention = '1' and automap = '0' and DS80 = '0') else '0';
 
 -------------------------------------------------------------------------------
 -- SD
@@ -961,50 +1074,6 @@ cs_rtc_ds <= '1' when cpu_iorq_n = '0' and cpu_m1_n = '1' and
 					  
 --  #7e -    /wr
 port_xxfe_reg <= cpu_do_bus when cs_xxfe = '1' and (cpu_wr_n'event and cpu_wr_n = '1');
-
---  Profi HDD
-hdd_profi_ebl_n	<='0' when (cpu_a_bus(7)='1' and cpu_a_bus(4 downto 0)="01011" and cpu_iorq_n='0') and ((cpm='1' and rom14='1') or (dos_act='1' and rom14='0')) and hdd_off = '0' else '1';	-- ROM14=0 BAS=0  SYS
-hdd_wwc_n 	<='0' when (cpu_wr_n='0' and cpu_a_bus(7 downto 0)="11001011" and cpu_iorq_n='0') and ((cpm='1' and rom14='1') or (dos_act='1' and rom14='0')) and hdd_off = '0' else '1'; -- Write High byte from Data bus to "Write register"
-hdd_wwe_n 	<='0' when (cpu_wr_n='0' and cpu_a_bus(7 downto 0)="11101011" and cpu_iorq_n='0') and ((cpm='1' and rom14='1') or (dos_act='1' and rom14='0')) and hdd_off = '0' else '1'; -- Read High byte from "Write register" to HDD bus
-hdd_rww_n 	<='0' when (cpu_wr_n='1' and cpu_a_bus(7 downto 0)="11001011" and cpu_iorq_n='0') and ((cpm='1' and rom14='1') or (dos_act='1' and rom14='0')) and hdd_off = '0' else '1'; -- Selector Low byte Data bus Buffer Direction: 1 - to HDD bus, 0 - to Data bus
-hdd_rwe_n 	<='0' when (cpu_wr_n='1' and cpu_a_bus(7 downto 0)="11101011" and cpu_iorq_n='0') and ((cpm='1' and rom14='1') or (dos_act='1' and rom14='0')) and hdd_off = '0' else '1'; -- Read High byte from "Read register" to Data bus
-hdd_cs3fx_n <='0' when (cpu_wr_n='0' and cpu_a_bus(7 downto 0)="10101011" and cpu_iorq_n='0') and ((cpm='1' and rom14='1') or (dos_act='1' and rom14='0')) and hdd_off = '0' else '1';
-hdd_active <= not(hdd_wwc_n and hdd_wwe_n and hdd_rww_n and hdd_rwe_n) or not(WRH and IOW and IOR and RDH);
-
---  Nemo HDD
-
---0XF0			; / 
---0XD0			;CHS-   /LBA  24-27
---0XB0			;CHS- 8-15/LBA  16-23
---0X90			;CHS- 0-7/LBA  8-15
---0X70			;CHS- /LBA  0-7
---0X50			; 
---0X30			; /
---0X10			; 
---0XC8			; /
---0X11			; 8 
-
-cs_nemo_ports <= '1' when (cpu_a_bus(7 downto 0) = x"F0" or 
-									cpu_a_bus(7 downto 0) = x"D0" or 
-									cpu_a_bus(7 downto 0) = x"B0" or 
-									cpu_a_bus(7 downto 0) = x"90" or 
-									cpu_a_bus(7 downto 0) = x"70" or 
-									cpu_a_bus(7 downto 0) = x"50" or 
-									cpu_a_bus(7 downto 0) = x"30" or 
-									cpu_a_bus(7 downto 0) = x"10" or 
-									cpu_a_bus(7 downto 0) = x"C8" or 
-									cpu_a_bus(7 downto 0) = x"11") and cpu_iorq_n = '0' and cpm = '0' else '0'; 
-
-nemo_ebl_n <= '0' when cs_nemo_ports = '1' and cpu_m1_n='1' and nemoide_en = '1' else '1';
-IOW <='0' when cpu_a_bus(2 downto 0)="000" and cpu_m1_n='1' and cpu_iorq_n='0' and cpm='0' and cpu_wr_n='0' else '1';
-WRH <='0' when cpu_a_bus(2 downto 0)="001" and cpu_m1_n='1' and cpu_iorq_n='0' and cpm='0' and cpu_wr_n='0' else '1';
-IOR <='0' when cpu_a_bus(2 downto 0)="000" and cpu_m1_n='1' and cpu_iorq_n='0' and cpm='0' and cpu_rd_n='0' else '1';
-RDH <='0' when cpu_a_bus(2 downto 0)="001" and cpu_m1_n='1' and cpu_iorq_n='0' and cpm='0' and cpu_rd_n='0' else '1';
-nemo_cs0<= cpu_a_bus(3) when nemo_ebl_n='0' else '1';
-nemo_cs1<= cpu_a_bus(4) when nemo_ebl_n='0' else '1';
-nemo_ior<= ior when nemo_ebl_n='0' else '1';
--- OCH:
---SDIR <= not nemo_ebl_n;
 
 --  Profi FDD
 RT_F2_1 <='0' when (cpu_a_bus(7 downto 5)="001" and cpu_a_bus(1 downto 0)="11" and cpu_iorq_n='0') and ((cpm='1' and rom14='1') or (dos_act='1' and rom14='0')) else '1'; --6D
@@ -1332,8 +1401,8 @@ begin
 		when x"15" => cpu_di_bus <= port_028b_reg;
 		when x"16" => cpu_di_bus <= zifi_do_bus;
 		when x"17" => cpu_di_bus <= vid_attr;
-		--when x"18" => cpu_di_bus <= cpld_do;
-		--when x"19" => cpu_di_bus <= cpld_do; -- nemo
+		when x"18" => cpu_di_bus <= fdd_do_bus;
+		when x"19" => cpu_di_bus <= ide_do_bus;
 		when others => cpu_di_bus <= (others => '1');
 	end case;
 end process;
@@ -1342,7 +1411,6 @@ selector <=
 	x"00" when (ram_oe_n = '0') else -- ram / rom
 	x"01" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and cs_rtc_ds = '1') else -- RTC MC146818A
 	x"02" when (cs_xxfe = '1' and cpu_rd_n = '0') else 									-- Keyboard, port #FE
-	--x"19" when (nemo_ebl_n = '0' and cpu_rd_n = '0') else									-- nemo
  	x"03" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and (cpu_a_bus(7 downto 0) = X"57" or (cpu_a_bus(7 downto 0) = X"EB" and cpm = '0' and divmmc_en = '1')) ) else 	-- Z-Controller + DivMMC
 	x"04" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and cpu_a_bus(7 downto 0) = X"77") else 	-- Z-Controller
 	x"05" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and cpu_a_bus( 7 downto 0) = X"1F" and dos_act = '0' and cpm = '0' and joy_mode = "000") else -- Joystick, port #1F
@@ -1362,16 +1430,10 @@ selector <=
 	x"15" when (cs_028b = '1' and cpu_rd_n = '0') else										-- port #028B
 	x"16" when zifi_oe_n = '0' else  -- zifi
 	x"17" when (vid_pff_cs = '1' and cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_a_bus( 7 downto 0) = X"FF") and dos_act='0' and cpm = '0' and ds80 = '0' else -- Port FF select
-	--x"18" when cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' else -- cpld 
+	x"18" when (fdd_oe_n = '0') else -- fdd
+	x"19" when (ide_oe_n = '0') else	-- ide
 	(others => '1');
 
-
--- HDD
-WA <= (others => '1');
-WCS_N <= "11";
-WRD_N <= '1';
-WWR_N <= '1';
-WRESET_N <= '1';
 
 -- SDRAM
 SDR_BA <= "00";
@@ -1381,10 +1443,6 @@ SDR_DQM <= "00";
 SDR_WE_N <= '1';
 SDR_CAS_N <= '1';
 SDR_RAS_N <= '1';
-
--- FDD
-FDC_DRIVE <= "00";
-FDC_MOTOR <= '0';
 
 -- FT812
 FT_SPI_CS_N <= '1';
@@ -1402,6 +1460,19 @@ port map(
 );
 
 ext_rom_bank <= kb_rom_bank;
+
+-- trigger a reset signal on rom bank switch
+process (CLK_BUS)
+begin
+	if rising_edge(CLK_BUS) then
+		rom_bank_reset <= '0';
+		if (prev_kb_rom_bank /= kb_rom_bank) then
+			rom_bank_reset <= '1';
+			prev_kb_rom_bank <= kb_rom_bank;
+		end if;
+	end if;
+end process;
+
 vid_scandoubler_enable <= not(kb_video);
 divmmc_en <= kb_divmmc_en;
 nemoide_en <= kb_nemoide_en;

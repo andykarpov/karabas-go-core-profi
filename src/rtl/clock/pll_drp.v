@@ -43,7 +43,7 @@ module pll_drp
    #(
       //***********************************************************************
       // State 1 Parameters - These are for the first reconfiguration state.
-      // 28 MHZ + 100 MHZ
+      // 28 MHZ + 16 MHZ + 8 MHZ
       //***********************************************************************
 
 	  // These parameters have an effect on the feedback path.  A change on
@@ -84,11 +84,11 @@ module pll_drp
       parameter S1_CLKOUT0_PHASE          = 0,
       parameter S1_CLKOUT0_DUTY           = 50000,
 
-      parameter S1_CLKOUT1_DIVIDE         = 7,
+      parameter S1_CLKOUT1_DIVIDE         = 44,
       parameter S1_CLKOUT1_PHASE          = 0,
       parameter S1_CLKOUT1_DUTY           = 50000,
 
-      parameter S1_CLKOUT2_DIVIDE         = 25,
+      parameter S1_CLKOUT2_DIVIDE         = 87,
       parameter S1_CLKOUT2_PHASE          = 0,
       parameter S1_CLKOUT2_DUTY           = 50000,
 
@@ -106,7 +106,7 @@ module pll_drp
 
       //***********************************************************************
       // State 2 Parameters - These are for the second reconfiguration state.
-      // 24 MHZ + 100 MHz
+      // 24 MHZ + 16 MHZ + 8 MHz
       //***********************************************************************
 	  // These parameters have an effect on the feedback path.  A change on
       // these parameters will effect all of the clock outputs.
@@ -146,11 +146,11 @@ module pll_drp
       parameter S2_CLKOUT0_PHASE          = 0,
       parameter S2_CLKOUT0_DUTY           = 50000,
       
-      parameter S2_CLKOUT1_DIVIDE         = 7,
+      parameter S2_CLKOUT1_DIVIDE         = 44,
       parameter S2_CLKOUT1_PHASE          = 0,
       parameter S2_CLKOUT1_DUTY           = 50000,
       
-      parameter S2_CLKOUT2_DIVIDE         = 30,
+      parameter S2_CLKOUT2_DIVIDE         = 87,
       parameter S2_CLKOUT2_PHASE          = 0,
       parameter S2_CLKOUT2_DUTY           = 50000,
       
