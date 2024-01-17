@@ -55,6 +55,8 @@ wire	[15:0]	crc16_d8;
 wire	[7:0]		bdi_do;
 wire				bdi_drq, bdi_intrq, bdi_wr_en;
 wire 				motor;
+reg  [7:0]		outdata;
+reg 				vg_req;
 
 /////////////////////////////////////////////////////////////////
 
@@ -105,9 +107,31 @@ always @( posedge clk )
 			if ( ~r_bdi_drq )
 				r_drq_r_dreg <= 1'b0;
 
+// output data
+always @( vg_reset_n, bdi_intrq, bdi_drq, bdi_do, ior, a[14], cs_n )     
+	if ( (ior == 1'b1) )
+	begin
+		outdata = 8'hFF;
+		vg_req = 1'b0;
+	end
+	else
+	begin
+		if (~csff_n)
+		begin
+			outdata = { bdi_intrq, bdi_drq, 6'b111111 };
+			vg_req = 1'b1;
+		end
+		else if ( (~cs_n) ) begin
+			outdata = bdi_do;
+			vg_req = 1'b1;
+		end
+		else 
+			vg_req = 1'b0;
+	end
+
 // data output
-assign dout = ((~cs_n) & (~rd_n)) ? bdi_do : ( ((~csff_n) & (~rd_n)) ? { bdi_intrq, bdi_drq, 6'b111111 } : 8'hFF );
-assign oe_n = ((~rd_n) & ((~cs_n) | (~csff_n))) ? 1'b0 : 1'b1;
+assign dout = outdata;
+assign oe_n = ~vg_req;
 
 // port ff
 always @( posedge clk )	//    #FF (TR-DOS)
