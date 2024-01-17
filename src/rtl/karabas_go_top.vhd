@@ -26,15 +26,13 @@
 -- EU, 2024
 
 -- TODO:
--- 1. mouse + serial mouse refactoring
+-- 1. serial mouse test
 -- 2. NMI button (hotkey + button)
 -- 3. UNO UART, ZIFI, CTS
 -- 4. Fix OSD Menu+ESC (don't send ESC 200ms after release)
--- 5. OSD popups (implement on MCU side)
+-- 5. OSD popups test (implement on MCU side)
 -- 6. GS
 -- 7. Turbo 56 MHz (system clock 56 or 112 ?)
--- 8. Fix make_core.py to use default value as pre-filled switch value instead of 0
--- 9. Fill build number automatically
 ------------------------------------------------------------------------------------------------------------------
 
 library IEEE; 
