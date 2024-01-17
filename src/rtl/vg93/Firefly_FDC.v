@@ -55,12 +55,14 @@ wire	[15:0]	crc16_d8;
 
 wire	[7:0]		bdi_do;
 wire				bdi_drq, bdi_intrq, bdi_wr_en;
+wire 				motor;
 
 /////////////////////////////////////////////////////////////////
 
 assign FDC_SIDE1 = !r_bdi_ff[4];
-assign FDC_DS[0] = r_bdi_ff[1:0] == 2'b00;
-assign FDC_DS[1] = r_bdi_ff[1:0] == 2'b01;
+assign FDC_DS[0] = motor & (r_bdi_ff[1:0] == 2'b00);
+assign FDC_DS[1] = motor & (r_bdi_ff[1:0] == 2'b01);
+assign FDC_MOTOR = motor;
 assign FDC_WG = wg;
 
 assign ior = iorq_n | rd_n;
@@ -86,7 +88,7 @@ always @(posedge clk)
 		r_intrq_r_sreg <= 1'b0;
 	else
 		if (~r_intrq_r_sreg)
-			if ( (~ior) && (~cs_n) && (a[7:0] == 8'h1F) )	//    BDI (STATUS register)
+			if ( (~ior) && (~cs_n) && (a[6:5] == 2'b00) )	//    BDI (STATUS register)
 				r_intrq_r_sreg <= 1'b1;
 			else	;
 		else
@@ -99,7 +101,7 @@ always @( posedge clk )
 		r_drq_r_dreg <= 1'b0;
 	else
 		if (~r_drq_r_dreg)
-			if (  (~( iorq_n | ( wr_n & rd_n ) )) && (~cs_n ) && (a[7:0] == 8'h7f) )	// -   BDI (DATA register)
+			if (  (~( iorq_n | ( wr_n & rd_n ) )) && (~cs_n ) && (a[6:5] == 2'b11) )	// -   BDI (DATA register)
 				r_drq_r_dreg <= 1'b1;
 			else	;
 		else
@@ -127,7 +129,7 @@ Main_CTRL U14 (
 //
 	.oSTEP ( FDC_STEP ),
 	.oDIRC ( FDC_DIR ),
-	.oHLD ( FDC_MOTOR ),
+	.oHLD ( motor ),
 	.iHRDY ( r_bdi_ff[3] ),
 	.iTR00 ( FDC_TR00 ),
 	.iIP ( FDC_INDEX ),

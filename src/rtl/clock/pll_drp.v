@@ -88,7 +88,7 @@ module pll_drp
       parameter S1_CLKOUT1_PHASE          = 0,
       parameter S1_CLKOUT1_DUTY           = 50000,
 
-      parameter S1_CLKOUT2_DIVIDE         = 87,
+      parameter S1_CLKOUT2_DIVIDE         = 88,
       parameter S1_CLKOUT2_PHASE          = 0,
       parameter S1_CLKOUT2_DUTY           = 50000,
 
@@ -150,7 +150,7 @@ module pll_drp
       parameter S2_CLKOUT1_PHASE          = 0,
       parameter S2_CLKOUT1_DUTY           = 50000,
       
-      parameter S2_CLKOUT2_DIVIDE         = 87,
+      parameter S2_CLKOUT2_DIVIDE         = 88,
       parameter S2_CLKOUT2_PHASE          = 0,
       parameter S2_CLKOUT2_DUTY           = 50000,
       
@@ -208,11 +208,11 @@ module pll_drp
       parameter S3_CLKOUT0_PHASE          = 0,
       parameter S3_CLKOUT0_DUTY           = 50000,
 
-      parameter S3_CLKOUT1_DIVIDE         = 124,
+      parameter S3_CLKOUT1_DIVIDE         = 44,
       parameter S3_CLKOUT1_PHASE          = 0,
       parameter S3_CLKOUT1_DUTY           = 50000,
 
-      parameter S3_CLKOUT2_DIVIDE         = 31,
+      parameter S3_CLKOUT2_DIVIDE         = 88,
       parameter S3_CLKOUT2_PHASE          = 0,
       parameter S3_CLKOUT2_DUTY           = 50000,
 
@@ -270,11 +270,11 @@ module pll_drp
       parameter S4_CLKOUT0_PHASE          = 0,
       parameter S4_CLKOUT0_DUTY           = 50000,
 
-      parameter S4_CLKOUT1_DIVIDE         = 108,
+      parameter S4_CLKOUT1_DIVIDE         = 44,
       parameter S4_CLKOUT1_PHASE          = 0,
       parameter S4_CLKOUT1_DUTY           = 50000,
 
-      parameter S4_CLKOUT2_DIVIDE         = 27,
+      parameter S4_CLKOUT2_DIVIDE         = 88,
       parameter S4_CLKOUT2_PHASE          = 0,
       parameter S4_CLKOUT2_DUTY           = 50000,
 
@@ -332,11 +332,11 @@ module pll_drp
       parameter S5_CLKOUT0_PHASE          = 0,
       parameter S5_CLKOUT0_DUTY           = 50000,
 
-      parameter S5_CLKOUT1_DIVIDE         = 52,
+      parameter S5_CLKOUT1_DIVIDE         = 33,
       parameter S5_CLKOUT1_PHASE          = 0,
       parameter S5_CLKOUT1_DUTY           = 50000,
 
-      parameter S5_CLKOUT2_DIVIDE         = 22,
+      parameter S5_CLKOUT2_DIVIDE         = 88,
       parameter S5_CLKOUT2_PHASE          = 0,
       parameter S5_CLKOUT2_DUTY           = 50000,
 
@@ -394,11 +394,11 @@ module pll_drp
       parameter S6_CLKOUT0_PHASE          = 0,
       parameter S6_CLKOUT0_DUTY           = 50000,
 
-      parameter S6_CLKOUT1_DIVIDE         = 116,
+      parameter S6_CLKOUT1_DIVIDE         = 44,
       parameter S6_CLKOUT1_PHASE          = 0,
       parameter S6_CLKOUT1_DUTY           = 50000,
 
-      parameter S6_CLKOUT2_DIVIDE         = 22,
+      parameter S6_CLKOUT2_DIVIDE         = 88,
       parameter S6_CLKOUT2_PHASE          = 0,
       parameter S6_CLKOUT2_DUTY           = 50000,
 
@@ -456,11 +456,11 @@ module pll_drp
       parameter S7_CLKOUT0_PHASE          = 0,
       parameter S7_CLKOUT0_DUTY           = 50000,
 
-      parameter S7_CLKOUT1_DIVIDE         = 100,
+      parameter S7_CLKOUT1_DIVIDE         = 44,
       parameter S7_CLKOUT1_PHASE          = 0,
       parameter S7_CLKOUT1_DUTY           = 50000,
 
-      parameter S7_CLKOUT2_DIVIDE         = 22,
+      parameter S7_CLKOUT2_DIVIDE         = 88,
       parameter S7_CLKOUT2_PHASE          = 0,
       parameter S7_CLKOUT2_DUTY           = 50000,
 
@@ -518,11 +518,11 @@ module pll_drp
       parameter S8_CLKOUT0_PHASE          = 0,
       parameter S8_CLKOUT0_DUTY           = 50000,
 
-      parameter S8_CLKOUT1_DIVIDE         = 116,
+      parameter S8_CLKOUT1_DIVIDE         = 44,
       parameter S8_CLKOUT1_PHASE          = 0,
       parameter S8_CLKOUT1_DUTY           = 50000,
 
-      parameter S8_CLKOUT2_DIVIDE         = 12,
+      parameter S8_CLKOUT2_DIVIDE         = 88,
       parameter S8_CLKOUT2_PHASE          = 0,
       parameter S8_CLKOUT2_DUTY           = 50000,
 
