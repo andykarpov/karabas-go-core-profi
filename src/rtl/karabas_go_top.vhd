@@ -951,6 +951,15 @@ port map(
 	FDC_DS => FDC_DRIVE
 );
 
+-- заглушки
+--FDC_SIDE_N <= '0';
+--FDC_DRIVE <= "00";
+--FDC_MOTOR <= '0';
+--FDC_WDATA <= '0';
+--FDC_WGATE <= '0';
+--FDC_STEP <= '0';
+--FDC_DIR <= '0';
+
 -------------------------------------------------------------------------------
 -- Global signals
 
@@ -1411,6 +1420,8 @@ selector <=
 	x"00" when (ram_oe_n = '0') else -- ram / rom
 	x"01" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and cs_rtc_ds = '1') else -- RTC MC146818A
 	x"02" when (cs_xxfe = '1' and cpu_rd_n = '0') else 									-- Keyboard, port #FE
+	x"18" when (fdd_oe_n = '0') else -- fdd
+	x"19" when (ide_oe_n = '0') else	-- ide	
  	x"03" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and (cpu_a_bus(7 downto 0) = X"57" or (cpu_a_bus(7 downto 0) = X"EB" and cpm = '0' and divmmc_en = '1')) ) else 	-- Z-Controller + DivMMC
 	x"04" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and cpu_a_bus(7 downto 0) = X"77") else 	-- Z-Controller
 	x"05" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and cpu_a_bus( 7 downto 0) = X"1F" and dos_act = '0' and cpm = '0' and joy_mode = "000") else -- Joystick, port #1F
@@ -1430,8 +1441,6 @@ selector <=
 	x"15" when (cs_028b = '1' and cpu_rd_n = '0') else										-- port #028B
 	x"16" when zifi_oe_n = '0' else  -- zifi
 	x"17" when (vid_pff_cs = '1' and cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_a_bus( 7 downto 0) = X"FF") and dos_act='0' and cpm = '0' and ds80 = '0' else -- Port FF select
-	x"18" when (fdd_oe_n = '0') else -- fdd
-	x"19" when (ide_oe_n = '0') else	-- ide
 	(others => '1');
 
 
