@@ -1,7 +1,7 @@
 {
     "id": "profi",
-    "name": "Pro Turbo 56",
-    "build": "24011920",
+    "name": "Pro Turbo 28",
+    "build": "24011922",
     "bitstream": "karabas_go.bin",
     "visible": true,
     "type": "osd",
@@ -9,7 +9,9 @@
     "eeprom_bank": 1,
     "roms": [
         {"filename": "roms/ROMain_ramdisk_D.rom", "address": 1048576},
-        {"filename": "roms/FDImage.rom", "address": 1114112},
+        {"filename": "roms/bios_pqdos.rom", "address": 1114112},
+        {"filename": "roms/FDImage.rom", "address": 1179648},
+        {"filename": "roms/ROMain_fatall_ramdisk_D.rom", "address": 1245184},
         {"filename": "roms/esxdos089.bin", "address": 1310720}
     ],
     "old_roms": [
@@ -20,14 +22,14 @@
         {"filename": "roms/esxdos089.bin", "address": 1310720}
     ],
     "osd": [
-        {"type": "S", "bits": 2, "name": "ROM Bank", "options": ["ROMain", "FDImage"], "default": 0, "hotkey": "Menu+F1"},
+        {"type": "S", "bits": 2, "name": "ROM Bank", "options": ["ROMain", "PQ-DOS", "FDImage", "FATALL"], "default": 0, "hotkey": "Menu+F1"},
         {"type": "S", "bits": 1, "name": "TurboFDC", "options": ["Off", "On"], "default": 0, "hotkey": "Menu+F5"},
         {"type": "S", "bits": 1, "name": "Covox", "options": ["Off", "On"], "default": 1, "hotkey": "Menu+F6"},
         {"type": "S", "bits": 2, "name": "PSG Mix", "options": ["ABC", "ACB", "Mono"], "default": 1, "hotkey": "Menu+F7"},
         {"type": "S", "bits": 1, "name": "PSG Type", "options": ["AY3-8912", "YM2149F"], "default": 0, "hotkey": "Menu+F8"},
         {"type": "S", "bits": 1, "name": "Video", "options": ["VGA 30kHz", "RGB 15kHz"], "default": 0, "hotkey": "Menu+F9"},
         {"type": "S", "bits": 1, "name": "VSync", "options": ["50 Hz", "60 Hz"], "default": 0, "hotkey": "Menu+F10"},
-        {"type": "S", "bits": 2, "name": "Turbo", "options": ["Off", "2x", "4x", "8x", "16x"], "default": 0, "hotkey": "Menu+F11"},
+        {"type": "S", "bits": 2, "name": "Turbo", "options": ["Off", "2x", "4x", "8x"], "default": 0, "hotkey": "Menu+F11"},
         {"type": "S", "bits": 1, "name": "Swap FDD", "options": ["Off", "On"], "default": 0, "hotkey": "Menu+Tab"},
         {"type": "S", "bits": 3, "name": "Joystick L", "options": ["Kempston", "Sinclair1", "Sinclair2", "Cursor", "QAOPM", "QAOPS"], "default": 0, "hotkey": "Menu+J"},
         {"type": "S", "bits": 3, "name": "Joystick R", "options": ["Kempston", "Sinclair1", "Sinclair2", "Cursor", "QAOPM", "QAOPS"], "default": 1, "hotkey": "Menu+R"},

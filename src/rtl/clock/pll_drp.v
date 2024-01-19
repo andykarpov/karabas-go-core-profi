@@ -43,7 +43,7 @@ module pll_drp
    #(
       //***********************************************************************
       // State 1 Parameters - These are for the first reconfiguration state.
-      // 56 MHZ + 16 MHZ
+      // 28 MHZ + 16 MHZ
       //***********************************************************************
 
 	  // These parameters have an effect on the feedback path.  A change on
@@ -56,7 +56,7 @@ module pll_drp
       //    _PHASE: This is the phase multiplied by 1000. For example if
       //          a phase of 24.567 deg was desired the input value would be
       //          24567.  The range for the phase is from -360000 to 360000.
-      parameter S1_CLKFBOUT_MULT          = 28,
+      parameter S1_CLKFBOUT_MULT          = 14,
       parameter S1_CLKFBOUT_PHASE         = 0,
 
 	  // The bandwidth parameter effects the phase error and the jitter filter
@@ -84,7 +84,7 @@ module pll_drp
       parameter S1_CLKOUT0_PHASE          = 0,
       parameter S1_CLKOUT0_DUTY           = 50000,
 
-      parameter S1_CLKOUT1_DIVIDE         = 88,
+      parameter S1_CLKOUT1_DIVIDE         = 44,
       parameter S1_CLKOUT1_PHASE          = 0,
       parameter S1_CLKOUT1_DUTY           = 50000,
 
@@ -106,7 +106,7 @@ module pll_drp
 
       //***********************************************************************
       // State 2 Parameters - These are for the second reconfiguration state.
-      // 56 MHZ + 16 MHZ + 8 MHz
+      // 28 MHZ + 16 MHZ
       //***********************************************************************
 	  // These parameters have an effect on the feedback path.  A change on
       // these parameters will effect all of the clock outputs.
@@ -118,7 +118,7 @@ module pll_drp
       //    _PHASE: This is the phase multiplied by 1000. For example if
       //          a phase of 24.567 deg was desired the input value would be
       //          24567.  The range for the phase is from -360000 to 360000.
-      parameter S2_CLKFBOUT_MULT          = 28,
+      parameter S2_CLKFBOUT_MULT          = 14,
       parameter S2_CLKFBOUT_PHASE         = 0,
 
       // The bandwidth parameter effects the phase error and the jitter filter
@@ -146,7 +146,7 @@ module pll_drp
       parameter S2_CLKOUT0_PHASE          = 0,
       parameter S2_CLKOUT0_DUTY           = 50000,
       
-      parameter S2_CLKOUT1_DIVIDE         = 88,
+      parameter S2_CLKOUT1_DIVIDE         = 44,
       parameter S2_CLKOUT1_PHASE          = 0,
       parameter S2_CLKOUT1_DUTY           = 50000,
       

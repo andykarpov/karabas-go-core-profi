@@ -35,21 +35,6 @@ end zifi;
 
 architecture rtl of zifi is
 
-component uart 
-port ( 
-    clk_bus     : in std_logic;
-	 ds80        : in std_logic;
-    txdata      : in std_logic_vector(7 downto 0);
-    txbegin     : in std_logic;
-    txbusy      : out std_logic;
-    rxdata      : out std_logic_vector(7 downto 0);
-    rxrecv      : out std_logic;
-    data_read   : in std_logic;
-    rx          : in std_logic;
-    tx          : out std_logic;
-    rts         : out std_logic);
-end component;
-
 constant zifi_command_port  : std_logic_vector(15 downto 0) := x"C7EF"; -- 51183
 constant zifi_error_port    : std_logic_vector(15 downto 0) := x"C7EF"; -- 51183
 constant zifi_data_port     : std_logic_vector(15 downto 0) := x"BFEF"; -- 49135
@@ -133,7 +118,8 @@ port map(
 	i_Clk => CLK,
 	i_RX_Serial => UART_RX,
 	o_RX_DV => fifo_rx_wr_req,
-	o_RX_Byte => fifo_rx_di
+	o_RX_Byte => fifo_rx_di,
+	i_DS80 => ds80
 );
 
 UART_transmitter: entity work.uart_tx
@@ -143,7 +129,8 @@ port map(
 	i_TX_Byte => fifo_tx_do,
 	o_TX_Active => txbusy,
 	o_TX_Serial => UART_TX,
-	o_TX_Done => txdone
+	o_TX_Done => txdone,
+	i_DS80 => ds80
 );
 
 fifo_tx_di <= di_reg;
@@ -284,5 +271,7 @@ fifo_tx_free <= std_logic_vector(unsigned(zifi_fifo_size) - unsigned(fifo_tx_use
 ZIFI_OE_N <= '0' when IORQ_N = '0' and RD_N = '0' and (A = zifi_in_fifo_port or A = zifi_out_fifo_port or A = zifi_error_port or (A(7 downto 0) = zifi_data_port(7 downto 0) and A(15 downto 8) <= zifi_data_port(15 downto 8))  ) else '1';
 
 ENABLED <= api_enabled;
+
+UART_CTS <= '0' when fifo_rx_used > 1792 else '1';
 
 end rtl;

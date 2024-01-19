@@ -233,6 +233,7 @@ signal loader_ram_wr : std_logic := '0';
 signal zc_do_bus		: std_logic_vector(7 downto 0);
 signal zc_spi_start	: std_logic;
 signal zc_wr_en		: std_logic;
+signal zc_rd_en		: std_logic;
 signal port77_wr		: std_logic;
 signal zc_busy			: std_logic;
 
@@ -333,7 +334,6 @@ signal ena_div2	: std_logic := '0';
 signal ena_div4	: std_logic := '0';
 signal ena_div8	: std_logic := '0';
 signal ena_div16	: std_logic := '0';
-signal ena_div32	: std_logic := '0';
 signal ena_cpu 	: std_logic := '0';
 
 -- System
@@ -453,11 +453,10 @@ port map(
 	CLK_16 	=> clk_16,
 	CLK_8 	=> clk_8,
 	
-	ENA_DIV2 => ena_div2, -- 28
-	ENA_DIV4 => ena_div4, -- 14
-	ENA_DIV8 => ena_div8, -- 7
-	ENA_DIV16 => ena_div16, -- 3.5
-	ENA_DIV32 => ena_div32, -- 1.75
+	ENA_DIV2 => ena_div2, -- 14
+	ENA_DIV4 => ena_div4, -- 7
+	ENA_DIV8 => ena_div8, -- 3.5
+	ENA_DIV16 => ena_div16, -- 1.75
 	ENA_CPU => ena_cpu,
 	
 	TURBO => turbo_mode,
@@ -556,9 +555,9 @@ port map (
 U4: entity work.video
 port map (
 	CLK_BUS 			=> clk_bus, 	-- 112 / 96
-	ENA_28			=> ena_div2, 	-- 28 / 24
-	ENA_14 			=> ena_div4, 	-- 14 / 12
-	ENA_7 			=> ena_div8, 	-- 7 / 6
+	ENA_28			=> '1', 			-- 28 / 24
+	ENA_14 			=> ena_div2, 	-- 14 / 12
+	ENA_7 			=> ena_div4, 	-- 7 / 6
 	RESET 			=> reset,	
 	BORDER 			=> port_xxfe_reg(7 downto 0),
 	TURBO 			=> turbo_mode,	-- turbo signal for int length
@@ -595,8 +594,8 @@ port map (
 U5: entity work.overlay
 port map (
 	CLK 				=> clk_bus,
-	ENA_28			=> ena_div2,
-	ENA_14 			=> ena_div4,
+	ENA_28			=> '1',
+	ENA_14 			=> ena_div2,
 	DS80				=> ds80,
 	RGB_I 			=> vid_rgb,
 	RGB_O 			=> vid_rgb_osd,
@@ -617,8 +616,8 @@ port map (
 U6: entity work.vga_scandoubler
 port map(
 	clk => clk_bus,
-	clk28en => ena_div2,
-	clk14en => ena_div4,
+	clk28en => '1',
+	clk14en => ena_div2,
 	enable_scandoubling => vid_scandoubler_enable,
 	disable_scaneffect => '1',
 	ri => vid_rgb_osd(8 downto 6),
@@ -780,7 +779,7 @@ DAC_MUTE <= '1';
 U12: entity work.turbosound
 port map (
 	I_CLK				=> clk_bus,
-	I_ENA				=> ena_div32,
+	I_ENA				=> ena_div16,
 	I_ADDR			=> cpu_a_bus,
 	I_DATA			=> cpu_do_bus,
 	I_WR_N			=> cpu_wr_n,
@@ -1293,6 +1292,7 @@ mc146818_wr <= '1' when (cs_rtc_ds = '1' and cpu_iorq_n = '0' and cpu_wr_n = '0'
 -- Z-controller + DIVMMC spi 
 zc_spi_start <= '1' when (cpu_a_bus(7 downto 0) = X"57" or (cpu_a_bus(7 downto 0) = X"EB" and cpm = '0' and divmmc_en = '1')) and cpu_iorq_n='0' and cpu_m1_n='1' and loader_act='0' else '0';
 zc_wr_en <= '1' when zc_spi_start = '1' and cpu_wr_n='0' else '0';
+zc_rd_en <= '1' when zc_spi_start = '1' and cpu_rd_n='0' else '0';
 port77_wr <= '1' when (cpu_a_bus(7 downto 0) = X"77" or (cpu_a_bus(7 downto 0) = X"E7" and divmmc_en = '1')) and cpu_iorq_n='0' and cpu_m1_n='1' and cpu_wr_n='0' and loader_act='0' else '0';
 
 process (port77_wr, loader_act, reset, clk_bus)
@@ -1312,9 +1312,7 @@ end process;
 
 U_ZC_SPI: entity work.zc_spi     -- SD
 port map(
-	clk     		=> clk_bus,  -- 56
-	ena			=> ena_div2, -- 28
-	reset 		=> reset,
+	clc     		=> clk_bus,  -- 28
 	
 	di				=> cpu_do_bus,
 	start 		=> zc_spi_start,
@@ -1323,8 +1321,7 @@ port map(
 	
 	do				=> zc_do_bus,
 	sck			=> zc_sclk,
-	mosi			=> zc_mosi,
-	busy			=> open
+	mosi			=> zc_mosi
 );
 
 zc_busy <= '0';
@@ -1463,17 +1460,10 @@ FT_OE_N <= '1';
 VCLK_buf: ODDR2
 port map(
 	Q => V_CLK, -- pixel clock for video dac
-	C0 => clk_vid,
-	C1 => not clk_vid,
+	C0 => clk_bus,
+	C1 => not clk_bus,
 	D0 => '1',
 	D1 => '0'
-);
-
-U_BUFG: BUFGCE 
-port map(
-	O => clk_vid,
-	I => clk_bus,
-	CE	=> ena_div2
 );
 
 ext_rom_bank <= kb_rom_bank;

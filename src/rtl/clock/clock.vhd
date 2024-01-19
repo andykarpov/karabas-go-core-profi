@@ -24,7 +24,6 @@ port (
 	ENA_DIV4		: buffer std_logic;
 	ENA_DIV8		: buffer std_logic;
 	ENA_DIV16   : buffer std_logic;
-	ENA_DIV32	: buffer std_logic;
 	ENA_CPU 		: buffer std_logic;
 	
 	TURBO			: in std_logic_vector(2 downto 0);
@@ -65,7 +64,7 @@ end process;
 
 pll_state <= "00" & prev_ds80;
 
--- reconfigurable pll 112 / 96 MHZ
+-- reconfigurable pll 28 / 24 MHZ
 U1: entity work.pll_top
 port map (
 	SSTEP 			=> pulse_reconf(7),
@@ -73,7 +72,7 @@ port map (
 	RST 				=> '0',
 	CLKIN				=> CLK,
 	SRDY 				=> open,
-	CLK0OUT 			=> CLK_BUS, -- 56 / 48
+	CLK0OUT 			=> CLK_BUS, -- 28 / 24
 	CLK1OUT 			=> CLK_16,  -- 16
 	CLK2OUT 			=> open,
 	CLK3OUT 			=> open
@@ -100,25 +99,27 @@ process (clk_bus)
 begin
 	if falling_edge(clk_bus) then
 		ena_cnt <= ena_cnt + 1;
+	end if;
+end process;
 
+process (clk_bus)
+begin
+	if rising_edge(clk_bus) then
 		ENA_DIV2 <= ena_cnt(0);
 		ENA_DIV4 <= ena_cnt(1) and ena_cnt(0);
 		ENA_DIV8 <= ena_cnt(2) and ena_cnt(1) and ena_cnt(0);
 		ENA_DIV16 <= ena_cnt(3) and ena_cnt(2) and ena_cnt(1) and ena_cnt(0);
-		ENA_DIV32 <= ena_cnt(4) and ena_cnt(3) and ena_cnt(2) and ena_cnt(1) and ena_cnt(0);
 
 		if (WAIT_CPU = '1') then 
 			ENA_CPU <= '0';
-		elsif turbo = "100" then -- 56
-			ENA_CPU <= '1';
 		elsif turbo = "011" then -- 28
-			ENA_CPU <= ena_div2;
+			ENA_CPU <= '1';
 		elsif turbo = "010" then -- 14
-			ENA_CPU <= ena_div4;
+			ENA_CPU <= ena_cnt(0);
 		elsif turbo = "001" then -- 7
-			ENA_CPU <= ena_div8;
+			ENA_CPU <= ena_cnt(1) and ena_cnt(0);
 		else
-			ENA_CPU <= ena_div16; -- 3.5
+			ENA_CPU <= ena_cnt(2) and ena_cnt(1) and ena_cnt(0); -- 3.5
 		end if;
 	end if;
 end process;
