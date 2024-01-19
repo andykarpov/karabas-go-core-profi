@@ -60,7 +60,7 @@ port (
 	AUTOMAP		: in std_logic;
 	REG_E3		: in std_logic_vector(7 downto 0);
 	
-	TURBO_MODE	: in std_logic_vector(1 downto 0)
+	TURBO_MODE	: in std_logic_vector(2 downto 0)
 );
 end memory;
 
@@ -203,7 +203,7 @@ begin
 	begin 
 		if rising_edge(CLK_BUS) then 
 		-- OCH: contend only when 3,5 MHz CLK 
-			if (page_cont = '1' and block_reg = '1' and count_block = '1' and DS80 = '0' and TURBO_MODE = "00") then 
+			if (page_cont = '1' and block_reg = '1' and count_block = '1' and DS80 = '0' and TURBO_MODE = "000") then 
 				contended <= '1';
 			else 
 				contended <= '0';

@@ -25,6 +25,7 @@
 
 module vga_scandoubler (
   input wire clk,
+  input wire clk28en,
   input wire clk14en,
   input wire enable_scandoubling,
   input wire disable_scaneffect,  // 1 to disable scanlines
@@ -54,12 +55,13 @@ module vga_scandoubler (
   reg [9:0] totalhor = 10'd0;
 
   wire [2:0] rout, gout, bout;
-  // Memoria de doble puerto que guarda la información de dos scans
-  // Cada scan puede ser de hasta 1024 puntos, incluidos aquí los
+  // Memoria de doble puerto que guarda la informacin de dos scans
+  // Cada scan puede ser de hasta 1024 puntos, incluidos aqu los
   // puntos en negro que se pintan durante el HBlank
 
   vgascanline_dport memscan (
     .clk(clk),
+	 .clk28en(clk28en),
     .addrwrite(addrvideo),
     .addrread(addrvga),
     .we(clk14en),
@@ -79,10 +81,10 @@ module vga_scandoubler (
   
   // Voy alternativamente escribiendo en una mitad o en otra del scan buffer
   // Cambio de mitad cada vez que encuentro un pulso de sincronismo horizontal
-  // En "totalhor" mido el número de ciclos de reloj que hay en un scan
+  // En "totalhor" mido el nmero de ciclos de reloj que hay en un scan
   reg hsync_ext_n_prev = 1'b1;
   always @(posedge clk) begin
-    if (clk14en == 1'b1) begin
+    if (clk28en == 1'b1 && clk14en == 1'b1) begin
       hsync_ext_n_prev <= hsync_ext_n;
       if (hsync_ext_n == 1'b0 && hsync_ext_n_prev == 1'b1) begin
         totalhor <= addrvideo[9:0];
@@ -95,15 +97,16 @@ module vga_scandoubler (
  
   // Recorro el scanbuffer al doble de velocidad, generando direcciones para
   // el scan buffer. Cada vez que el video original ha terminado una linea,
-  // cambio de mitad de buffer. Cuando termino de recorrerlo pero aún no
+  // cambio de mitad de buffer. Cuando termino de recorrerlo pero an no
   // estoy en un retrazo horizontal, simplemente vuelvo a recorrer el scan buffer
   // desde el mismo origen
   // Cada vez que termino de recorrer el scan buffer basculo "scaneffect" que
-  // uso después para mostrar los píxeles a su brillo nominal, o con su brillo
+  // uso despus para mostrar los pxeles a su brillo nominal, o con su brillo
   // reducido para un efecto chachi de scanlines en la VGA
  
   reg hsync_ext_n_prev2 = 1'b1;
   always @(posedge clk) begin
+	 if (clk28en == 1'b1) begin
       hsync_ext_n_prev2 <= hsync_ext_n;
       if (addrvga[9:0] == totalhor && hsync_ext_n == 1'b1 && hsync_ext_n_prev2 == 1'b1) begin
          addrvga <= {addrvga[10], 10'b000000000};
@@ -115,9 +118,10 @@ module vga_scandoubler (
       end
       else
         addrvga <= addrvga + 11'd1;
+	 end
   end
 
-  // El HSYNC de la VGA está bajo sólo durante HSYNC_COUNT ciclos a partir del comienzo
+  // El HSYNC de la VGA est bajo slo durante HSYNC_COUNT ciclos a partir del comienzo
   // del barrido de un scanline
   reg hsync_vga, vsync_vga;
     
@@ -128,11 +132,12 @@ module vga_scandoubler (
        hsync_vga = 1'b1;
   end
  
-  // El VSYNC de la VGA está bajo sólo durante VSYNC_COUNT ciclos a partir del flanco de
-  // bajada de la señal de sincronismo vertical original
+  // El VSYNC de la VGA est bajo slo durante VSYNC_COUNT ciclos a partir del flanco de
+  // bajada de la seal de sincronismo vertical original
   reg [15:0] cntvsync = 16'hFFFF;
   initial vsync_vga = 1'b1;
   always @(posedge clk) begin
+	 if (clk28en == 1'b1) begin
       if (vsync_ext_n == 1'b0) begin
         if (cntvsync == 16'hFFFF) begin
           cntvsync <= 16'd0;
@@ -149,6 +154,7 @@ module vga_scandoubler (
       end
       else if (vsync_ext_n == 1'b1)
         cntvsync <= 16'hFFFF;
+	 end
   end
 
   always @* begin
@@ -175,6 +181,7 @@ endmodule
 // guardar un scan, y otros 1024 para el siguiente scan
 module vgascanline_dport (
  input wire clk,
+ input wire clk28en,
  input wire [10:0] addrwrite,
  input wire [10:0] addrread,
  input wire we,
@@ -184,9 +191,11 @@ module vgascanline_dport (
  
  reg [8:0] scan[0:2047]; // two scanlines
  always @(posedge clk) begin
-  dout <= scan[addrread];
-  if (we == 1'b1)
-   scan[addrwrite] <= din;
+	if (clk28en == 1'b1) begin
+	  dout <= scan[addrread];
+	  if (we == 1'b1)
+		scan[addrwrite] <= din;
+	end
  end
 endmodule
 

@@ -9,11 +9,12 @@ use IEEE.std_logic_unsigned.all;
 
 entity pentagon_video is
 	port (
-		CLK_BUS 	: in std_logic; -- 28 MHz
+		CLK_BUS 	: in std_logic; -- 56 MHz
+		ENA_28	: in std_logic; -- 28 MHz
 		ENA_14	: in std_logic; -- 14 MHz
 		ENA_7		: in std_logic; -- 7 MHz 
 		BORDER	: in std_logic_vector(2 downto 0);	-- bordr color (port #xxFE)
-		TURBO 	: in std_logic_vector := "00"; -- 01 = turbo 2x mode, 10 - turbo 4x mode, 11 - turbo 8x mode, 00 = normal mode
+		TURBO 	: in std_logic_vector(2 downto 0) := "000"; -- 01 = turbo 2x mode, 10 - turbo 4x mode, 11 - turbo 8x mode, 00 = normal mode
 		INTA		: in std_logic := '0'; -- int request for turbo mode
 		INT		: out std_logic; -- int output
 		MODE60	: in std_logic := '0'; -- '0'
@@ -66,15 +67,16 @@ architecture rtl of pentagon_video is
 	signal VIDEO_I 	: std_logic;	
 		
 	signal int_sig : std_logic;
+	signal bl_int 			: std_logic;
 		
 begin
 
 	-- sync, counters
-	process( CLK_BUS, ENA_14, ENA_7, chr_col_cnt, hor_cnt, chr_row_cnt, ver_cnt, TURBO, INTA)
+	process( CLK_BUS, ENA_28, ENA_14, ENA_7, chr_col_cnt, hor_cnt, chr_row_cnt, ver_cnt, TURBO, INTA)
 	begin
 		if rising_edge(CLK_BUS) then
 		
-			if ENA_14 = '1' and ENA_7 = '1' then
+			if ENA_28 = '1' and ENA_14 = '1' and ENA_7 = '1' then
 			
 				if chr_col_cnt = 7 then
 				
@@ -121,36 +123,9 @@ begin
 					
 				end if;
 			
-				-- int
-				if TURBO = "01" then
-					-- TURBO 2x int
-					if chr_col_cnt = 6 and hor_cnt(1 downto 0) = "11" then
-						if ver_cnt = 29 and chr_row_cnt = 7 and hor_cnt(5 downto 2) = "1001" then
-							int_sig <= '0';
-						else
-							int_sig <= '1';
-						end if;
-					end if;
-				elsif TURBO = "10" then 
-					-- TURBO 4x int
-					if chr_col_cnt = 6 and hor_cnt(0) = '1' then
-						if ver_cnt = 29 and chr_row_cnt = 7 and hor_cnt(5 downto 1) = "10011" then
-							int_sig <= '0';
-						else
-							int_sig <= '1';
-						end if;
-					end if;
-				elsif TURBO = "11" then 
-					-- TURBO 8x int
-					if chr_col_cnt = 6 then
-						if ver_cnt = 29 and chr_row_cnt = 7 and hor_cnt(5 downto 0) = "100111" then
-							int_sig <= '0';
-						else
-							int_sig <= '1';
-						end if;
-					end if;
-				else 
-					-- PENTAGON int
+				case TURBO is
+					when "000" => -- TURBO OFF
+						-- PENTAGON int
 					if (SCREEN_MODE = "00") then 
 						if chr_col_cnt = 6 and hor_cnt(2 downto 0) = "111" then
 							if ver_cnt = 29 and chr_row_cnt = 7 and hor_cnt(5 downto 3) = "100" then
@@ -170,7 +145,42 @@ begin
 						end if;
 					end if;
 
-				end if;
+					when "001" => -- TURBO 2x
+						if chr_col_cnt = 6 and hor_cnt(1 downto 0) = "11" then
+							if ver_cnt = 29 and chr_row_cnt = 7 and hor_cnt(5 downto 2) = "1001" then
+								int_sig <= '0';
+							else
+								int_sig <= '1';
+							end if;
+						end if;
+						
+					when "010" => -- TURBO 4x
+						if chr_col_cnt = 6 and hor_cnt(0) = '1' then
+							if ver_cnt = 29 and chr_row_cnt = 7 and hor_cnt(5 downto 1) = "10011" then
+								int_sig <= '0';
+							else
+								int_sig <= '1';
+							end if;
+						end if;
+						
+					when "011" => -- TURBO 8x
+						if chr_col_cnt = 6 then
+							if ver_cnt = 29 and chr_row_cnt = 7 and hor_cnt(5 downto 0) = "100111" then
+								int_sig <= '0';
+							else
+								int_sig <= '1';
+							end if;
+						end if;
+
+					when others => -- TURBO 16x and up
+						if chr_col_cnt = 6 or chr_col_cnt = 2 then
+							if ver_cnt = 29 and chr_row_cnt = 7 and hor_cnt(5 downto 0) = "100111" and chr_col_cnt = 6 then
+								int_sig <= '0';
+							elsif chr_col_cnt = 2 then
+								int_sig <= '1';
+							end if;
+						end if;
+				end case;
 
 				chr_col_cnt <= chr_col_cnt + 1;
 			end if;
@@ -178,10 +188,10 @@ begin
 	end process;
 
 	-- r/g/b/i
-	process( CLK_BUS, ENA_14, ENA_7, paper_r, shift_r, attr_r, invert, blank_r, BORDER )
+	process( CLK_BUS, ENA_28, ENA_14, ENA_7, paper_r, shift_r, attr_r, invert, blank_r, BORDER )
 	begin
 		if rising_edge(CLK_BUS) then
-		if ENA_14 = '1' and ENA_7 = '1' then
+		if ENA_28 = '1' and ENA_14 = '1' and ENA_7 = '1' then
 			if paper_r = '0' then -- paper
 					-- standard RGB
 					if( shift_r(7) xor ( attr_r(7) and invert(4) ) ) = '1' then -- fg pixel
@@ -214,10 +224,10 @@ begin
 	end process;
 
 	-- paper, blank
-	process( CLK_BUS, ENA_14, ENA_7, chr_col_cnt, hor_cnt, ver_cnt, shift_hr_r, attr, bitmap, paper, shift_r )
+	process( CLK_BUS, ENA_28, ENA_14, ENA_7, chr_col_cnt, hor_cnt, ver_cnt, shift_hr_r, attr, bitmap, paper, shift_r )
 	begin
 		if rising_edge(CLK_BUS) then
-			if ENA_14 = '1' then		
+			if ENA_14 = '1' and ENA_28 = '1' then		
 				if ENA_7 = '1' then
 					if chr_col_cnt = 7 then
 						-- PENTAGON blank
@@ -237,11 +247,11 @@ begin
 	end process;	
 	
 	-- bitmap shift registers
-	process( CLK_BUS, ENA_14, ENA_7, chr_col_cnt, hor_cnt, ver_cnt, shift_hr_r, attr, bitmap, paper, shift_r )
+	process( CLK_BUS, ENA_28, ENA_14, ENA_7, chr_col_cnt, hor_cnt, ver_cnt, shift_hr_r, attr, bitmap, paper, shift_r )
 	begin
 		if rising_edge(CLK_BUS) then
 
-			if ENA_14 = '1' then
+			if ENA_28 = '1' and ENA_14 = '1' then
 					-- standard shift register 
 					if ENA_7 = '1' then
 						if chr_col_cnt = 7 then
@@ -257,10 +267,10 @@ begin
 	end process;
 	
 	-- video mem read cycle
-	process (CLK_BUS, ENA_14, chr_col_cnt)
+	process (CLK_BUS, ENA_28, ENA_14, chr_col_cnt)
 	begin 
 		if rising_edge(CLK_BUS) then 
-			if ENA_14 = '1' and ENA_7 = '1' then
+			if ENA_28 = '1' and ENA_14 = '1' and ENA_7 = '1' then
 				case chr_col_cnt is 
 					when "001" => VID_RD <= '0'; A <= std_logic_vector( '0' & ver_cnt(4 downto 3) & chr_row_cnt & ver_cnt(2 downto 0) & hor_cnt(4 downto 0));
 					when "010" => bitmap <= DI;

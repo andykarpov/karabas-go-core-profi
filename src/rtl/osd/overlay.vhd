@@ -6,6 +6,7 @@ use IEEE.std_logic_unsigned.all;
 entity overlay is
 	port (
 		CLK		: in std_logic;
+		ENA_28	: in std_logic;
 		ENA_14	: in std_logic;
 		RGB_I 	: in std_logic_vector(8 downto 0);
 		RGB_O 	: out std_logic_vector(8 downto 0);
@@ -76,7 +77,7 @@ begin
 	 U_FONT: entity work.rom_font
     port map (
         addra  => rom_addr,
-        clka   => CLK,
+        clka   => CLK and ena_14,
         douta  => font_word
     );
 
@@ -84,6 +85,7 @@ begin
 	 U_ICONS: entity work.icons
     port map (
 		CLK		=> CLK,
+		ENA_28 	=> ENA_28,
 		ENA_14   => ENA_14,
 		RGB_I 	=> RGB_I,
 		RGB_O 	=> rgb,
@@ -105,7 +107,7 @@ begin
         wea    => vram_wr,
 
         addrb  => addr_read,
-        clkb   => CLK,
+        clkb   => CLK and ena_14,
         doutb  => vram_do
     );
 
@@ -124,7 +126,7 @@ begin
 	 process (CLK, ENA_14, vram_do)
 	 begin
 		if (rising_edge(CLK)) then 
-			if (ENA_14 = '1') then 
+			if (ENA_28 = '1' and ENA_14 = '1') then 
 			
 				if (OSD_POPUP = '1') then 
 					case (hcnt(3 downto 0)) is
@@ -159,25 +161,27 @@ begin
 	 process (CLK, ENA_14, OSD_POPUP, hcnt, char_x, char_y)
 	 begin
 		if rising_edge(CLK) then
-			if ENA_14 = '1' then
-				if char_x = "111" then 
-					rom_addr <= vram_do(15 downto 8) & char_y;
-				end if;
-				pixel <= font_reg(7);
-				
-				if (OSD_POPUP = '0' and cnt_dbl = "01") then
-					cnt_dbl <= "00";
-				elsif (OSD_POPUP = '1' and cnt_dbl = "11") then 
-					cnt_dbl <= "00";
-				else
-					cnt_dbl <= cnt_dbl + 1;
-				end if;
-			else 
-				if cnt_dbl = "00" then
-					if char_x = "000" then 
-						font_reg <= font_word;
-					else 
-						font_reg <= font_reg(6 downto 0) & "0";
+			if ENA_28 = '1' then
+				if ENA_14 = '1' then
+					if char_x = "111" then 
+						rom_addr <= vram_do(15 downto 8) & char_y;
+					end if;
+					pixel <= font_reg(7);
+					
+					if (OSD_POPUP = '0' and cnt_dbl = "01") then
+						cnt_dbl <= "00";
+					elsif (OSD_POPUP = '1' and cnt_dbl = "11") then 
+						cnt_dbl <= "00";
+					else
+						cnt_dbl <= cnt_dbl + 1;
+					end if;
+				else 
+					if cnt_dbl = "00" then
+						if char_x = "000" then 
+							font_reg <= font_word;
+						else 
+							font_reg <= font_reg(6 downto 0) & "0";
+						end if;
 					end if;
 				end if;
 			end if;

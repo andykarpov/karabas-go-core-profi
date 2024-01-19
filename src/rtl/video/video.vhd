@@ -9,13 +9,14 @@ use IEEE.std_logic_unsigned.all;
 
 entity video is
 	port (
-		CLK_BUS 	: in std_logic; -- 28 MHz
+		CLK_BUS 	: in std_logic; -- 56 MHz
+		ENA_28	: in std_logic; -- 28 MHz
 		ENA_14	: in std_logic; -- 14 MHz
 		ENA_7		: in std_logic; -- 7 MHz 
 		RESET 	: in std_logic := '0';
 
 		BORDER	: in std_logic_vector(7 downto 0);	-- bordr color (port #xxFE)
-		TURBO 	: in std_logic_vector := "00"; -- 01 = turbo 2x mode, 10 - turbo 4x mode, 11 - turbo 8x mode, 00 = normal mode
+		TURBO 	: in std_logic_vector(2 downto 0) := "000"; -- 01 = turbo 2x mode, 10 - turbo 4x mode, 11 - turbo 8x mode, 00 = normal mode
 		INTA		: in std_logic := '0'; -- int request for turbo mode
 		MODE60	: in std_logic := '0'; -- 
 		INT		: out std_logic; -- int output
@@ -105,7 +106,8 @@ begin
 
 	U_PENT: entity work.pentagon_video 
 	port map (
-		CLK_BUS => CLK_BUS, -- 28
+		CLK_BUS => CLK_BUS, -- 56
+		ENA_28 => ENA_28, -- 28
 		ENA_14 => ENA_14, -- 14
 		ENA_7 => ENA_7, -- 7
 		BORDER => BORDER(2 downto 0),
@@ -137,7 +139,8 @@ begin
 
 	U_PROFI: entity work.profi_video 
 	port map (
-		CLK_BUS => CLK_BUS, -- 24
+		CLK_BUS => CLK_BUS, -- 48
+		ENA_28 => ENA_28, -- 24
 		ENA_14 => ENA_14, -- 12
 		TURBO => TURBO,
 		BORDER => BORDER(3 downto 0),
@@ -200,7 +203,7 @@ begin
 				8 => "000000000", 9 => "000000110", 10 => "000110000", 11 => "000110110", 12 => "110000000", 13 => "110000110", 14 => "110110000", 15 => "110110110"
 			);
 		elsif rising_edge(CLK_BUS) then 
-			if ENA_14 = '1' and palette_wr = '1' then
+			if palette_wr = '1' then
 					palette(to_integer(unsigned(BORDER(3 downto 0) xor X"F"))) <= (not BUS_A) & BORDER(7);
 			end if;
 		end if;

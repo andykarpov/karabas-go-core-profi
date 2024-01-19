@@ -9,9 +9,10 @@ use IEEE.std_logic_unsigned.all;
 
 entity profi_video is
 	port (
-		CLK_BUS	: in std_logic; -- 24
+		CLK_BUS	: in std_logic; -- 48
+		ENA_28	: in std_logic; -- 24
 		ENA_14	: in std_logic; -- 12					
-		TURBO 	: in std_logic_vector := "00";
+		TURBO 	: in std_logic_vector(2 downto 0) := "000";
 		INTA		: in std_logic;
 		INT		: out std_logic;
 		BORDER	: in std_logic_vector(3 downto 0);	
@@ -107,10 +108,10 @@ architecture rtl of profi_video is
 begin
 
 -- sync, counters
-process (CLK_BUS, ENA_14)
+process (CLK_BUS, ENA_28, ENA_14)
 begin
 	if rising_edge(CLK_BUS) then
-			if (ENA_14 = '1') then		-- 12MHz			
+			if (ENA_28 = '1' and ENA_14 = '1') then		-- 12MHz			
 				if (h_cnt = pcpm_h_end) then
 					h_cnt <= (others => '0');
 				else
@@ -138,7 +139,7 @@ begin
 				end if;
 
 				
-				if (h_cnt > pcpm_h_int_on and v_cnt = pcpm_v_int_on and turbo = "00") or (h_cnt > pcpm_h_int_on_turbo and v_cnt = pcpm_v_int_on and turbo /= "00") then -- or (h_cnt < pcpm_h_int_off and v_cnt = pcpm_v_int_off) then
+				if (h_cnt > pcpm_h_int_on and v_cnt = pcpm_v_int_on and turbo = "000") or (h_cnt > pcpm_h_int_on_turbo and v_cnt = pcpm_v_int_on and turbo /= "000") then -- or (h_cnt < pcpm_h_int_off and v_cnt = pcpm_v_int_off) then
 					int_sig <= '0';
 				else
 					int_sig <= '1';
@@ -156,10 +157,10 @@ begin
 end process;
 
 -- pixel / attr registers
-process( CLK_BUS, ENA_14, h_cnt )
+process( CLK_BUS, ENA_28, ENA_14, h_cnt )
 	begin
 		if rising_edge(CLK_BUS) then
-			if ENA_14 = '1' then
+			if ENA_28 = '1' and ENA_14 = '1' then
 				if h_cnt(2 downto 0) = 7 then
 					pixel_reg <= vid_reg;
 					attr_reg <= at_reg;
@@ -171,10 +172,10 @@ process( CLK_BUS, ENA_14, h_cnt )
 	end process;
 
 -- memory read
-process(CLK_BUS, ENA_14, h_cnt)
+process(CLK_BUS, ENA_28, ENA_14, h_cnt)
 begin
 	if rising_edge(CLK_BUS) then 
-		if (ENA_14 = '1') then 
+		if (ENA_28 = '1' and ENA_14 = '1') then 
 			case h_cnt(2 downto 0) is 
 				when "001" => VID_RD <= '0'; A <= std_logic_vector((not h_cnt(3)) & v_cnt(7 downto 6)) & std_logic_vector(v_cnt(2 downto 0)) & std_logic_vector(v_cnt(5 downto 3)) & std_logic_vector(h_cnt(8 downto 4));
 				when "010" => vid_reg <= DI;
@@ -186,10 +187,10 @@ begin
 	end if;
 end process;
 
-process (CLK_BUS, ENA_14, blank_sig, paper1, pixel_reg, h_cnt, attr_reg, BORDER)
+process (CLK_BUS, ENA_28, ENA_14, blank_sig, paper1, pixel_reg, h_cnt, attr_reg, BORDER)
 begin 
 	if rising_edge(CLK_BUS) then 
-		if ENA_14 = '1' then
+		if ENA_28 = '1' and ENA_14 = '1' then
 			if (blank1 = '1') then 
 				rgbi <= "0000";
 			elsif paper1 = '1' and (pixel_reg(7 - to_integer(h_cnt(2 downto 0)))) = '0' then 

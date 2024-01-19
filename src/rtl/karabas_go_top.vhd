@@ -26,13 +26,10 @@
 -- EU, 2024
 
 -- TODO:
+-- 0. FDD fixes
 -- 1. serial mouse test
--- 2. NMI button (hotkey + button)
--- 3. UNO UART, ZIFI, CTS
--- 4. Fix OSD Menu+ESC (don't send ESC 200ms after release)
--- 5. OSD popups test (implement on MCU side)
--- 6. GS
--- 7. Turbo 56 MHz (system clock 56 or 112 ?)
+-- 2. UNO UART, ZIFI, CTS
+-- 3. GS
 ------------------------------------------------------------------------------------------------------------------
 
 library IEEE; 
@@ -163,7 +160,7 @@ signal ram6				: std_logic;
 signal ram7				: std_logic;
 signal onrom			: std_logic;
 signal unlock_128		: std_logic;
-signal turbo_mode		: std_logic_vector(1 downto 0) := "00";
+signal turbo_mode		: std_logic_vector(2 downto 0) := "000";
 signal lock_dffd		: std_logic;
 signal sound_off		: std_logic;
 signal hdd_type		: std_logic;
@@ -176,8 +173,8 @@ signal hdd_active		: std_logic;
 signal kb_do_bus		: std_logic_vector(5 downto 0);
 signal kb_reset 		: std_logic := '0';
 signal kb_nmi 		: std_logic := '0';
-signal kb_turbo 		: std_logic_vector(1 downto 0) := "00";
-signal kb_turbo_old	: std_logic_vector(1 downto 0) := "00";
+signal kb_turbo 		: std_logic_vector(2 downto 0) := "000";
+signal kb_turbo_old	: std_logic_vector(2 downto 0) := "000";
 signal kb_pause 		: std_logic := '0';
 signal joy_type 		: std_logic := '0';
 signal joy_mode 		: std_logic_vector(2 downto 0) := "000";
@@ -237,6 +234,7 @@ signal zc_do_bus		: std_logic_vector(7 downto 0);
 signal zc_spi_start	: std_logic;
 signal zc_wr_en		: std_logic;
 signal port77_wr		: std_logic;
+signal zc_busy			: std_logic;
 
 signal zc_cs_n			: std_logic;
 signal zc_sclk			: std_logic;
@@ -329,11 +327,13 @@ signal saa_out_r		: std_logic_vector(7 downto 0);
 signal clk_bus			: std_logic;
 signal clk_16 			: std_logic;
 signal clk_8 			: std_logic;
+signal clk_vid 		: std_logic;
 
 signal ena_div2	: std_logic := '0';
 signal ena_div4	: std_logic := '0';
 signal ena_div8	: std_logic := '0';
 signal ena_div16	: std_logic := '0';
+signal ena_div32	: std_logic := '0';
 signal ena_cpu 	: std_logic := '0';
 
 -- System
@@ -453,10 +453,11 @@ port map(
 	CLK_16 	=> clk_16,
 	CLK_8 	=> clk_8,
 	
-	ENA_DIV2 => ena_div2,
-	ENA_DIV4 => ena_div4,
-	ENA_DIV8 => ena_div8,
-	ENA_DIV16 => ena_div16,
+	ENA_DIV2 => ena_div2, -- 28
+	ENA_DIV4 => ena_div4, -- 14
+	ENA_DIV8 => ena_div8, -- 7
+	ENA_DIV16 => ena_div16, -- 3.5
+	ENA_DIV32 => ena_div32, -- 1.75
 	ENA_CPU => ena_cpu,
 	
 	TURBO => turbo_mode,
@@ -554,9 +555,10 @@ port map (
 -- Video Spectrum/Pentagon
 U4: entity work.video
 port map (
-	CLK_BUS 			=> clk_bus, 	-- 28 / 24
-	ENA_14 			=> ena_div2, 	-- 14 / 12
-	ENA_7 			=> ena_div4, 	-- 7 / 6
+	CLK_BUS 			=> clk_bus, 	-- 112 / 96
+	ENA_28			=> ena_div2, 	-- 28 / 24
+	ENA_14 			=> ena_div4, 	-- 14 / 12
+	ENA_7 			=> ena_div8, 	-- 7 / 6
 	RESET 			=> reset,	
 	BORDER 			=> port_xxfe_reg(7 downto 0),
 	TURBO 			=> turbo_mode,	-- turbo signal for int length
@@ -593,7 +595,8 @@ port map (
 U5: entity work.overlay
 port map (
 	CLK 				=> clk_bus,
-	ENA_14 			=> ena_div2,
+	ENA_28			=> ena_div2,
+	ENA_14 			=> ena_div4,
 	DS80				=> ds80,
 	RGB_I 			=> vid_rgb,
 	RGB_O 			=> vid_rgb_osd,
@@ -614,7 +617,8 @@ port map (
 U6: entity work.vga_scandoubler
 port map(
 	clk => clk_bus,
-	clk14en => ena_div2,
+	clk28en => ena_div2,
+	clk14en => ena_div4,
 	enable_scandoubling => vid_scandoubler_enable,
 	disable_scaneffect => '1',
 	ri => vid_rgb_osd(8 downto 6),
@@ -776,7 +780,7 @@ DAC_MUTE <= '1';
 U12: entity work.turbosound
 port map (
 	I_CLK				=> clk_bus,
-	I_ENA				=> ena_div16,
+	I_ENA				=> ena_div32,
 	I_ADDR			=> cpu_a_bus,
 	I_DATA			=> cpu_do_bus,
 	I_WR_N			=> cpu_wr_n,
@@ -980,7 +984,7 @@ cpu_nmi_n <= mapcond when kb_nmi = '1' and divmmc_en = '1' else
 cpu_wait_n <= '1';
 
 -- cpu wait condition
-cpu_wait <= '1' when kb_pause = '1' or  (kb_screen_mode = "01" and memory_contention = '1' and automap = '0' and DS80 = '0') else '0';
+cpu_wait <= '1' when zc_busy = '1' or kb_pause = '1' or  (kb_screen_mode = "01" and memory_contention = '1' and automap = '0' and DS80 = '0') else '0';
 
 -------------------------------------------------------------------------------
 -- SD
@@ -1040,7 +1044,7 @@ hdd_type <= port_028b_reg(1);										-- 1 	- HDD type Profi/Nemo
 turbo_fdc_off <= not port_028b_reg(2) and kb_turbofdc;		-- 2 	- TURBO_FDC_off
 fdc_swap <= port_028b_reg(3) or kb_swap_fdd;					-- 3 	- Floppy Disk Drive Selector Change
 sound_off <= port_028b_reg(4);									-- 4 	- Sound_off
-turbo_mode <= port_028b_reg(6 downto 5);						-- 5,6- Turbo Mode Selector 
+turbo_mode <= kb_turbo; -- '0' & port_028b_reg(6 downto 5);						-- 5,6- Turbo Mode Selector 
 lock_dffd <= port_028b_reg(7);								 	-- 7 	- Lock port DFFD
 ext_rom_bank_pq <= ext_rom_bank when rom0 = '0' else "01";	-- ROMBANK ALT
 
@@ -1111,7 +1115,7 @@ begin
 		port_018b_reg <= (others => '0');
 		port_028b_reg <= (others => '0');
 		dos_act <= '1';
-		kb_turbo_old <= "00";
+		kb_turbo_old <= "000";
 --- 06.07.2023:OCH: DIVMMC port added to ZController
 		port_e3_reg(5 downto 0) <= (others => '0');
 		port_e3_reg(7) <= '0';
@@ -1286,10 +1290,9 @@ saa_wr_n <= '0' when (cpu_iorq_n = '0' and cpu_wr_n = '0' and cpu_a_bus(7 downto
 mc146818_wr <= '1' when (cs_rtc_ds = '1' and cpu_iorq_n = '0' and cpu_wr_n = '0' and cpu_m1_n = '1') else '0';
 
 
---- 06.07.2023:OCH: DIVMMC ports added to ZController
 -- Z-controller + DIVMMC spi 
 zc_spi_start <= '1' when (cpu_a_bus(7 downto 0) = X"57" or (cpu_a_bus(7 downto 0) = X"EB" and cpm = '0' and divmmc_en = '1')) and cpu_iorq_n='0' and cpu_m1_n='1' and loader_act='0' else '0';
-zc_wr_en <= '1' when (cpu_a_bus(7 downto 0) = X"57" or (cpu_a_bus(7 downto 0) = X"EB" and cpm = '0' and divmmc_en = '1')) and cpu_iorq_n='0' and cpu_m1_n='1' and cpu_wr_n='0' and loader_act='0' else '0';
+zc_wr_en <= '1' when zc_spi_start = '1' and cpu_wr_n='0' else '0';
 port77_wr <= '1' when (cpu_a_bus(7 downto 0) = X"77" or (cpu_a_bus(7 downto 0) = X"E7" and divmmc_en = '1')) and cpu_iorq_n='0' and cpu_m1_n='1' and cpu_wr_n='0' and loader_act='0' else '0';
 
 process (port77_wr, loader_act, reset, clk_bus)
@@ -1297,15 +1300,8 @@ process (port77_wr, loader_act, reset, clk_bus)
 		if loader_act='1' or reset='1' then
 			zc_cs_n <= '1';
 		elsif clk_bus'event and clk_bus='1' then
---- 06.07.2023:OCH: DIVMMC uses 0 bit to control zc_cs_n, instead of 1 bit ZController. 
---- Lets check port number and select correct bit
---			if port77_wr='1' then
---				zc_cs_n <= cpu_do_bus(1);
---			end if;
 			if port77_wr='1' then
---- 08.07.2023:OCH: E7 port confict with E7 port of SPI Flash parallel interface so block
---- DIVMMC E7 port when flash loader software active   
-				if cpu_a_bus(7 downto 0) = X"E7" and ext_rom_bank(1 downto 0) /= "10" then
+				if cpu_a_bus(7 downto 0) = X"E7" then
 					zc_cs_n <= cpu_do_bus(0);
 				else
 					zc_cs_n <= cpu_do_bus(1);
@@ -1316,15 +1312,22 @@ end process;
 
 U_ZC_SPI: entity work.zc_spi     -- SD
 port map(
-	DI				=> cpu_do_bus,
-	START			=> zc_spi_start,
-	WR_EN			=> zc_wr_en,
-	CLC     		=> clk_bus, 
-	MISO    		=> SD_DO,
-	DO				=> zc_do_bus,
-	SCK     		=> zc_sclk,
-	MOSI    		=> zc_mosi
+	clk     		=> clk_bus,  -- 56
+	ena			=> ena_div2, -- 28
+	reset 		=> reset,
+	
+	di				=> cpu_do_bus,
+	start 		=> zc_spi_start,
+	miso			=> SD_DO,
+	wr_en			=> zc_wr_en,
+	
+	do				=> zc_do_bus,
+	sck			=> zc_sclk,
+	mosi			=> zc_mosi,
+	busy			=> open
 );
+
+zc_busy <= '0';
 
 ------------------------ divmmc-----------------------------
 -- Engineer:   Mario Prato
@@ -1418,7 +1421,6 @@ selector <=
 	x"00" when (ram_oe_n = '0') else -- ram / rom
 	x"01" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and cs_rtc_ds = '1') else -- RTC MC146818A
 	x"02" when (cs_xxfe = '1' and cpu_rd_n = '0') else 									-- Keyboard, port #FE
-	x"18" when (fdd_oe_n = '0') else -- fdd
 	x"19" when (ide_oe_n = '0') else	-- ide	
  	x"03" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and (cpu_a_bus(7 downto 0) = X"57" or (cpu_a_bus(7 downto 0) = X"EB" and cpm = '0' and divmmc_en = '1')) ) else 	-- Z-Controller + DivMMC
 	x"04" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and cpu_a_bus(7 downto 0) = X"77") else 	-- Z-Controller
@@ -1439,6 +1441,7 @@ selector <=
 	x"15" when (cs_028b = '1' and cpu_rd_n = '0') else										-- port #028B
 	x"16" when zifi_oe_n = '0' else  -- zifi
 	x"17" when (vid_pff_cs = '1' and cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_a_bus( 7 downto 0) = X"FF") and dos_act='0' and cpm = '0' and ds80 = '0' else -- Port FF select
+	x"18" when (fdd_oe_n = '0') else -- fdd
 	(others => '1');
 
 
@@ -1460,10 +1463,17 @@ FT_OE_N <= '1';
 VCLK_buf: ODDR2
 port map(
 	Q => V_CLK, -- pixel clock for video dac
-	C0 => clk_bus,
-	C1 => not clk_bus,
+	C0 => clk_vid,
+	C1 => not clk_vid,
 	D0 => '1',
 	D1 => '0'
+);
+
+U_BUFG: BUFGCE 
+port map(
+	O => clk_vid,
+	I => clk_bus,
+	CE	=> ena_div2
 );
 
 ext_rom_bank <= kb_rom_bank;
