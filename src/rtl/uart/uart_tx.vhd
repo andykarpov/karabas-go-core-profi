@@ -72,7 +72,7 @@ begin
           o_TX_Serial <= '0';
  
           -- Wait g_CLKS_PER_BIT-1 clock cycles for start bit to finish
-          if (DS80 = '0' and r_Clk_Count < g_CLKS_PER_BIT-1) or (DS80 = '1' and r_Clk_Count < g_CLKS_PER_BIT_DS80-1) then
+          if (i_DS80 = '0' and r_Clk_Count < g_CLKS_PER_BIT-1) or (i_DS80 = '1' and r_Clk_Count < g_CLKS_PER_BIT_DS80-1) then
             r_Clk_Count <= r_Clk_Count + 1;
             r_SM_Main   <= s_TX_Start_Bit;
           else
@@ -84,7 +84,7 @@ begin
         when s_TX_Data_Bits =>
           o_TX_Serial <= r_TX_Data(r_Bit_Index);
            
-          if (DS80 = '0' and r_Clk_Count < g_CLKS_PER_BIT-1) or (DS80 = '1' and r_Clk_Count < g_CLKS_PER_BIT_DS80-1) then
+          if (i_DS80 = '0' and r_Clk_Count < g_CLKS_PER_BIT-1) or (i_DS80 = '1' and r_Clk_Count < g_CLKS_PER_BIT_DS80-1) then
             r_Clk_Count <= r_Clk_Count + 1;
             r_SM_Main   <= s_TX_Data_Bits;
           else
@@ -105,7 +105,7 @@ begin
           o_TX_Serial <= '1';
  
           -- Wait g_CLKS_PER_BIT-1 clock cycles for Stop bit to finish
-          if (DS80 = '0' and r_Clk_Count < g_CLKS_PER_BIT-1) or (DS80 = '1' and r_Clk_Count < g_CLKS_PER_BIT_DS80-1) then
+          if (i_DS80 = '0' and r_Clk_Count < g_CLKS_PER_BIT-1) or (i_DS80 = '1' and r_Clk_Count < g_CLKS_PER_BIT_DS80-1) then
             r_Clk_Count <= r_Clk_Count + 1;
             r_SM_Main   <= s_TX_Stop_Bit;
           else

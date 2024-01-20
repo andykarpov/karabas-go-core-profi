@@ -1,7 +1,7 @@
 {
     "id": "profi",
     "name": "Pro Turbo 28",
-    "build": "24011922",
+    "build": "24012000",
     "bitstream": "karabas_go.bin",
     "visible": true,
     "type": "osd",

@@ -75,7 +75,7 @@ begin
  
           -- Check middle of start bit to make sure it's still low
           when s_RX_Start_Bit =>
-          if (DS80 = '0' and r_Clk_Count = (g_CLKS_PER_BIT-1)/2) or (DS80 = '1' and r_Clk_Count = (g_CLKS_PER_BIT_DS80-1)/2) then
+          if (i_DS80 = '0' and r_Clk_Count = (g_CLKS_PER_BIT-1)/2) or (i_DS80 = '1' and r_Clk_Count = (g_CLKS_PER_BIT_DS80-1)/2) then
             if r_RX_Data = '0' then
               r_Clk_Count <= 0;  -- reset counter since we found the middle
               r_SM_Main   <= s_RX_Data_Bits;
@@ -89,7 +89,7 @@ begin
          
         -- Wait g_CLKS_PER_BIT-1 clock cycles to sample serial data
         when s_RX_Data_Bits =>
-          if (DS80 = '0' and r_Clk_Count < g_CLKS_PER_BIT-1) or (DS80 = '1' and r_Clk_Count < g_CLKS_PER_BIT_DS80-1) then
+          if (i_DS80 = '0' and r_Clk_Count < g_CLKS_PER_BIT-1) or (i_DS80 = '1' and r_Clk_Count < g_CLKS_PER_BIT_DS80-1) then
             r_Clk_Count <= r_Clk_Count + 1;
             r_SM_Main   <= s_RX_Data_Bits;
           else
@@ -109,7 +109,7 @@ begin
         -- Receive Stop bit. Stop bit = 1
         when s_RX_Stop_Bit =>
           -- Wait g_CLKS_PER_BIT-1 clock cycles for Stop bit to finish
-          if (DS80 = '0' and r_Clk_Count < g_CLKS_PER_BIT-1) or (DS80 = '1' and r_Clk_Count < g_CLKS_PER_BIT_DS80-1) then
+          if (i_DS80 = '0' and r_Clk_Count < g_CLKS_PER_BIT-1) or (i_DS80 = '1' and r_Clk_Count < g_CLKS_PER_BIT_DS80-1) then
             r_Clk_Count <= r_Clk_Count + 1;
             r_SM_Main   <= s_RX_Stop_Bit;
           else

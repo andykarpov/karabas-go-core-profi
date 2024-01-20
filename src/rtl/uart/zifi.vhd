@@ -46,7 +46,7 @@ signal command_reg          : std_logic_vector(7 downto 0);
 signal err_reg              : std_logic_vector(7 downto 0);
 signal di_reg               : std_logic_vector(7 downto 0);
 signal do_reg               : std_logic_vector(7 downto 0);
-signal api_enabled          : std_logic := '1';
+signal api_enabled          : std_logic := '0';
 
 signal fifo_tx_di           : std_logic_vector(7 downto 0);
 signal fifo_tx_do           : std_logic_vector(7 downto 0);
@@ -194,7 +194,7 @@ begin
 		  wr_allow <= '1';
 		  rd_allow <= '1';
 		  fifo_tx_wr_req <= '0';
-		  api_enabled <= '1';
+		  api_enabled <= '0';
 		  
     elsif (rising_edge(CLK)) then
 	 
@@ -272,6 +272,6 @@ ZIFI_OE_N <= '0' when IORQ_N = '0' and RD_N = '0' and (A = zifi_in_fifo_port or 
 
 ENABLED <= api_enabled;
 
-UART_CTS <= '0' when fifo_rx_used > 1792 else '1';
+UART_CTS <= '1' when fifo_rx_used > 1792 else '0'; -- active 0 ?
 
 end rtl;

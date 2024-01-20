@@ -16,7 +16,7 @@ port (
 	CLK			: in std_logic;
 	DS80			: in std_logic;
 	
-	CLK_BUS		: buffer std_logic; -- 56 / 48
+	CLK_BUS		: buffer std_logic; -- 28 / 24
 	CLK_16 		: buffer std_logic; -- 16
 	CLK_8			: buffer std_logic; -- 8
 	
@@ -34,49 +34,32 @@ end clock;
 
 architecture rtl of clock is
 
-signal prev_ds80 : std_logic := '0';
-signal pulse_reconf : std_logic_vector(7 downto 0) := "00000001"; -- force reconfigure on boot
-
 signal ena_cnt : std_logic_vector(4 downto 0) := "00000";
 signal locked : std_logic := '0';
-signal pll_state : std_logic_vector(2 downto 0) := "000";
-
 signal ce_8 : std_logic := '0';
+signal clk_28, clk_24 : std_logic;
 
 begin 
 
-process (CLK_BUS)
-begin
-	if rising_edge(CLK_BUS) then 
-		if (prev_ds80 /= ds80) then 	
-			prev_ds80 <= ds80;
-			pulse_reconf <= "00000001";
-		else
-			pulse_reconf <= pulse_reconf(6 downto 0) & '0';
-		end if;
-		
-		if (locked = '0') then 
-			locked <= '1';
-		end if;
-		
-	end if;
-end process;
-
-pll_state <= "00" & prev_ds80;
-
--- reconfigurable pll 28 / 24 MHZ
-U1: entity work.pll_top
+-- PLL1
+U1: entity work.pll
 port map (
-	SSTEP 			=> pulse_reconf(7),
-	STATE 			=> pll_state,
-	RST 				=> '0',
-	CLKIN				=> CLK,
-	SRDY 				=> open,
-	CLK0OUT 			=> CLK_BUS, -- 28 / 24
-	CLK1OUT 			=> CLK_16,  -- 16
-	CLK2OUT 			=> open,
-	CLK3OUT 			=> open
+	CLK_IN1			=> CLK,
+	CLK_OUT1			=> clk_28,
+	CLK_OUT2 		=> clk_24,
+	CLK_OUT3 		=> clk_16,
+	LOCKED			=> locked
+	);
+
+-- clock switch
+U2 : BUFGMUX_1
+port map (
+ I0      => clk_28,
+ I1      => clk_24,
+ O       => clk_bus,
+ S       => ds80
 );
+
 	
 ARESET 		<= not locked;
 

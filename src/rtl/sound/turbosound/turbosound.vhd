@@ -17,8 +17,6 @@ entity turbosound is
 		I_IORQ_N	   : in std_logic;
 		I_M1_N		: in std_logic;
 		I_RESET_N	: in std_logic;
-		I_BDIR      : in std_logic;
-		I_BC1       : in std_logic;
 		O_SEL		   : out std_logic;
 		I_MODE 	   : in std_logic;
 		-- ssg0
@@ -35,6 +33,7 @@ entity turbosound is
 end turbosound;
  
 architecture rtl of turbosound is
+	signal ay_hit : std_logic;
 	signal bc1	: std_logic;
 	signal bdir	: std_logic;
 	signal ssg	: std_logic;
@@ -65,10 +64,9 @@ end component;
 	
 begin
 
-bdir	<= '1' when (I_M1_N = '1' and I_IORQ_N = '0' and I_WR_N = '0' and I_ADDR(15) = '1' and I_ADDR(1) = '0') else '0';
-bc1	<= '1' when (I_M1_N = '1' and I_IORQ_N = '0' and I_ADDR(15) = '1' and I_ADDR(14) = '1' and I_ADDR(1) = '0') else '0';
---	bdir <= I_BDIR;
---	bc1 <= I_BC1;
+ay_hit <= '1' when (I_ADDR(7 downto 0) = x"FD" and I_ADDR(15) = '1') else '0';
+bc1 <= '1' when ay_hit = '1' and I_M1_N = '1' and I_IORQ_N = '0' and I_ADDR(14) = '1' else '0';
+bdir <= '1' when ay_hit = '1' and I_M1_N = '1' and I_IORQ_N = '0' and I_WR_N = '0' else '0';
 	
 	O_SEL	<= ssg;
 	

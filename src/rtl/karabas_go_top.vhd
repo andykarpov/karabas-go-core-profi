@@ -28,8 +28,7 @@
 -- TODO:
 -- 0. FDD fixes
 -- 1. serial mouse test
--- 2. UNO UART, ZIFI, CTS
--- 3. GS
+-- 2. GS
 ------------------------------------------------------------------------------------------------------------------
 
 library IEEE; 
@@ -49,11 +48,13 @@ entity karabas_go is
            DAC_DAT : out  STD_LOGIC;
            DAC_BCK : out  STD_LOGIC;
            DAC_MUTE : out  STD_LOGIC;
-           ESP_RESET_N : out  STD_LOGIC;
-           ESP_BOOT_N : out  STD_LOGIC;
+           
+			  ESP_RESET_N : inout  STD_LOGIC;
+           ESP_BOOT_N : inout  STD_LOGIC;
            UART_RX : inout  STD_LOGIC;
            UART_TX : inout  STD_LOGIC;
-           UART_CTS : out  STD_LOGIC;
+           UART_CTS : inout  STD_LOGIC;
+			  
            WA : out  STD_LOGIC_VECTOR (2 downto 0);
            WCS_N : out  STD_LOGIC_VECTOR(1 downto 0);
            WRD_N : out  STD_LOGIC;
@@ -786,8 +787,6 @@ port map (
 	I_IORQ_N			=> cpu_iorq_n,
 	I_M1_N			=> cpu_m1_n,
 	I_RESET_N		=> cpu_reset_n,
-	I_BDIR 			=> '1', 
-	I_BC1 			=> '1', 
 	O_SEL				=> ssg_sel,
 	I_MODE 			=> kb_psg_type,
 	-- ssg0
@@ -1429,10 +1428,10 @@ selector <=
 	x"0A" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_a_bus = X"FADF" and ms_present = '1' and cpm='0') else	-- Mouse0 port key, z
 	x"0B" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_a_bus = X"FBDF" and ms_present = '1' and cpm='0') else	-- Mouse0 port x
 	x"0C" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_a_bus = X"FFDF" and ms_present = '1' and cpm='0') else	-- Mouse0 port y 
-	x"0D" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and zxuno_uart2_oe_n = '0') else -- ZX UNO UART2
+--	x"0D" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and zxuno_uart2_oe_n = '0') else -- ZX UNO UART2
 	x"0E" when (serial_ms_oe_n = '0') else -- Serial mouse
-	x"0F" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and zxuno_addr_oe_n = '0') else -- ZX UNO Register
-	x"10" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and zxuno_uart_oe_n = '0') else -- ZX UNO UART
+--	x"0F" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and zxuno_addr_oe_n = '0') else -- ZX UNO Register
+--	x"10" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and zxuno_uart_oe_n = '0') else -- ZX UNO UART
 	x"13" when (cs_008b = '1' and cpu_rd_n = '0') else										-- port #008B
 	x"14" when (cs_018b = '1' and cpu_rd_n = '0') else										-- port #018B
 	x"15" when (cs_028b = '1' and cpu_rd_n = '0') else										-- port #028B
