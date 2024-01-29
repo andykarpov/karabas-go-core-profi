@@ -27,8 +27,9 @@
 
 -- TODO:
 -- 0. FDD fixes
--- 1. serial mouse test
--- 2. GS
+-- 1. IDE controller timings
+-- 2. serial mouse test
+-- 3. GS (fix conflicts with FDD and/or HDD)
 ------------------------------------------------------------------------------------------------------------------
 
 library IEEE; 
@@ -325,12 +326,21 @@ signal saa_wr_n		: std_logic;
 signal saa_out_l		: std_logic_vector(7 downto 0);
 signal saa_out_r		: std_logic_vector(7 downto 0);
 
+-- gs
+signal gs_l 			: std_logic_vector(8 downto 0);
+signal gs_r 			: std_logic_vector(8 downto 0);
+signal gs_oe_n 		: std_logic := '1';
+signal gs_do_bus	 	: std_logic_vector(7 downto 0);
+
 -- CLOCK
 signal clk_bus			: std_logic;
 signal clk_16 			: std_logic;
 signal clk_8 			: std_logic;
 signal clk_vid 		: std_logic;
+signal clk_sdr 		: std_logic;
+signal clk_gs 			: std_logic;
 
+signal ena_gs 		: std_logic := '0';
 signal ena_div2	: std_logic := '0';
 signal ena_div4	: std_logic := '0';
 signal ena_div8	: std_logic := '0';
@@ -413,9 +423,8 @@ signal hid_kb_dat2 : std_logic_vector(7 downto 0);
 signal hid_kb_dat3 : std_logic_vector(7 downto 0);
 signal hid_kb_dat4 : std_logic_vector(7 downto 0);
 signal hid_kb_dat5 : std_logic_vector(7 downto 0);
-signal joy_l : std_logic_vector(11 downto 0);
-signal joy_r : std_logic_vector(11 downto 0);
-signal joy_usb: std_logic_vector(11 downto 0);
+signal joy_l : std_logic_vector(12 downto 0);
+signal joy_r : std_logic_vector(12 downto 0);
 
 signal kb_vsync : std_logic := '0';
 signal kb_joy_type_l : std_logic_vector(2 downto 0) := "000";
@@ -441,6 +450,16 @@ signal ide_oe_n	: std_logic := '1';
 signal fdd_do_bus : std_logic_vector(7 downto 0);
 signal fdd_oe_n : std_logic := '1';
 
+signal usb_uart_rx_data : std_logic_vector(7 downto 0);
+signal usb_uart_rx_idx : std_logic_vector(7 downto 0);
+signal usb_uart_tx_data : std_logic_vector(7 downto 0);
+signal usb_uart_tx_wr : std_logic;
+signal usb_uart_tx_mode : std_logic := '0';
+signal usb_uart_dll : std_logic_vector(7 downto 0);
+signal usb_uart_dlm : std_logic_vector(7 downto 0);
+signal usb_uart_dll_wr : std_logic := '0';
+signal usb_uart_dlm_wr : std_logic := '0';
+
 begin
 
 U1: entity work.clock
@@ -450,14 +469,15 @@ port map(
 	
 	DS80 => ds80,
 	
-	CLK_BUS => clk_bus,
+	CLK_BUS => clk_bus, -- 28 / 24
 	CLK_16 	=> clk_16,
 	CLK_8 	=> clk_8,
-	
-	ENA_DIV2 => ena_div2, -- 14
-	ENA_DIV4 => ena_div4, -- 7
-	ENA_DIV8 => ena_div8, -- 3.5
-	ENA_DIV16 => ena_div16, -- 1.75
+	CLK_SDR  => clk_sdr, -- 84
+
+	ENA_DIV2 => ena_div2, -- 14 / 12
+	ENA_DIV4 => ena_div4, -- 7 / 6
+	ENA_DIV8 => ena_div8, -- 3.5 / 3
+	ENA_DIV16 => ena_div16, -- 1.75 / 1.5
 	ENA_CPU => ena_cpu,
 	
 	TURBO => turbo_mode,
@@ -466,10 +486,10 @@ port map(
 );
 
 -- Zilog Z80A CPU
-U2: entity work.T80a
+U2: entity work.T80s
 port map (
 	RESET_n			=> cpu_reset_n,
-	CLK_n				=> not clk_bus,
+	CLK				=> clk_bus,
 	CEN				=> ena_cpu,
 	WAIT_n			=> cpu_wait_n,
 	INT_n				=> cpu_int_n and serial_ms_int,
@@ -484,8 +504,8 @@ port map (
 	HALT_n			=> open,
 	BUSAK_n			=> open,
 	A					=> cpu_a_bus,
-	DIN				=> cpu_di_bus,
-	DOUT				=> cpu_do_bus
+	DI					=> cpu_di_bus,
+	DO					=> cpu_do_bus
 );
 
 -- memory manager
@@ -507,7 +527,7 @@ port map (
 	loader_act 		=> loader_act,
 	loader_ram_a 	=> loader_ram_a(20 downto 0),
 	loader_ram_do 	=> loader_ram_do,
-	loader_ram_wr 	=> loader_ram_wr,
+	loader_ram_wr 	=> loader_ram_wr and not(loader_ram_a(31)),
 
 	-- ram 
 	MA 				=> MA,
@@ -665,13 +685,22 @@ port map(
 	
 	JOY_L => joy_l,
 	JOY_R => joy_r,
-	JOY_USB => joy_usb,
 	
 	RTC_A => mc146818_a_bus,
 	RTC_DI => cpu_do_bus,
 	RTC_DO => mc146818_do_bus,
 	RTC_CS => '1',
 	RTC_WR_N => not mc146818_wr,
+	
+	UART_RX_DATA => usb_uart_rx_data,
+	UART_RX_IDX	=> usb_uart_rx_idx,
+	UART_TX_DATA => usb_uart_tx_data,
+	UART_TX_WR => usb_uart_tx_wr,
+	UART_TX_MODE => usb_uart_tx_mode,
+	UART_DLM => usb_uart_dlm,
+	UART_DLL => usb_uart_dll,
+	UART_DLM_WR => usb_uart_dlm_wr,
+	UART_DLL_WR => usb_uart_dll_wr,
 	
 	ROMLOADER_ACTIVE => loader_act,
 	ROMLOAD_ADDR => loader_ram_a,
@@ -878,7 +907,17 @@ port map (
 
 	UART_RX   => UART_RX,
 	UART_TX   => zifi_uart_tx,
-	UART_CTS  => zifi_uart_cts	
+	UART_CTS  => zifi_uart_cts,
+	
+	USB_UART_RX_DATA => usb_uart_rx_data,
+	USB_UART_RX_IDX => usb_uart_rx_idx,
+	USB_UART_TX_DATA => usb_uart_tx_data,
+	USB_UART_TX_WR => usb_uart_tx_wr,
+	USB_UART_TX_MODE => usb_uart_tx_mode,
+	USB_UART_DLL => usb_uart_dll,
+	USB_UART_DLM => usb_uart_dlm,
+	USB_UART_DLL_WR => usb_uart_dll_wr,
+	USB_UART_DLM_WR => usb_uart_dlm_wr
 );
 
 UART_TX <= zifi_uart_tx; -- when zifi_api_enabled = '1' else zxuno_uart_tx;
@@ -951,14 +990,81 @@ port map(
 	FDC_DS => FDC_DRIVE
 );
 
--- заглушки
---FDC_SIDE_N <= '0';
---FDC_DRIVE <= "00";
---FDC_MOTOR <= '0';
---FDC_WDATA <= '0';
---FDC_WGATE <= '0';
---FDC_STEP <= '0';
---FDC_DIR <= '0';
+U19: entity work.audio_mixer
+port map(
+	clk => clk_bus,
+
+	mute => loader_act or kb_pause or sound_off,
+	mode => kb_psg_mix,
+
+	speaker => speaker,
+	tape_in => TAPE_IN,
+
+	ssg0_a => ssg_cn0_a,
+	ssg0_b => ssg_cn0_b,
+	ssg0_c => ssg_cn0_c,
+
+	ssg1_a => ssg_cn1_a,
+	ssg1_b => ssg_cn1_b,
+	ssg1_c => ssg_cn1_c,
+
+	covox_a => covox_a,
+	covox_b => covox_b,
+	covox_c => covox_c,
+	covox_d => covox_d,
+	covox_fb => covox_fb,
+	
+	saa_l => saa_out_l,
+	saa_r => saa_out_r,
+	
+	gs_l => gs_l,
+	gs_r => gs_r,
+	
+	audio_l => audio_l,
+	audio_r => audio_r
+);
+
+U20: entity work.gs_top
+port map(
+	clk_sys => clk_sdr,
+	clk_bus => clk_bus,
+	ce => ena_div2,
+	ds80 => ds80,
+	cpm => cpm,
+	dos => dos_act,
+	fdd => not(fdd_cs_n) or not(fdd_cs_pff_n),
+	reset => reset,
+	areset => areset,
+	
+	a => cpu_a_bus,
+	di => cpu_do_bus,
+	mreq_n => cpu_mreq_n,
+	iorq_n => cpu_iorq_n,
+	m1_n => cpu_m1_n,
+	rd_n => cpu_rd_n,
+	wr_n => cpu_wr_n,
+	
+	oe_n => gs_oe_n,
+	do_bus => gs_do_bus,
+	
+	sdram_clk => SDR_CLK,
+	sdram_dq => SDR_DQ,
+	sdram_a => SDR_A,
+	sdram_dqm => SDR_DQM,
+	sdram_ba => SDR_BA,
+	sdram_we_n => SDR_WE_N,
+	sdram_ras_n => SDR_RAS_N,
+	sdram_cas_n => SDR_CAS_N,
+	
+	loader_act => loader_act,
+	loader_a => loader_ram_a,
+	loader_d => loader_ram_do,
+	loader_wr => loader_ram_wr,
+	
+	out_l => gs_l,
+	out_r => gs_r
+	
+);
 
 -------------------------------------------------------------------------------
 -- Global signals
@@ -1208,75 +1314,10 @@ begin
 end process;
 
 -------------------------------------------------------------------------------
--- Audio mixer
+-- Audio 
 
 speaker <= port_xxfe_reg(4);
 BEEPER <= speaker;
-
-audio_mono <= 	
-				("0000" & speaker & "00000000000") +
-				("00000" & TAPE_IN & "0000000000") +				
-				("0000"  & ssg_cn0_a &     "0000") + 
-				("0000"  & ssg_cn0_b &     "0000") + 
-				("0000"  & ssg_cn0_c &     "0000") + 
-				("0000"  & ssg_cn1_a &     "0000") + 
-				("0000"  & ssg_cn1_b &     "0000") + 
-				("0000"  & ssg_cn1_c &     "0000") + 
-				("0000"  & covox_a &       "0000") + 
-				("0000"  & covox_b &       "0000") + 
-				("0000"  & covox_c &       "0000") + 
-				("0000"  & covox_d &       "0000") + 
-				("0000"  & covox_fb &      "0000") + 
-				("0000"  & saa_out_l &     "0000") + 				
-				("0000"  & saa_out_r &     "0000");
-
-audio_l <= "0000000000000000" when loader_act = '1' or kb_pause = '1' or sound_off = '1' else 
-				audio_mono when kb_psg_mix = "10" else
-				("000" & speaker & "000000000000") + -- ACB: L = A + C/2
-				("00000" & TAPE_IN & "0000000000") +	
-				("000"  & ssg_cn0_a &     "00000") + 
-				("0000"  & ssg_cn0_c &     "0000") + 
-				("000"  & ssg_cn1_a &     "00000") + 
-				("0000"  & ssg_cn1_c &     "0000") + 
-				("000"  & covox_a &       "00000") + 
-				("000"  & covox_b &       "00000") + 
-				("000"  & covox_fb &      "00000") + 
-				("000"  & saa_out_l  &    "00000") when kb_psg_mix = "01" else 
-				("000" & speaker & "000000000000") +  -- ABC: L = A + B/2
-				("00000" & TAPE_IN & "0000000000") +	
-				("000"  & ssg_cn0_a &     "00000") + 
-				("0000"  & ssg_cn0_b &     "0000") + 
-				("000"  & ssg_cn1_a &     "00000") + 
-				("0000"  & ssg_cn1_b &     "0000") + 
-				("000"  & covox_a &       "00000") + 
-				("000"  & covox_b &       "00000") + 
-				("000"  & covox_fb &      "00000") + 
-				("000"  & saa_out_l  &    "00000");
-				
-audio_r <= "0000000000000000" when loader_act = '1' or kb_pause = '1' or sound_off = '1' else 
-				audio_mono when kb_psg_mix = "10" else
-				("000" & speaker & "000000000000") + -- ACB: R = B + C/2
-				("00000" & TAPE_IN & "0000000000") +	
-				("000"  & ssg_cn0_b &     "00000") + 
-				("0000"  & ssg_cn0_c &     "0000") + 
-				("000"  & ssg_cn1_b &     "00000") + 
-				("0000"  & ssg_cn1_c &     "0000") + 
-				("000"  & covox_c &       "00000") + 
-				("000"  & covox_d &       "00000") + 
-				("000"  & covox_fb &      "00000") + 
-				("000"  & saa_out_r &     "00000") when kb_psg_mix = "01" else
-				("000" & speaker & "000000000000") + -- ABC: R = C + B/2
-				("00000" & TAPE_IN & "0000000000") +	
-				("000"  & ssg_cn0_c &     "00000") + 
-				("0000"  & ssg_cn0_b &     "0000") + 
-				("000"  & ssg_cn1_c &     "00000") + 
-				("0000"  & ssg_cn1_b &     "0000") + 
-				("000"  & covox_c &       "00000") + 
-				("000"  & covox_d &       "00000") + 
-				("000"  & covox_fb &      "00000") + 
-				("000"  & saa_out_r &     "00000");
-				
--- Tape Out: 1/0 for revDS, open collector output for revA,B,C,D
 TAPE_OUT <= port_xxfe_reg(3);
 				
 -- SAA1099
@@ -1382,7 +1423,7 @@ end process;
 
 process (selector, cpu_a_bus, gx0, serial_ms_do_bus, ram_do_bus, mc146818_do_bus, kb_do_bus, zc_do_bus, ssg_cn0_bus, ssg_cn1_bus, port_7ffd_reg, port_dffd_reg, zxuno_uart_do_bus,
 			zxuno_uart2_do_bus, vid_attr, port_eff7_reg, joy_bus, ms_z, ms_b, ms_x, ms_y, zxuno_addr_to_cpu, port_xxC7_reg, port_008b_reg,
-			port_018b_reg, port_028b_reg, TAPE_IN)
+			port_018b_reg, port_028b_reg, gs_do_bus, ide_do_bus, fdd_do_bus, TAPE_IN)
 begin
 	case selector is
 		when x"00" => cpu_di_bus <= ram_do_bus;
@@ -1398,17 +1439,15 @@ begin
 		when x"0A" => cpu_di_bus <= ms_z(3 downto 0) & '1' & not(ms_b(2)) & not(ms_b(0)) & not(ms_b(1)); -- D0=right, D1 = left, D2 = middle, D3 = fourth, D4..D7 - wheel
 		when x"0B" => cpu_di_bus <= ms_x;
 		when x"0C" => cpu_di_bus <= ms_y;
-		when x"0D" => cpu_di_bus <= zxuno_uart2_do_bus;
-		when x"0E" => cpu_di_bus <= serial_ms_do_bus;
-		when x"0F" => cpu_di_bus <= zxuno_addr_to_cpu;
-		when x"10" => cpu_di_bus <= zxuno_uart_do_bus;
-		when x"13" => cpu_di_bus <= port_008b_reg;
-		when x"14" => cpu_di_bus <= port_018b_reg;
-		when x"15" => cpu_di_bus <= port_028b_reg;
-		when x"16" => cpu_di_bus <= zifi_do_bus;
-		when x"17" => cpu_di_bus <= vid_attr;
-		when x"18" => cpu_di_bus <= fdd_do_bus;
-		when x"19" => cpu_di_bus <= ide_do_bus;
+		when x"0D" => cpu_di_bus <= serial_ms_do_bus;
+		when x"0E" => cpu_di_bus <= port_008b_reg;
+		when x"0F" => cpu_di_bus <= port_018b_reg;
+		when x"10" => cpu_di_bus <= port_028b_reg;
+		when x"11" => cpu_di_bus <= zifi_do_bus;
+		when x"12" => cpu_di_bus <= vid_attr;
+		when x"13" => cpu_di_bus <= fdd_do_bus;
+		when x"14" => cpu_di_bus <= ide_do_bus;
+		when x"15" => cpu_di_bus <= gs_do_bus;
 		when others => cpu_di_bus <= (others => '1');
 	end case;
 end process;
@@ -1416,8 +1455,7 @@ end process;
 selector <= 	
 	x"00" when (ram_oe_n = '0') else -- ram / rom
 	x"01" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and cs_rtc_ds = '1') else -- RTC MC146818A
-	x"02" when (cs_xxfe = '1' and cpu_rd_n = '0') else 									-- Keyboard, port #FE
-	x"19" when (ide_oe_n = '0') else	-- ide	
+	x"02" when (cs_xxfe = '1' and cpu_rd_n = '0') else 									-- Keyboard, port #FE	
  	x"03" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and (cpu_a_bus(7 downto 0) = X"57" or (cpu_a_bus(7 downto 0) = X"EB" and cpm = '0' and divmmc_en = '1')) ) else 	-- Z-Controller + DivMMC
 	x"04" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and cpu_a_bus(7 downto 0) = X"77") else 	-- Z-Controller
 	x"05" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and cpu_a_bus( 7 downto 0) = X"1F" and dos_act = '0' and cpm = '0' and joy_mode = "000") else -- Joystick, port #1F
@@ -1428,27 +1466,16 @@ selector <=
 	x"0A" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_a_bus = X"FADF" and ms_present = '1' and cpm='0') else	-- Mouse0 port key, z
 	x"0B" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_a_bus = X"FBDF" and ms_present = '1' and cpm='0') else	-- Mouse0 port x
 	x"0C" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_a_bus = X"FFDF" and ms_present = '1' and cpm='0') else	-- Mouse0 port y 
---	x"0D" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and zxuno_uart2_oe_n = '0') else -- ZX UNO UART2
-	x"0E" when (serial_ms_oe_n = '0') else -- Serial mouse
---	x"0F" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and zxuno_addr_oe_n = '0') else -- ZX UNO Register
---	x"10" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and zxuno_uart_oe_n = '0') else -- ZX UNO UART
-	x"13" when (cs_008b = '1' and cpu_rd_n = '0') else										-- port #008B
-	x"14" when (cs_018b = '1' and cpu_rd_n = '0') else										-- port #018B
-	x"15" when (cs_028b = '1' and cpu_rd_n = '0') else										-- port #028B
-	x"16" when zifi_oe_n = '0' else  -- zifi
-	x"17" when (vid_pff_cs = '1' and cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_a_bus( 7 downto 0) = X"FF") and dos_act='0' and cpm = '0' and ds80 = '0' else -- Port FF select
-	x"18" when (fdd_oe_n = '0') else -- fdd
+	x"0D" when (serial_ms_oe_n = '0') else -- Serial mouse
+	x"0E" when (cs_008b = '1' and cpu_rd_n = '0') else										-- port #008B
+	x"0F" when (cs_018b = '1' and cpu_rd_n = '0') else										-- port #018B
+	x"10" when (cs_028b = '1' and cpu_rd_n = '0') else										-- port #028B
+	x"11" when zifi_oe_n = '0' and cpu_iorq_n = '0' and cpu_rd_n = '0' else  		-- zifi
+	x"12" when (vid_pff_cs = '1' and cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_a_bus( 7 downto 0) = X"FF") and dos_act='0' and cpm = '0' and ds80 = '0' else -- Port FF select
+	x"13" when (fdd_oe_n = '0' and cpu_iorq_n = '0' and cpu_rd_n = '0') else 		-- fdd
+	x"14" when (ide_oe_n = '0' and cpu_iorq_n = '0' and cpu_rd_n = '0') else		-- ide
+	x"15" when (gs_oe_n = '0' and cpu_iorq_n = '0' and cpu_rd_n = '0') else -- gs
 	(others => '1');
-
-
--- SDRAM
-SDR_BA <= "00";
-SDR_A <= (others => '0');
-SDR_CLK <= '0';
-SDR_DQM <= "00";
-SDR_WE_N <= '1';
-SDR_CAS_N <= '1';
-SDR_RAS_N <= '1';
 
 -- FT812
 FT_SPI_CS_N <= '1';

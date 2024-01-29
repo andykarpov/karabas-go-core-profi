@@ -37,9 +37,8 @@ entity mcu is
 	 KB_DAT5   : out std_logic_vector(7 downto 0) := "00000000";
 
 	 -- joysticks
-	 JOY_L			: out std_logic_vector(11 downto 0) := "000000000000";
-	 JOY_R			: out std_logic_vector(11 downto 0) := "000000000000";
-	 JOY_USB			: out std_logic_vector(11 downto 0) := "000000000000";
+	 JOY_L			: out std_logic_vector(12 downto 0) := "000000000000";
+	 JOY_R			: out std_logic_vector(12 downto 0) := "000000000000";
 
     -- rtc	 
 	 RTC_A 		: in std_logic_vector(7 downto 0);
@@ -47,6 +46,20 @@ entity mcu is
 	 RTC_DO 		: out std_logic_vector(7 downto 0);
 	 RTC_CS 		: in std_logic := '0';
 	 RTC_WR_N 	: in std_logic := '1';
+	 
+	 -- usb uart
+	 UART_RX_DATA			: out std_logic_vector(7 downto 0);
+	 UART_RX_IDX	: out std_logic_vector(7 downto 0) := (others => '0');
+	 
+	 UART_TX_DATA			: in std_logic_vector(7 downto 0);
+	 UART_TX_WR				: in std_logic := '0';
+	 UART_TX_MODE 			: in std_logic := '0'; -- 0 = zifi data @ 115200, 1 = evo rs232 data @ dll/dlm speed
+	 
+	 -- evo rs232 dlm/dll registers
+	 UART_DLM : in std_logic_vector(7 downto 0);
+	 UART_DLL : in std_logic_vector(7 downto 0);
+	 UART_DLM_WR : in std_logic;
+	 UART_DLL_WR : in std_logic;
 	 
 	 -- soft switches command
 	 SOFTSW_COMMAND : out std_logic_vector(15 downto 0);
@@ -76,13 +89,13 @@ architecture rtl of mcu is
 	constant CMD_ROMBANK    : std_logic_vector(7 downto 0) := x"06";
 	constant CMD_ROMDATA    : std_logic_vector(7 downto 0) := x"07";
 	constant CMD_ROMLOADER  : std_logic_vector(7 downto 0) := x"08";
-	
 
 	-- 11, 12 - usb gamepad, joy : todo
 
 	constant CMD_OSD 			: std_logic_vector(7 downto 0) := x"20";
 	constant CMD_RTC 			: std_logic_vector(7 downto 0) := x"FA";
-
+	constant CMD_FLASHBOOT  : std_logic_vector(7 downto 0) := x"FB";
+	constant CMD_UART			: std_logic_vector(7 downto 0) := x"FC";
 	constant CMD_INIT_START	: std_logic_vector(7 downto 0) := x"FD";
 	constant CMD_INIT_DONE	: std_logic_vector(7 downto 0) := x"FE";	
 	constant CMD_NOPE			: std_logic_vector(7 downto 0) := x"FF";
@@ -206,32 +219,37 @@ begin
 						case spi_do(15 downto 8) is
 							-- joy L
 							when x"00" =>
-									  joy_l(0) <= spi_do(5); -- right 
-									  joy_l(1) <= spi_do(4); -- left 
-									  joy_l(2) <= spi_do(3); -- down 
-									  joy_l(3) <= spi_do(2); -- up
-									  joy_l(4) <= spi_do(0); -- fire
-									  joy_l(5) <= spi_do(1); -- fire2
+									  joy_l(0) <= spi_do(0); -- ON
+									  joy_l(1) <= spi_do(1); -- UP 
+									  joy_l(2) <= spi_do(2); -- DOWN 
+									  joy_l(3) <= spi_do(3); -- LEFT
+									  joy_l(4) <= spi_do(4); -- RIGHT
+									  joy_l(5) <= spi_do(5); -- START
 									  joy_l(6) <= spi_do(6); -- A
 									  joy_l(7) <= spi_do(7); -- B
 							when x"01" =>
-									  joy_r(0) <= spi_do(5); -- right 
-									  joy_r(1) <= spi_do(4); -- left 
-									  joy_r(2) <= spi_do(3); -- down 
-									  joy_r(3) <= spi_do(2); -- up
-									  joy_r(4) <= spi_do(0); -- fire
-									  joy_r(5) <= spi_do(1); -- fire2
+									  joy_l(8) <= spi_do(0); -- C 
+									  joy_l(9) <= spi_do(1); -- X 
+									  joy_l(10) <= spi_do(2); -- Y 
+									  joy_l(11) <= spi_do(3); -- Z
+									  joy_l(12) <= spi_do(4); -- MODE
+
+							-- joy R
+							when x"02" =>
+									  joy_r(0) <= spi_do(0); -- ON
+									  joy_r(1) <= spi_do(1); -- UP 
+									  joy_r(2) <= spi_do(2); -- DOWN 
+									  joy_r(3) <= spi_do(3); -- LEFT
+									  joy_r(4) <= spi_do(4); -- RIGHT
+									  joy_r(5) <= spi_do(5); -- START
 									  joy_r(6) <= spi_do(6); -- A
 									  joy_r(7) <= spi_do(7); -- B
-							when x"02" =>
-									  joy_usb(0) <= spi_do(5); -- right 
-									  joy_usb(1) <= spi_do(4); -- left 
-									  joy_usb(2) <= spi_do(3); -- down 
-									  joy_usb(3) <= spi_do(2); -- up
-									  joy_usb(4) <= spi_do(0); -- fire
-									  joy_usb(5) <= spi_do(1); -- fire2
-									  joy_usb(6) <= spi_do(6); -- A
-									  joy_usb(7) <= spi_do(7); -- B
+							when x"03" =>
+									  joy_r(8) <= spi_do(0); -- C 
+									  joy_r(9) <= spi_do(1); -- X 
+									  joy_r(10) <= spi_do(2); -- Y 
+									  joy_r(11) <= spi_do(3); -- Z
+									  joy_r(12) <= spi_do(4); -- MODE
 							when others => null;
 						end case;
 
@@ -264,6 +282,11 @@ begin
 						rtcr_a <= spi_do(15 downto 8);
 						rtcr_d <= spi_do(7 downto 0);
 						rtcr_command <= not rtcr_command;
+						
+					-- uart
+					when CMD_UART =>
+						UART_RX_DATA <= spi_do(7 downto 0);
+						UART_RX_IDX <= spi_do(15 downto 8);
 
 					-- init start
 					when CMD_INIT_START => BUSY <= '1';
@@ -346,11 +369,24 @@ begin
 	);
 	
 	-- fifo handling / queue commands to mcu side
-	process(CLK, N_RESET, RTC_WR_N, RTC_CS, queue_wr_full, RTC_A, RTC_DI, queue_wr_req, queue_rd_empty, BUSY)
+	process(CLK)
 	begin
-		if rising_edge(CLK) then		
-			queue_wr_req <= '0';			
-			if RTC_WR_N = '0' AND RTC_CS = '1' and BUSY = '0' then -- add rtc register write to queue
+		if rising_edge(CLK) then
+			queue_wr_req <= '0';
+			if UART_TX_WR = '1' then -- send UART byte
+				queue_wr_req <= '1';
+				if (UART_TX_MODE = '1') then
+					queue_di <= CMD_UART & "00000011" & UART_TX_DATA;
+				else 
+					queue_di <= CMD_UART & "00000000" & UART_TX_DATA;
+				end if;
+			elsif UART_DLL_WR = '1' then -- send UART DLL reg
+				queue_wr_req <= '1';
+				queue_di <= CMD_UART & "00000001" & UART_DLL;
+			elsif UART_DLM_WR = '1' then -- send UART RLM reg
+				queue_wr_req <= '1';
+				queue_di <= CMD_UART & "00000010" & UART_DLM;
+			elsif RTC_WR_N = '0' AND RTC_CS = '1' and BUSY = '0' then -- add rtc register write to queue
 				queue_wr_req <= '1';
 				queue_di <= CMD_RTC & RTC_A & RTC_DI;
 			elsif queue_rd_empty = '1' or queue_data_count < 5 then -- anti-empty queue
@@ -362,7 +398,7 @@ begin
 	end process;
 	
 	-- write RTC registers into ram from host / mcu
-	process (N_RESET, CLK, RTC_WR_N, RTC_CS, RTC_A, RTC_DI, rtcr_a, rtcr_d, rtcr_command, last_rtcr_command, BUSY) 
+	process (CLK) 
 	begin 
 		if rising_edge(CLK) then
 			rtcw_wr <= "0";

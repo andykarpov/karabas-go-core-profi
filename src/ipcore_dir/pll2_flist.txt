@@ -44,7 +44,6 @@ pll2/simulation/timing/vcs_session.tcl
 pll2/simulation/timing/wave.do
 pll2.asy
 pll2.gise
-pll2.sym
 pll2.ucf
 pll2.v
 pll2.veo

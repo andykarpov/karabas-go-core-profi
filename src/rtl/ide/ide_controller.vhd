@@ -136,11 +136,16 @@ begin
 			IDE_WR_N <= WR_N;
 			IDE_RD_N <= RD_N;
 			IDE_CS_N <= cs3fx_n & cs1fx_n;
-		else
+		elsif (nemo_ebl_n = '0') then
 			IDE_A <= A(7 downto 5);
 			IDE_WR_N <= iow;
 			IDE_RD_N <= nemo_ior;
 			IDE_CS_N <= nemo_cs1 & nemo_cs0;
+		else
+			IDE_A <= "000";
+			IDE_WR_N <= '1';
+			IDE_RD_N <= '1';
+			IDE_CS_N <= "11";
 		end if;  
   end if;
 end process;

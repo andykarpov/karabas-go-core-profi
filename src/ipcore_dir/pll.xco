@@ -1,7 +1,7 @@
 ##############################################################
 #
 # Xilinx Core Generator version 14.7
-# Date: Sun Dec 24 17:58:03 2023
+# Date: Sun Jan 28 21:59:58 2024
 #
 ##############################################################
 #
@@ -84,9 +84,9 @@ CSET clkout3_requested_phase=0.000
 CSET clkout3_used=true
 CSET clkout4_drives=BUFG
 CSET clkout4_requested_duty_cycle=50.000
-CSET clkout4_requested_out_freq=100.000
+CSET clkout4_requested_out_freq=84.000
 CSET clkout4_requested_phase=0.000
-CSET clkout4_used=false
+CSET clkout4_used=true
 CSET clkout5_drives=BUFG
 CSET clkout5_requested_duty_cycle=50.000
 CSET clkout5_requested_out_freq=100.000
@@ -189,7 +189,7 @@ CSET mmcm_notes=None
 CSET mmcm_ref_jitter1=0.010
 CSET mmcm_ref_jitter2=0.010
 CSET mmcm_startup_wait=false
-CSET num_out_clks=3
+CSET num_out_clks=4
 CSET override_dcm=false
 CSET override_dcm_clkgen=false
 CSET override_mmcm=false
@@ -197,19 +197,19 @@ CSET override_pll=false
 CSET platform=lin
 CSET pll_bandwidth=OPTIMIZED
 CSET pll_clk_feedback=CLKFBOUT
-CSET pll_clkfbout_mult=14
+CSET pll_clkfbout_mult=27
 CSET pll_clkfbout_phase=0.000
 CSET pll_clkin_period=20.000
-CSET pll_clkout0_divide=25
+CSET pll_clkout0_divide=24
 CSET pll_clkout0_duty_cycle=0.500
 CSET pll_clkout0_phase=0.000
-CSET pll_clkout1_divide=29
+CSET pll_clkout1_divide=28
 CSET pll_clkout1_duty_cycle=0.500
 CSET pll_clkout1_phase=0.000
-CSET pll_clkout2_divide=44
+CSET pll_clkout2_divide=42
 CSET pll_clkout2_duty_cycle=0.500
 CSET pll_clkout2_phase=0.000
-CSET pll_clkout3_divide=1
+CSET pll_clkout3_divide=8
 CSET pll_clkout3_duty_cycle=0.500
 CSET pll_clkout3_phase=0.000
 CSET pll_clkout4_divide=1
@@ -219,7 +219,7 @@ CSET pll_clkout5_divide=1
 CSET pll_clkout5_duty_cycle=0.500
 CSET pll_clkout5_phase=0.000
 CSET pll_compensation=SYSTEM_SYNCHRONOUS
-CSET pll_divclk_divide=1
+CSET pll_divclk_divide=2
 CSET pll_notes=None
 CSET pll_ref_jitter=0.010
 CSET power_down_port=POWER_DOWN
@@ -266,4 +266,4 @@ CSET use_status=false
 MISC pkg_timestamp=2012-05-10T12:44:55Z
 # END Extra information
 GENERATE
-# CRC: fdb976ca
+# CRC: 1d303722
