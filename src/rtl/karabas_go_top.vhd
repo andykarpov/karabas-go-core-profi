@@ -30,6 +30,7 @@
 -- 1. IDE controller timings
 -- 2. serial mouse test
 -- 3. GS (fix conflicts with FDD and/or HDD)
+-- 4. Turbo via port (now disabled)
 ------------------------------------------------------------------------------------------------------------------
 
 library IEEE; 
@@ -183,15 +184,16 @@ signal joy_mode 		: std_logic_vector(2 downto 0) := "000";
 signal kb_loaded 		: std_logic := '0';
 signal kb_screen_mode: std_logic_vector(1 downto 0) := "00";
 
--- Joy
+-- Kempston Joy
 signal joy_bus 		: std_logic_vector(7 downto 0) := "00000000";
 
--- Mouse
+-- Absolute Mouse
 signal ms_x				: std_logic_vector(7 downto 0);
 signal ms_y				: std_logic_vector(7 downto 0);
 signal ms_z				: std_logic_vector(3 downto 0);
 signal ms_b				: std_logic_vector(2 downto 0);
 
+-- USB HID Mouse report
 signal hid_ms_x 		: std_logic_vector(7 downto 0);
 signal hid_ms_y		: std_logic_vector(7 downto 0);
 signal hid_ms_z		: std_logic_vector(3 downto 0);
@@ -244,6 +246,7 @@ signal zc_sclk			: std_logic;
 signal zc_mosi			: std_logic;
 signal zc_miso			: std_logic;
 
+-- Nemo IDE
 signal nemoide_en 		: std_logic;
 
 --- DivMMC
@@ -256,8 +259,7 @@ signal map3DXX 		: std_logic;
 signal map1F00 		: std_logic;
 signal mapcond 		: std_logic;
 
-
--- MC146818A
+-- MC146818A RTC
 signal mc146818_wr		: std_logic;
 signal mc146818_rd		: std_logic;
 signal mc146818_a_bus	: std_logic_vector(7 downto 0);
@@ -319,7 +321,6 @@ signal covox_fb		: std_logic_vector(7 downto 0);
 -- Output audio
 signal audio_l			: std_logic_vector(15 downto 0);
 signal audio_r			: std_logic_vector(15 downto 0);
-signal audio_mono		: std_logic_vector(15 downto 0);
 
 -- SAA1099
 signal saa_wr_n		: std_logic;
@@ -367,29 +368,23 @@ signal port_xxC7_reg : std_logic_vector(7 downto 0);
 signal port_xxE7_reg : std_logic_vector(7 downto 0);
 signal port_xx67_reg : std_logic_vector(7 downto 0);
 
--- ZXUNO regs / UART ports
-signal zxuno_regrd : std_logic;
-signal zxuno_regwr : std_logic;
-signal zxuno_addr : std_logic_vector(7 downto 0);
-signal zxuno_regaddr_changed : std_logic;
-signal zxuno_addr_oe_n : std_logic;
-signal zxuno_addr_to_cpu : std_logic_vector(7 downto 0);
-signal zxuno_uart_do_bus 	: std_logic_vector(7 downto 0);
-signal zxuno_uart_oe_n 		: std_logic;
-signal zxuno_uart2_do_bus 	: std_logic_vector(7 downto 0);
-signal zxuno_uart2_oe_n 		: std_logic;
-signal uart2_tx : std_logic;
-signal uart2_rx : std_logic;
-signal uart2_cts : std_logic;
-signal zxuno_uart_tx : std_logic;
-signal zxuno_uart_cts : std_logic;
-
 -- ZIFI UART 
 signal zifi_do_bus : std_logic_vector(7 downto 0);
 signal zifi_oe_n   : std_logic := '1';
 signal zifi_uart_tx : std_logic;
 signal zifi_uart_cts : std_logic;
 signal zifi_api_enabled : std_logic;
+
+-- USB UART
+signal usb_uart_rx_data : std_logic_vector(7 downto 0);
+signal usb_uart_rx_idx : std_logic_vector(7 downto 0);
+signal usb_uart_tx_data : std_logic_vector(7 downto 0);
+signal usb_uart_tx_wr : std_logic;
+signal usb_uart_tx_mode : std_logic := '0';
+signal usb_uart_dll : std_logic_vector(7 downto 0);
+signal usb_uart_dlm : std_logic_vector(7 downto 0);
+signal usb_uart_dll_wr : std_logic := '0';
+signal usb_uart_dlm_wr : std_logic := '0';
 
 -- serial mouse 
 signal serial_ms_do_bus : std_logic_vector(7 downto 0);
@@ -409,13 +404,7 @@ signal gx0 				: std_logic := '0';
 signal count_block 		: std_logic := '0';
 signal memory_contention : std_logic := '0';
 
--- wait signal
-signal WAIT_C			:std_logic_vector(1 downto 0);
-signal WAIT_IO			:std_logic;
-signal WAIT_EN			:std_logic;
-signal WAIT_C_STOP	:std_logic;
-
--- hid
+-- usb hid keyboard
 signal hid_kb_status : std_logic_vector(7 downto 0);
 signal hid_kb_dat0 : std_logic_vector(7 downto 0);
 signal hid_kb_dat1 : std_logic_vector(7 downto 0);
@@ -423,9 +412,12 @@ signal hid_kb_dat2 : std_logic_vector(7 downto 0);
 signal hid_kb_dat3 : std_logic_vector(7 downto 0);
 signal hid_kb_dat4 : std_logic_vector(7 downto 0);
 signal hid_kb_dat5 : std_logic_vector(7 downto 0);
+
+-- sega gamepads / atari joy from mcu
 signal joy_l : std_logic_vector(12 downto 0);
 signal joy_r : std_logic_vector(12 downto 0);
 
+-- keyboard switches
 signal kb_vsync : std_logic := '0';
 signal kb_joy_type_l : std_logic_vector(2 downto 0) := "000";
 signal kb_joy_type_r : std_logic_vector(2 downto 0) := "000";
@@ -444,24 +436,17 @@ signal kb_nemoide_en : std_logic := '0';
 signal kb_type : std_logic := '0';
 signal mcu_busy : std_logic := '1';
 
+-- HDD signals
 signal ide_do_bus : std_logic_vector(7 downto 0);
 signal ide_oe_n	: std_logic := '1';
 
+-- FDD signals
 signal fdd_do_bus : std_logic_vector(7 downto 0);
 signal fdd_oe_n : std_logic := '1';
 
-signal usb_uart_rx_data : std_logic_vector(7 downto 0);
-signal usb_uart_rx_idx : std_logic_vector(7 downto 0);
-signal usb_uart_tx_data : std_logic_vector(7 downto 0);
-signal usb_uart_tx_wr : std_logic;
-signal usb_uart_tx_mode : std_logic := '0';
-signal usb_uart_dll : std_logic_vector(7 downto 0);
-signal usb_uart_dlm : std_logic_vector(7 downto 0);
-signal usb_uart_dll_wr : std_logic := '0';
-signal usb_uart_dlm_wr : std_logic := '0';
-
 begin
 
+-- Clock generator
 U1: entity work.clock
 port map(
 	CLK => CLK_50MHZ,	
@@ -714,6 +699,7 @@ port map(
 	
 );
 
+-- USB HID parser / transformer to 8x5 matrix + joy mapper on keyboard
 U8: entity work.hid_parser
 port map (
 	CLK => clk_bus,
@@ -746,6 +732,7 @@ port map (
 	KEYCODE => kb_keycode
 );
 
+-- Soft switches parser from MCU
 U9: entity work.soft_switches
 port map (
 	CLK => clk_bus,
@@ -772,6 +759,7 @@ port map (
 	RESET => kb_reset	
 );
 
+-- USB HID mouse transformer to absolute coords
 U10: entity work.cursor
 port map(
 	CLK => clk_bus,
@@ -794,6 +782,7 @@ port map(
 
 ms_present <= '1';
 
+-- Audio I2S DAC
 U11: entity work.PCM5102
 port map (
 	clk => clk_bus,
@@ -829,7 +818,7 @@ port map (
 	O_SSG1_AUDIO_B	=> ssg_cn1_b,
 	O_SSG1_AUDIO_C	=> ssg_cn1_c);
 	
--- Covox
+-- Covox / Soundrive
 U13: entity work.covox
 port map (
 	I_RESET			=> reset,
@@ -849,6 +838,7 @@ port map (
 	O_FB 				=> covox_fb
 );
 
+-- SAA1099 sound generator
 U14: entity work.saa1099
 port map(
 	clk				=> clk_8,
@@ -889,6 +879,7 @@ port map(
 	OE_N 				=> serial_ms_oe_n
 );
 
+-- ZIFI for ESP8266, TS rs232 and EVO rs232 for USB UART
 U16: entity work.zifi 
 port map (
 	CLK    => clk_bus,
@@ -920,11 +911,12 @@ port map (
 	USB_UART_DLM_WR => usb_uart_dlm_wr
 );
 
-UART_TX <= zifi_uart_tx; -- when zifi_api_enabled = '1' else zxuno_uart_tx;
-UART_CTS <= zifi_uart_cts; -- when zifi_api_enabled = '1' else zxuno_uart_cts;
+UART_TX <= zifi_uart_tx; 
+UART_CTS <= zifi_uart_cts; 
 ESP_RESET_N <= 'Z';
 ESP_BOOT_N <= 'Z';
 
+-- IDE controller
 U17: entity work.ide_controller
 port map(
 	CLK 		=> clk_bus,
@@ -958,6 +950,7 @@ port map(
 	IDE_RESET_N => WRESET_N
 );
 
+-- FDD controller
 U18: entity work.firefly_fdc
 port map(
 	clk => clk_bus,
@@ -990,6 +983,7 @@ port map(
 	FDC_DS => FDC_DRIVE
 );
 
+-- Audio mixer
 U19: entity work.audio_mixer
 port map(
 	clk => clk_bus,
@@ -1024,6 +1018,7 @@ port map(
 	audio_r => audio_r
 );
 
+-- General Sound
 U20: entity work.gs_top
 port map(
 	clk_sys => clk_sdr,
@@ -1081,7 +1076,7 @@ end process;
 
 cpu_inta_n <= cpu_iorq_n or cpu_m1_n;	-- INTA
 
--- 11.07.2013:OCH: implementation of nmi signal for DIVMMC
+-- nmi signal
 cpu_nmi_n <= mapcond when kb_nmi = '1' and divmmc_en = '1' else 
 	'0' when divmmc_en = '0' and kb_nmi = '1' and ((cpu_m1_n = '0' and cpu_mreq_n = '0' and cpu_a_bus(15 downto 14) /= "00") or DS80 = '1') else 
 	'1';
@@ -1091,7 +1086,7 @@ cpu_wait_n <= '1';
 cpu_wait <= '1' when zc_busy = '1' or kb_pause = '1' or  (kb_screen_mode = "01" and memory_contention = '1' and automap = '0' and DS80 = '0') else '0';
 
 -------------------------------------------------------------------------------
--- SD
+-- SD Card
 
 SD_CS_N	<= zc_cs_n;
 sd_CLK 	<= zc_sclk;
@@ -1145,10 +1140,10 @@ cs_028b <='1' when cpu_a_bus(15 downto 0)=X"028B" and cpu_iorq_n='0' and cpu_m1_
 
 hdd_off <= port_028b_reg(0);										-- 0 	- HDD_off
 hdd_type <= port_028b_reg(1);										-- 1 	- HDD type Profi/Nemo
-turbo_fdc_off <= not port_028b_reg(2) and kb_turbofdc;		-- 2 	- TURBO_FDC_off
+turbo_fdc_off <= not port_028b_reg(2) and kb_turbofdc;	-- 2 	- TURBO_FDC_off
 fdc_swap <= port_028b_reg(3) or kb_swap_fdd;					-- 3 	- Floppy Disk Drive Selector Change
 sound_off <= port_028b_reg(4);									-- 4 	- Sound_off
-turbo_mode <= kb_turbo; -- '0' & port_028b_reg(6 downto 5);						-- 5,6- Turbo Mode Selector 
+turbo_mode <= kb_turbo; -- '0' & port_028b_reg(6 downto 5);	-- 5,6- Turbo Mode Selector 
 lock_dffd <= port_028b_reg(7);								 	-- 7 	- Lock port DFFD
 ext_rom_bank_pq <= ext_rom_bank when rom0 = '0' else "01";	-- ROMBANK ALT
 
@@ -1421,8 +1416,8 @@ end process;
 -------------------------------------------------------------------------------
 -- CPU Data bus
 
-process (selector, cpu_a_bus, gx0, serial_ms_do_bus, ram_do_bus, mc146818_do_bus, kb_do_bus, zc_do_bus, ssg_cn0_bus, ssg_cn1_bus, port_7ffd_reg, port_dffd_reg, zxuno_uart_do_bus,
-			zxuno_uart2_do_bus, vid_attr, port_eff7_reg, joy_bus, ms_z, ms_b, ms_x, ms_y, zxuno_addr_to_cpu, port_xxC7_reg, port_008b_reg,
+process (selector, cpu_a_bus, gx0, serial_ms_do_bus, ram_do_bus, mc146818_do_bus, kb_do_bus, zc_do_bus, ssg_cn0_bus, ssg_cn1_bus, port_7ffd_reg, port_dffd_reg,
+			vid_attr, port_eff7_reg, joy_bus, ms_z, ms_b, ms_x, ms_y, port_xxC7_reg, port_008b_reg,
 			port_018b_reg, port_028b_reg, gs_do_bus, ide_do_bus, fdd_do_bus, TAPE_IN)
 begin
 	case selector is
