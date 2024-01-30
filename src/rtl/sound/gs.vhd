@@ -76,7 +76,7 @@ use IEEE.STD_LOGIC_ARITH.all;
 entity gs is
 	Port ( 
 		RESET		: in std_logic;
-		CLK			: in std_logic; -- 28 / 24
+		CLK			: in std_logic; -- 56 / 48
 		CE				: in std_logic; -- 14 / 12
 		DS80			: in std_logic;
 		CPM			: in std_logic;

@@ -1025,8 +1025,8 @@ port map(
 U20: entity work.gs_top
 port map(
 	clk_sys => clk_sdr,
-	clk_bus => clk_bus,
-	ce => ena_div4,
+	clk_bus => clk_bus, -- 56/48
+	ce => ena_div4, -- 14/12
 	ds80 => ds80,
 	cpm => cpm,
 	dos => dos_act,
