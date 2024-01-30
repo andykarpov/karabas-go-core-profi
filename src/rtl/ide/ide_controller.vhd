@@ -11,9 +11,9 @@ use IEEE.numeric_std.all;
 entity ide_controller is 
 port (
 	CLK 			: in std_logic;
-	ENA_CPU		: in std_logic;
 	RESET 		: in std_logic;
 	
+	PROFIDE_EN 	: in std_logic;
 	NEMOIDE_EN	: in std_logic;
 	
 	A 				: in std_logic_vector(15 downto 0);
@@ -68,8 +68,8 @@ signal nemo_rdh_n 		: std_logic := '1';
 signal wd_reg_in	: std_logic_vector(15 downto 0);
 signal wd_reg_out	: std_logic_vector(15 downto 0);
 
--- state machine
-type qmachine IS(idle, rd_wr_on, rd_wr_2, rd_wr_3, cs_off, finish );
+-- state machine (56 mhz clock)
+type qmachine IS(idle, rd_wr_preon, rd_wr_on, rd_wr_pre2, rd_wr_2, rd_wr_pre3, rd_wr_3, cs_preoff, cs_off, finish );
 signal qstate : qmachine := idle;
 
 -- r/w latches
@@ -107,7 +107,7 @@ hia <= A(15 downto 8);
 --  Profi HDD ports: AB, CB, EB
 cs_profi_ports <= '1' when (loa = x"AB" or loa = x"CB" or loa = x"EB") and IORQ_N='0' and HDD_OFF = '0' and
 							  ((CPM='1' and ROM14='1') or (DOS='1' and ROM14='0')) else '0';
-profi_ebl_n	<='0' when cs_profi_ports = '1' and M1_N = '1' else '1';				 						 -- Profi HDD ports access
+profi_ebl_n	<='0' when cs_profi_ports = '1' and M1_N = '1' and PROFIDE_EN = '1' else '1';			 -- Profi HDD ports access
 profi_iow_n <='0' when (WR_N='0' and loa=x"EB" and hia <= x"07" and profi_ebl_n = '0') else '1'; -- Write Cycle 
 profi_wrh_n <='0' when (WR_N='0' and loa=x"CB" and profi_ebl_n = '0') else '1'; 						 -- Write High byte from Data bus to "Write register"
 profi_ior_n <='0' when (RD_N='0' and loa=x"CB" and hia <= x"07" and profi_ebl_n = '0') else '1'; -- Read Cycle
@@ -159,7 +159,7 @@ begin
 						  if (profi_iow_n = '0' or cs3fx_n = '0') then -- fill input register
 								wd_reg_in(7 downto 0) <= DI;
 						  end if;
-                    qstate <= rd_wr_on;
+                    qstate <= rd_wr_preon;
 
                 elsif nemo_ebl_n = '0' and (nemo_iow_n = '0' or nemo_ior_n = '0') then -- nemo r/w cycle start
                     IDE_A <= A(7 downto 5); -- set address
@@ -170,8 +170,10 @@ begin
 						  if (nemo_iow_n = '0') then -- fill input register
 								wd_reg_in(7 downto 0) <= DI;
 						  end if;
-						  qstate <= rd_wr_on;
+						  qstate <= rd_wr_preon;
                 end if;
+
+            when rd_wr_preon => qstate <= rd_wr_on;
 
             when rd_wr_on => -- set rd / wr signals
                 IDE_RD_N <= rd_r;
@@ -179,10 +181,14 @@ begin
 					 if (wr_r = '0') then -- push write reg to IDE bus
 						IDE_D <= wd_reg_in;
 					 end if;
-                qstate <= rd_wr_2;
+                qstate <= rd_wr_pre2;
+
+            when rd_wr_pre2 => qstate <= rd_wr_2;
 
             when rd_wr_2 => -- wait r/w					
-               qstate <= rd_wr_3;
+               qstate <= rd_wr_pre3;
+
+            when rd_wr_pre3 => qstate <= rd_wr_3;
 
             when rd_wr_3 =>
 
@@ -192,7 +198,9 @@ begin
 					
                 IDE_RD_N <= '1'; -- set rd/wr inactive
                 IDE_WR_N <= '1';
-               qstate <= cs_off;
+               qstate <= cs_preoff;
+
+            when cs_preoff => qstate <= cs_off;
 
             when cs_off =>
 				

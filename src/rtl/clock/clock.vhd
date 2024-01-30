@@ -16,7 +16,7 @@ port (
 	CLK			: in std_logic;
 	DS80			: in std_logic;
 	
-	CLK_BUS		: buffer std_logic; -- 28 / 24
+	CLK_BUS		: buffer std_logic; -- 56 / 48
 	CLK_16 		: buffer std_logic; -- 16
 	CLK_8			: buffer std_logic; -- 8
 	CLK_SDR		: buffer std_logic; -- 84 (sdram)
@@ -25,6 +25,7 @@ port (
 	ENA_DIV4		: buffer std_logic;
 	ENA_DIV8		: buffer std_logic;
 	ENA_DIV16   : buffer std_logic;
+	ENA_DIV32   : buffer std_logic;
 	ENA_CPU 		: buffer std_logic;
 	
 	TURBO			: in std_logic_vector(2 downto 0);
@@ -38,7 +39,7 @@ architecture rtl of clock is
 signal ena_cnt : std_logic_vector(4 downto 0) := "00000";
 signal locked : std_logic := '0';
 signal ce_8 : std_logic := '0';
-signal clk_28, clk_24 : std_logic;
+signal clk_56, clk_48 : std_logic;
 
 begin 
 
@@ -46,8 +47,8 @@ begin
 U1: entity work.pll
 port map (
 	CLK_IN1			=> CLK,
-	CLK_OUT1			=> clk_28,
-	CLK_OUT2 		=> clk_24,
+	CLK_OUT1			=> clk_56,
+	CLK_OUT2 		=> clk_48,
 	CLK_OUT3 		=> clk_16,
 	CLK_OUT4			=> clk_sdr,
 	LOCKED			=> locked
@@ -56,8 +57,8 @@ port map (
 -- clock switch
 U2 : BUFGMUX_1
 port map (
- I0      => clk_28,
- I1      => clk_24,
+ I0      => clk_56,
+ I1      => clk_48,
  O       => clk_bus,
  S       => ds80
 );
@@ -94,17 +95,18 @@ begin
 		ENA_DIV4 <= ena_cnt(1) and ena_cnt(0);
 		ENA_DIV8 <= ena_cnt(2) and ena_cnt(1) and ena_cnt(0);
 		ENA_DIV16 <= ena_cnt(3) and ena_cnt(2) and ena_cnt(1) and ena_cnt(0);
+		ENA_DIV32 <= ena_cnt(4) and ena_cnt(3) and ena_cnt(2) and ena_cnt(1) and ena_cnt(0);
 
 		if (WAIT_CPU = '1') then 
 			ENA_CPU <= '0';
 		elsif turbo = "011" then -- 28
-			ENA_CPU <= '1';
-		elsif turbo = "010" then -- 14
 			ENA_CPU <= ena_cnt(0);
-		elsif turbo = "001" then -- 7
+		elsif turbo = "010" then -- 14
 			ENA_CPU <= ena_cnt(1) and ena_cnt(0);
+		elsif turbo = "001" then -- 7
+			ENA_CPU <= ena_cnt(2) and ena_cnt(1) and ena_cnt(0);
 		else
-			ENA_CPU <= ena_cnt(2) and ena_cnt(1) and ena_cnt(0); -- 3.5
+			ENA_CPU <= ena_cnt(3) and ena_cnt(2) and ena_cnt(1) and ena_cnt(0); -- 3.5
 		end if;
 	end if;
 end process;

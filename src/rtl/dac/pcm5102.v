@@ -11,7 +11,7 @@ module PCM5102(clk,left,right,din,bck,lrck);
 	
 	parameter DAC_CLK_DIV_BITS = 3; 
 
-	reg [DAC_CLK_DIV_BITS:0]	i2s_clk;			// 3 Bit Counter 28MHz / 8 = 3,5 MHz, bck = 3.5MHz, / 32 = ca 109,3 Khz SampleRate
+	reg [DAC_CLK_DIV_BITS:0]	i2s_clk;			// 3 Bit Counter 56MHz / 8 = 7 MHz, bck = 7MHz, / 32 = ca 220 Khz SampleRate
 	always @(posedge clk) begin
 		i2s_clk 	<= i2s_clk + 1;
 	end	

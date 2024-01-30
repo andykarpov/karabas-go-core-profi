@@ -1,7 +1,7 @@
 {
     "id": "profi",
     "name": "Karabas Pro +",
-    "build": "24013100",
+    "build": "24013110",
     "bitstream": "karabas_go.bin",
     "visible": true,
     "type": "osd",

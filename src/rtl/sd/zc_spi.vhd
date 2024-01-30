@@ -7,6 +7,7 @@ port(
 --INPUTS
 DI      : in std_logic_vector(7 downto 0);
 CLC     : in std_logic;
+ENA	  : in std_logic;
 START   : in std_logic;
 MISO    : in std_logic;
 WR_EN   : in std_logic;
@@ -26,30 +27,30 @@ signal COUNTER_EN   : std_logic;
 signal START_SYNC   : std_logic;
 
 begin        
-        SCK             <= CLC and not COUNTER(3);
+        SCK             <= ENA and not COUNTER(3);
         DO              <= SHIFT_IN;
         MOSI            <= SHIFT_OUT(7);
         COUNTER_EN      <= not COUNTER(3) or COUNTER(2) or COUNTER(1) or COUNTER(0);
 
-        process(CLC)
+        process(CLC, ENA)
         begin
-            if CLC'event and CLC = '1' then
+            if CLC'event and CLC = '1' and ENA = '1' then
                 START_SYNC <= START;
             end if;
         end process;
         
-        process(CLC,COUNTER(3))
+        process(CLC,COUNTER(3), ENA)
         begin
-            if CLC'event and CLC = '1' then
+            if CLC'event and CLC = '1' and ENA = '1' then
                 if COUNTER(3) = '0' then
                     SHIFT_IN <= SHIFT_IN(6 downto 0)&MISO;
                 end if;
             end if;
         end process;
         
-        process(CLC,WR_EN,COUNTER(3))
+        process(CLC, ENA, WR_EN, COUNTER(3))
         begin
-            if CLC'event and CLC = '0' then
+            if CLC'event and CLC = '1' and ENA = '0' then
                 if WR_EN = '1' then
                     SHIFT_OUT <= DI;
                 else
@@ -60,12 +61,12 @@ begin
             end if;
         end process;
 
-        process(CLC,START_SYNC,COUNTER_EN)
+        process(CLC,ENA,START_SYNC,COUNTER_EN)
         begin
             if START_SYNC = '1' then
                 COUNTER <= "1110";
             else
-                if CLC'event and CLC = '0' then
+                if CLC'event and CLC = '1' and ENA = '0' then
                     if COUNTER_EN = '1' then
                         COUNTER <= COUNTER+"0001";
                     end if;

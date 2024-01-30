@@ -341,11 +341,11 @@ signal clk_vid 		: std_logic;
 signal clk_sdr 		: std_logic;
 signal clk_gs 			: std_logic;
 
-signal ena_gs 		: std_logic := '0';
 signal ena_div2	: std_logic := '0';
 signal ena_div4	: std_logic := '0';
 signal ena_div8	: std_logic := '0';
 signal ena_div16	: std_logic := '0';
+signal ena_div32  : std_logic := '0';
 signal ena_cpu 	: std_logic := '0';
 
 -- System
@@ -455,15 +455,16 @@ port map(
 	
 	DS80 => ds80,
 	
-	CLK_BUS => clk_bus, -- 28 / 24
+	CLK_BUS => clk_bus, -- 56 / 48
 	CLK_16 	=> clk_16,
 	CLK_8 	=> clk_8,
 	CLK_SDR  => clk_sdr, -- 84
 
-	ENA_DIV2 => ena_div2, -- 14 / 12
-	ENA_DIV4 => ena_div4, -- 7 / 6
-	ENA_DIV8 => ena_div8, -- 3.5 / 3
-	ENA_DIV16 => ena_div16, -- 1.75 / 1.5
+	ENA_DIV2 => ena_div2, -- 28 / 24
+	ENA_DIV4 => ena_div4, -- 14 / 12
+	ENA_DIV8 => ena_div8, -- 7 / 6
+	ENA_DIV16 => ena_div16, -- 3.5 / 3
+	ENA_DIV32 => ena_div32, -- 1.75 / 1.5
 	ENA_CPU => ena_cpu,
 	
 	TURBO => turbo_mode,
@@ -561,10 +562,10 @@ port map (
 -- Video Spectrum/Pentagon
 U4: entity work.video
 port map (
-	CLK_BUS 			=> clk_bus, 	-- 112 / 96
-	ENA_28			=> '1', 			-- 28 / 24
-	ENA_14 			=> ena_div2, 	-- 14 / 12
-	ENA_7 			=> ena_div4, 	-- 7 / 6
+	CLK_BUS 			=> clk_bus, 	-- 56 / 48
+	ENA_28			=> ena_div2, 	-- 28 / 24
+	ENA_14 			=> ena_div4, 	-- 14 / 12
+	ENA_7 			=> ena_div8, 	-- 7 / 6
 	RESET 			=> reset,	
 	BORDER 			=> port_xxfe_reg(7 downto 0),
 	TURBO 			=> turbo_mode,	-- turbo signal for int length
@@ -601,8 +602,8 @@ port map (
 U5: entity work.overlay
 port map (
 	CLK 				=> clk_bus,
-	ENA_28			=> '1',
-	ENA_14 			=> ena_div2,
+	ENA_28			=> ena_div2,
+	ENA_14 			=> ena_div4,
 	DS80				=> ds80,
 	RGB_I 			=> vid_rgb,
 	RGB_O 			=> vid_rgb_osd,
@@ -623,8 +624,8 @@ port map (
 U6: entity work.vga_scandoubler
 port map(
 	clk => clk_bus,
-	clk28en => '1',
-	clk14en => ena_div2,
+	clk28en => ena_div2,
+	clk14en => ena_div4,
 	enable_scandoubling => vid_scandoubler_enable,
 	disable_scaneffect => '1',
 	ri => vid_rgb_osd(8 downto 6),
@@ -799,7 +800,7 @@ DAC_MUTE <= '1';
 U12: entity work.turbosound
 port map (
 	I_CLK				=> clk_bus,
-	I_ENA				=> ena_div16,
+	I_ENA				=> ena_div32,
 	I_ADDR			=> cpu_a_bus,
 	I_DATA			=> cpu_do_bus,
 	I_WR_N			=> cpu_wr_n,
@@ -921,9 +922,9 @@ ESP_BOOT_N <= 'Z';
 U17: entity work.ide_controller
 port map(
 	CLK 		=> clk_bus,
-	ENA_CPU	=> ena_cpu,
 	RESET 	=> reset,
 	
+	PROFIDE_EN => '1',
 	NEMOIDE_EN => nemoide_en,
 
 	A 			=> cpu_a_bus,
@@ -1025,7 +1026,7 @@ U20: entity work.gs_top
 port map(
 	clk_sys => clk_sdr,
 	clk_bus => clk_bus,
-	ce => ena_div2,
+	ce => ena_div4,
 	ds80 => ds80,
 	cpm => cpm,
 	dos => dos_act,
@@ -1349,7 +1350,8 @@ end process;
 
 U_ZC_SPI: entity work.zc_spi     -- SD
 port map(
-	clc     		=> clk_bus,  -- 28
+	clc     		=> clk_bus,  -- 56
+	ena			=> ena_div2, -- 28
 	
 	di				=> cpu_do_bus,
 	start 		=> zc_spi_start,
