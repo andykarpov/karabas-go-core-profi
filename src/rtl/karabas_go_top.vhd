@@ -439,6 +439,7 @@ signal mcu_busy : std_logic := '1';
 -- HDD signals
 signal ide_do_bus : std_logic_vector(7 downto 0);
 signal ide_oe_n	: std_logic := '1';
+signal ide_busy 	: std_logic := '0';
 
 -- FDD signals
 signal fdd_do_bus : std_logic_vector(7 downto 0);
@@ -947,7 +948,8 @@ port map(
 	IDE_CS_N => WCS_N,
 	IDE_RD_N => WRD_N,
 	IDE_WR_N => WWR_N,
-	IDE_RESET_N => WRESET_N
+	IDE_RESET_N => WRESET_N,
+	IDE_BUSY => ide_busy
 );
 
 -- FDD controller
@@ -1083,7 +1085,7 @@ cpu_nmi_n <= mapcond when kb_nmi = '1' and divmmc_en = '1' else
 cpu_wait_n <= '1';
 
 -- cpu wait condition
-cpu_wait <= '1' when zc_busy = '1' or kb_pause = '1' or  (kb_screen_mode = "01" and memory_contention = '1' and automap = '0' and DS80 = '0') else '0';
+cpu_wait <= '1' when zc_busy = '1' or ide_busy = '1' or kb_pause = '1' or  (kb_screen_mode = "01" and memory_contention = '1' and automap = '0' and DS80 = '0') else '0';
 
 -------------------------------------------------------------------------------
 -- SD Card
@@ -1451,6 +1453,7 @@ selector <=
 	x"00" when (ram_oe_n = '0') else -- ram / rom
 	x"01" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and cs_rtc_ds = '1') else -- RTC MC146818A
 	x"02" when (cs_xxfe = '1' and cpu_rd_n = '0') else 									-- Keyboard, port #FE	
+	x"14" when (ide_oe_n = '0') else		-- ide
  	x"03" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and (cpu_a_bus(7 downto 0) = X"57" or (cpu_a_bus(7 downto 0) = X"EB" and cpm = '0' and divmmc_en = '1')) ) else 	-- Z-Controller + DivMMC
 	x"04" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and cpu_a_bus(7 downto 0) = X"77") else 	-- Z-Controller
 	x"05" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and cpu_a_bus( 7 downto 0) = X"1F" and dos_act = '0' and cpm = '0' and joy_mode = "000") else -- Joystick, port #1F
@@ -1468,7 +1471,6 @@ selector <=
 	x"11" when zifi_oe_n = '0' and cpu_iorq_n = '0' and cpu_rd_n = '0' else  		-- zifi
 	x"12" when (vid_pff_cs = '1' and cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_a_bus( 7 downto 0) = X"FF") and dos_act='0' and cpm = '0' and ds80 = '0' else -- Port FF select
 	x"13" when (fdd_oe_n = '0' and cpu_iorq_n = '0' and cpu_rd_n = '0') else 		-- fdd
-	x"14" when (ide_oe_n = '0' and cpu_iorq_n = '0' and cpu_rd_n = '0') else		-- ide
 	x"15" when (gs_oe_n = '0' and cpu_iorq_n = '0' and cpu_rd_n = '0') else -- gs
 	(others => '1');
 
