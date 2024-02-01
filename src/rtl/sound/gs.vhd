@@ -78,10 +78,11 @@ entity gs is
 		RESET		: in std_logic;
 		CLK			: in std_logic; -- 56 / 48
 		CE				: in std_logic; -- 14 / 12
+		
 		DS80			: in std_logic;
 		CPM			: in std_logic;
 		DOS			: in std_logic;
-		FDD 			: in std_logic;
+		ROM14 		: in std_logic;
 
 		A			: in std_logic_vector(15 downto 0);
 		DI			: in std_logic_vector(7 downto 0);
@@ -138,7 +139,7 @@ architecture gs_unit of gs is
 	signal cpu_a_bus		: std_logic_vector(15 downto 0);
 	signal cpu_di_bus		: std_logic_vector(7 downto 0);
 	signal cpu_do_bus		: std_logic_vector(7 downto 0);
-
+	
 begin
 
 z80_unit: entity work.T80s
@@ -162,49 +163,58 @@ port map(
 	DI			=> cpu_di_bus,
 	DO			=> cpu_do_bus);
 	
-process (CLK, CE, cnt)
+	
+process (CLK, CE)
 begin
 	if CLK'event and CLK = '1' and CE = '1' then
 		cnt <= cnt + 1;
-		if (ds80 = '0' and cnt = "0101110101") or (ds80 = '1' and cnt = "0101000000") then	-- 14MHz / 373 (12 MHz / 320) = 0.0375MHz = 37.5kHz, 
+		if (ds80 = '0' and cnt >= "0101110101") or (ds80 = '1' and cnt >= "0101000000") then	-- 14MHz / 373 (12 MHz / 320) = 0.0375MHz = 37.5kHz, 
 			cnt <= (others => '0');
 		end if;
 	end if;
 end process;
 
 -- INT#
-process (CLK, CE, cpu_iorq_n, cpu_m1_n, cnt)
+process (CLK, CE, cpu_iorq_n, cpu_m1_n)
 begin
 	if cpu_iorq_n = '0' and cpu_m1_n = '0' then
 		int_n <= '1';
 	elsif CLK'event and CLK = '1' and CE = '1' then
-		if (ds80 = '0' and cnt = "0101110101") or (ds80 = '1' and cnt = "0101000000") then
+		if (ds80 = '0' and cnt >= "0101110101") or (ds80 = '1' and cnt >= "0101000000") then
 			int_n <= '0';
 		end if;
 	end if;
 end process;
 
-process (CLK, CE, cpu_iorq_n, cpu_m1_n, cpu_a_bus, IORQ_n, RD_n, A, WR_n)
+process (CLK, RESET)
 begin
-	if (cpu_iorq_n = '0' and cpu_m1_n = '1' and cpu_a_bus(3 downto 0) = X"2") or (IORQ_n = '0' and RD_n = '0' and A(7 downto 0) = X"B3") then
+	if RESET = '1' then 
 		bit7_flag <= '0';
-	elsif (cpu_iorq_n = '0' and cpu_m1_n = '1' and cpu_a_bus(3 downto 0) = X"3") or (IORQ_n = '0' and WR_n = '0' and A(7 downto 0) = X"B3") then
-		bit7_flag <= '1';
-	elsif CLK'event and CLK = '1' and CE = '1' then
-		if (cpu_iorq_n = '0' and cpu_m1_n = '1' and cpu_a_bus(3 downto 0) = X"A") then
+	elsif rising_edge(CLK) then
+		if IORQ_N = '0' and RD_n = '0' and A(7 downto 0) = x"B3" then 
+			bit7_flag <= '0';
+		elsif IORQ_N = '0' and WR_n = '0' and A(7 downto 0) = x"B3" then 
+			bit7_flag <= '1';
+		elsif cpu_iorq_n = '0' and cpu_m1_n = '1' and cpu_a_bus(3 downto 0) = x"2" then 
+			bit7_flag <= '0';
+		elsif cpu_iorq_n = '0' and cpu_m1_n = '1' and cpu_a_bus(3 downto 0) = x"3" then 
+			bit7_flag <= '1';
+		elsif cpu_iorq_n = '0' and cpu_m1_n = '1' and cpu_a_bus(3 downto 0) = x"A" then 
 			bit7_flag <= not port_xx00_reg(0);
 		end if;
 	end if;
 end process;
 
-process (CLK, CE, cpu_iorq_n, cpu_m1_n, cpu_a_bus, IORQ_n, RD_n, A, WR_n)
+process (CLK, RESET)
 begin
-	if cpu_iorq_n = '0' and cpu_m1_n = '1' and cpu_a_bus(3 downto 0) = X"5" then
+	if RESET = '1' then 
 		bit0_flag <= '0';
-	elsif IORQ_n = '0' and WR_n = '0' and A(7 downto 0) = X"BB" then
-		bit0_flag <= '1';
-	elsif CLK'event and CLK = '1' and CE = '1' then
-		if (cpu_iorq_n = '0' and cpu_m1_n = '1' and cpu_a_bus(3 downto 0) = X"B") then
+	elsif rising_edge(CLK) then 
+		if IORQ_n = '0' and WR_n = '0' and A(7 downto 0) = x"BB" then 
+			bit0_flag <= '1';
+		elsif cpu_iorq_n = '0' and cpu_m1_n = '1' and cpu_a_bus(3 downto 0) = x"5" then 
+			bit0_flag <= '0';
+		elsif cpu_iorq_n = '0' and cpu_m1_n = '1' and cpu_a_bus(3 downto 0) = x"B" then 
 			bit0_flag <= port_xx06_reg(5);
 		end if;
 	end if;
@@ -217,8 +227,8 @@ begin
 		port_xxbb_reg <= (others => '0');
 		port_xxb3_reg <= (others => '0');
 	elsif CLK'event and CLK = '1' then
-		if IORQ_n = '0' and WR_n = '0' and FDD = '0' and A(7 downto 0) = X"BB" then port_xxbb_reg <= DI; end if;
-		if IORQ_n = '0' and WR_n = '0' and FDD = '0' and A(7 downto 0) = X"B3" then port_xxb3_reg <= DI; end if;
+		if IORQ_n = '0' and WR_n = '0' and A(7 downto 0) = X"BB" then port_xxbb_reg <= DI; end if;
+		if IORQ_n = '0' and WR_n = '0' and A(7 downto 0) = X"B3" then port_xxb3_reg <= DI; end if;
 	end if;
 end process;
 
@@ -274,11 +284,10 @@ cpu_di_bus <=	MDI when (cpu_mreq_n = '0' and cpu_rd_n = '0') else
 				port_xxb3_reg when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_a_bus(3 downto 0) = X"2") else
 				"11111111";
 
--- signed => unsigned
-ch_a_u <= ch_a_reg when ch_a_reg(7) = '0' else '0' & not(ch_a_reg(6 downto 0)) + 1;
-ch_b_u <= ch_b_reg when ch_b_reg(7) = '0' else '0' & not(ch_b_reg(6 downto 0)) + 1;
-ch_c_u <= ch_c_reg when ch_c_reg(7) = '0' else '0' & not(ch_c_reg(6 downto 0)) + 1;
-ch_d_u <= ch_d_reg when ch_d_reg(7) = '0' else '0' & not(ch_d_reg(6 downto 0)) + 1;
+ch_a_u <= ch_a_reg;
+ch_b_u <= ch_b_reg;
+ch_c_u <= ch_c_reg;
+ch_d_u <= ch_d_reg;
 
 -- Channel A volume controlled output
 att_a: entity work.attenuator
@@ -322,6 +331,6 @@ MWE_n 	<= cpu_wr_n or cpu_mreq_n or not (mem(6) or mem(5) or mem(4) or mem(3) or
 MRD_n   <= cpu_rd_n or cpu_mreq_n;
 MRFSH_n <= cpu_rfsh_n;
 
-OE_N <= '0' when IORQ_n = '0' and RD_n = '0' and FDD = '0' and (A(7 downto 0) = x"b3" or A(7 downto 0) = x"bb") else '1';
+OE_N <= '0' when IORQ_n = '0' and RD_n = '0' and (A(7 downto 0) = x"b3" or A(7 downto 0) = x"bb") else '1';
 
 end gs_unit;

@@ -87,7 +87,7 @@ always @(posedge clk)
 		r_intrq_r_sreg <= 1'b0;
 	else
 		if (~r_intrq_r_sreg)
-			if ( (~ior) && (~cs_n) && (a[6:5] == 2'b00) )	//    BDI (STATUS register)
+			if ( (~ior) && (~cs_n) && (a[6:5] == 2'b00) )	//    BDI (STATUS register) 1F / 83
 				r_intrq_r_sreg <= 1'b1;
 			else	;
 		else
@@ -100,7 +100,7 @@ always @( posedge clk )
 		r_drq_r_dreg <= 1'b0;
 	else
 		if (~r_drq_r_dreg)
-			if (  (~( iorq_n | ( wr_n & rd_n ) )) && (~cs_n ) && (a[6:5] == 2'b11) )	// -   BDI (DATA register)
+			if (  (~( iorq_n | ( wr_n & rd_n ) )) && (~cs_n ) && (a[6:5] == 2'b11) )	// -   BDI (DATA register) 7F / E3
 				r_drq_r_dreg <= 1'b1;
 			else	;
 		else

@@ -30,7 +30,8 @@ entity soft_switches is
 	KB_TYPE : out std_logic;
 	PAUSE : out std_logic;
 	NMI : out std_logic;
-	RESET : out std_logic
+	RESET : out std_logic;
+	GS_RESET : out std_logic
 	);
 end soft_switches;
 
@@ -60,8 +61,9 @@ begin
 				when x"0D" => NEMOIDE_EN <= SOFTSW_COMMAND(0);
 				when x"0E" => KB_TYPE <= SOFTSW_COMMAND(0);
 				when x"0F" => PAUSE <= SOFTSW_COMMAND(0);
-				when x"10" => NMI <= SOFTSW_COMMAND(0);
-				when x"11" => RESET <= SOFTSW_COMMAND(0);	
+				when x"10" => GS_RESET <= SOFTSW_COMMAND(0);
+				when x"11" => NMI <= SOFTSW_COMMAND(0);
+				when x"12" => RESET <= SOFTSW_COMMAND(0);	
 				when others => null;
 			end case;
 		end if;

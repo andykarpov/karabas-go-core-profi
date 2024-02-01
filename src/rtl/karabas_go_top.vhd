@@ -27,10 +27,9 @@
 
 -- TODO:
 -- 0. FDD fixes
--- 1. IDE controller timings
--- 2. serial mouse test
--- 3. GS (fix conflicts with FDD and/or HDD)
--- 4. Turbo via port (now disabled)
+-- 1. serial mouse test
+-- 2. GS (fix conflicts)
+-- 3. Turbo via port (now disabled)
 ------------------------------------------------------------------------------------------------------------------
 
 library IEEE; 
@@ -175,6 +174,7 @@ signal hdd_active		: std_logic;
 -- Keyboard
 signal kb_do_bus		: std_logic_vector(5 downto 0);
 signal kb_reset 		: std_logic := '0';
+signal kb_gs_reset   : std_logic := '0';
 signal kb_nmi 		: std_logic := '0';
 signal kb_turbo 		: std_logic_vector(2 downto 0) := "000";
 signal kb_turbo_old	: std_logic_vector(2 downto 0) := "000";
@@ -290,14 +290,7 @@ signal cs_018b			: std_logic := '0';
 signal cs_028b			: std_logic := '0';
 
 -- Profi FDD ports
-signal RT_F2_1			:std_logic;
-signal RT_F2_2			:std_logic;
-signal RT_F2_3			:std_logic;
 signal fdd_cs_pff_n	:std_logic;
-signal RT_F1_1			:std_logic;
-signal RT_F1_2			:std_logic;
-signal RT_F1			:std_logic;
-signal P0				:std_logic;
 signal fdd_cs_n		:std_logic;
 
 -- TurboSound
@@ -444,6 +437,8 @@ signal ide_busy 	: std_logic := '0';
 -- FDD signals
 signal fdd_do_bus : std_logic_vector(7 downto 0);
 signal fdd_oe_n : std_logic := '1';
+signal fdd_mode : std_logic_vector(1 downto 0);
+signal loa : std_logic_vector(7 downto 0);
 
 begin
 
@@ -757,6 +752,7 @@ port map (
 	NEMOIDE_EN => kb_nemoide_en,
 	KB_TYPE => kb_type,
 	PAUSE => kb_pause,
+	GS_RESET => kb_gs_reset,
 	NMI => kb_nmi,
 	RESET => kb_reset	
 );
@@ -827,7 +823,7 @@ port map (
 	I_CLK				=> clk_bus,
 	I_CS				=> kb_covox,
 	I_WR_N			=> cpu_wr_n,
-	I_ADDR			=> cpu_a_bus(7 downto 0),
+	I_ADDR			=> loa,
 	I_DATA			=> cpu_do_bus,
 	I_IORQ_N			=> cpu_iorq_n,
 	I_DOS				=> dos_act,
@@ -1026,12 +1022,14 @@ U20: entity work.gs_top
 port map(
 	clk_sys => clk_sdr,
 	clk_bus => clk_bus, -- 56/48
-	ce => ena_div4, -- 14/12
+	ce => ena_div2 and ena_div4, -- 14/12
+
 	ds80 => ds80,
 	cpm => cpm,
 	dos => dos_act,
-	fdd => not(fdd_cs_n) or not(fdd_cs_pff_n),
-	reset => reset,
+	rom14 => rom14,
+
+	reset => kb_gs_reset or loader_act or mcu_busy,
 	areset => areset,
 	
 	a => cpu_a_bus,
@@ -1069,6 +1067,8 @@ port map(
 
 reset <= areset or kb_reset or loader_act or mcu_busy or rom_bank_reset; -- hot reset
 
+loa <= cpu_a_bus(7 downto 0); -- low cpu address
+
 -- CPU reset
 process (clk_bus)
 begin
@@ -1086,7 +1086,11 @@ cpu_nmi_n <= mapcond when kb_nmi = '1' and divmmc_en = '1' else
 cpu_wait_n <= '1';
 
 -- cpu wait condition
-cpu_wait <= '1' when zc_busy = '1' or ide_busy = '1' or kb_pause = '1' or  (kb_screen_mode = "01" and memory_contention = '1' and automap = '0' and DS80 = '0') else '0';
+cpu_wait <= '1' when zc_busy = '1' or 
+							ide_busy = '1' or 
+							kb_pause = '1' or  
+							(kb_screen_mode = "01" and memory_contention = '1' and automap = '0' and DS80 = '0') 
+							else '0';
 
 -------------------------------------------------------------------------------
 -- SD Card
@@ -1102,8 +1106,8 @@ SD_DI 	<= zc_mosi;
 -- IN A, (#FD) - read a value from a hardware port 
 -- OUT (#FD), A - writes the value of the second operand into the port given by the first operand.
 fd_sel <= '0' when (
-	(cpu_do_bus(7 downto 4) = "1101" and cpu_do_bus(2 downto 0) = "011") or 
-	(cpu_di_bus(7 downto 4) = "1101" and cpu_di_bus(2 downto 0) = "011")) else '1'; 
+	(loa(7 downto 4) = "1101" and loa(2 downto 0) = "011") or 
+	(loa(7 downto 4) = "1101" and loa(2 downto 0) = "011")) else '1'; 
 
 process(fd_sel, reset, cpu_m1_n)
 begin
@@ -1151,55 +1155,59 @@ lock_dffd <= port_028b_reg(7);								 	-- 7 	- Lock port DFFD
 ext_rom_bank_pq <= ext_rom_bank when rom0 = '0' else "01";	-- ROMBANK ALT
 
 rom14 <= port_7ffd_reg(4); -- rom bank
-cpm 	<= port_dffd_reg(5); -- 1 -      TR-DOS        (ROM14=0);  ROM14=1 - .   . 
-worom <= port_dffd_reg(4); -- 1 -    7ffd   ,       seg 00
+cpm 	<= port_dffd_reg(5); -- 1 - блокирует работу контроллера из ПЗУ TR-DOS и включает порты на доступ из ОЗУ (ROM14=0); При ROM14=1 - мод. доступ к расширен. периферии
+worom <= port_dffd_reg(4); -- 1 - отключает блокировку порта 7ffd и выключает ПЗУ, помещая на его место ОЗУ из seg 00
 ds80 	<= port_dffd_reg(7); -- 0 = seg05 spectrum bitmap, 1 = profi bitmap seg06 & seg 3a & seg 04 & seg 38
-scr 	<= port_dffd_reg(6); --  CPU   seg 02,    D3 CMR0    1 (#8000-#BFFF)
-sco 	<= port_dffd_reg(3); --     :
-									-- 0 -   1 (#C000-#FFFF)
-									-- 1 -   2 (#4000-#7FFF)
+scr 	<= port_dffd_reg(6); -- памяти CPU на место seg 02, при этом бит D3 CMR0 должен быть в 1 (#8000-#BFFF)
+sco 	<= port_dffd_reg(3); -- Выбор положения окна проецирования сегментов:
+									-- 0 - окно номер 1 (#C000-#FFFF)
+									-- 1 - окно номер 2 (#4000-#7FFF)
 
 -- Extended memory for 1MB
 ram_ext <= port_dffd_reg(2 downto 0); -- profi 1024
 
 -- OCH: change decoding of #FE port when Nemo enabled  
 cs_xxfe <= '1' when (cpu_iorq_n = '0' and cpu_a_bus(0) = '0' and nemoide_en = '0') or 
-						  (cpu_iorq_n = '0' and cpu_a_bus(6 downto 0) = "1111110" and nemoide_en = '1') else '0';
-cs_xx7e <= '1' when cs_xxfe = '1' and cpu_a_bus(7) = '0' else '0';
+						  (cpu_iorq_n = '0' and loa(6 downto 0) = "1111110" and nemoide_en = '1') else '0';
+cs_xx7e <= '1' when cs_xxfe = '1' and loa(7) = '0' else '0';
 cs_eff7 <= '1' when cpu_iorq_n = '0' and cpu_m1_n = '1' and cpu_a_bus = X"EFF7" else '0';
 cs_fffd <= '1' when cpu_iorq_n = '0' and cpu_m1_n = '1' and cpu_a_bus = X"FFFD" and fd_port = '1' else '0';
 cs_dffd <= '1' when cpu_iorq_n = '0' and cpu_m1_n = '1' and cpu_a_bus = X"DFFD" and fd_port = '1' and lock_dffd = '0' else '0';
 cs_7ffd <= '1' when cpu_iorq_n = '0' and cpu_m1_n = '1' and cpu_a_bus = X"7FFD" and fd_port = '1' else '0';
 cs_1ffd <= '1' when cpu_iorq_n = '0' and cpu_m1_n = '1' and cpu_a_bus = X"1FFD" and fd_port = '1' else '0';
 -- OCH: change decoding of #FD port when Nemo enabled
-cs_xxfd <= '1' when (cpu_iorq_n = '0' and cpu_m1_n = '1' and cpu_a_bus(15) = '0' and cpu_a_bus(1) = '0' and nemoide_en = '0') or
-						  (cpu_iorq_n = '0' and cpu_m1_n = '1' and cpu_a_bus(15) = '0' and cpu_a_bus(7 downto 0) = x"FD" and nemoide_en = '1') else '0';						  
+cs_xxfd <= '1' when (cpu_iorq_n = '0' and cpu_m1_n = '1' and cpu_a_bus(15) = '0' and loa(1) = '0' and nemoide_en = '0') or
+						  (cpu_iorq_n = '0' and cpu_m1_n = '1' and cpu_a_bus(15) = '0' and loa = x"FD" and nemoide_en = '1') else '0';						  
 
---  AS 
+-- RTC AS reg (address)
 cs_rtc_as <= '1' when cpu_iorq_n = '0' and cpu_m1_n = '1' and
-							((cpu_a_bus(7 downto 0) = X"FF" or cpu_a_bus(7 downto 0) = X"BF") and ((cpm='1' and rom14='1') or (dos_act='1' and rom14='0'))) --  
+							((loa = x"FF" or loa = x"BF") and ((cpm='1' and rom14='1') or (dos_act='1' and rom14='0'))) --  
 				     else '0';
---
---  DS 					  
+-- RTC DS reg (data)
 cs_rtc_ds <= '1' when cpu_iorq_n = '0' and cpu_m1_n = '1' and 
-							((cpu_a_bus(7 downto 0) = X"DF" or cpu_a_bus(7 downto 0) = X"9F") and ((cpm='1' and rom14='1') or (dos_act='1' and rom14='0'))) --  
+							((loa = x"DF" or loa = x"9F") and ((cpm='1' and rom14='1') or (dos_act='1' and rom14='0'))) --  
 				     else '0';
 					  
---  #7e -    /wr
+-- port #7E - write by cpu_wr_n front
 port_xxfe_reg <= cpu_do_bus when cs_xxfe = '1' and (cpu_wr_n'event and cpu_wr_n = '1');
 
 --  Profi FDD
-RT_F2_1 <='0' when (cpu_a_bus(7 downto 5)="001" and cpu_a_bus(1 downto 0)="11" and cpu_iorq_n='0') and ((cpm='1' and rom14='1') or (dos_act='1' and rom14='0')) else '1'; --6D
-RT_F2_2 <='0' when cpu_a_bus(7 downto 5)="101" and cpu_a_bus(1 downto 0)="11" and cpu_iorq_n='0' and cpm='1' and dos_act='0' and rom14='0' else '1'; --75
-RT_F2_3 <='0' when cpu_a_bus(7 downto 5)="111" and cpu_a_bus(1 downto 0)="11" and cpu_iorq_n='0' and cpm='0' and dos_act='1' and rom14='1' else '1'; --F3 and FB
-fdd_cs_pff_n <= RT_F2_1 and RT_F2_2 and RT_F2_3;
 
-RT_F1_1 <= '0' when cpu_a_bus(7)='0' and cpu_a_bus(1 downto 0)="11" and cpu_iorq_n='0' and cpm='1' and dos_act='0' and rom14='0' else '1';
-RT_F1_2 <= '0' when cpu_a_bus(7)='0' and cpu_a_bus(1 downto 0)="11" and cpu_iorq_n='0' and cpm='0' and dos_act='1' and rom14='1' else '1';
-RT_F1 <= RT_F1_1 and RT_F1_2;
-P0 <='0' when (cpu_a_bus(7)='1' and cpu_a_bus(4 downto 0)="00011" and cpu_iorq_n='0') and ((cpm='1' and rom14='1') or (dos_act='1' and rom14='0')) else '1';
-fdd_cs_n <= RT_F1 and P0;
+-- 1F 3F 5F 7F FF -- spectrum bdi
+-- 1F 3F 5F 7F BF -- основная периферия в короткой адресации
+-- 83 A3 C3 E3 3F -- расш периферия Profi 2+, 3+
 
+-- fdd BDI RQ port FF (3F,BF)
+fdd_cs_pff_n <= '0' when ((loa=x"FF" and cpu_iorq_n='0') and ((cpm='0' and dos_act='1' and rom14='1'))) or					  -- FF
+								 ((loa=x"BF" and cpu_iorq_n='0') and ((cpm='1' and dos_act='0' and rom14='0'))) or 					  -- BF
+								 ((loa=x"3F" and cpu_iorq_n='0') and ((cpm='1' and rom14='1') or (dos_act='1' and rom14='0')))    -- 3F								 
+								 else '1';
+
+-- fdd control ports 1F,3F,5F,7F (83,A3,C3,E3)
+fdd_cs_n <= '0' when ((loa=x"1F" or loa=x"3F" or loa=x"5F" or loa=x"7F") and cpu_iorq_n='0' and cpm='0' and dos_act='1' and rom14='1') or -- bdi
+							((loa=x"1F" or loa=x"3F" or loa=x"5F" or loa=x"7F") and cpu_iorq_n='0' and cpm='1' and dos_act='0' and rom14='0') or -- main
+							((loa=x"83" or loa=x"A3" or loa=x"C3" or loa=x"E3") and cpu_iorq_n='0' and ((cpm='1' and rom14='1') or (dos_act='1' and rom14='0'))) -- ext
+							else '1';
 -- Ports
 process (reset, areset, clk_bus, cpu_a_bus, dos_act, cs_xxfe, cs_eff7, cs_7ffd, cs_xxfd, port_7ffd_reg, port_1ffd_reg, cpu_mreq_n, cpu_m1_n, cpu_wr_n, cpu_do_bus, fd_port, cs_008b, kb_turbo, kb_turbo_old)
 begin
@@ -1218,16 +1226,12 @@ begin
 		port_028b_reg <= (others => '0');
 		dos_act <= '1';
 		kb_turbo_old <= "000";
---- 06.07.2023:OCH: DIVMMC port added to ZController
 		port_e3_reg(5 downto 0) <= (others => '0');
 		port_e3_reg(7) <= '0';
 		
 	elsif clk_bus'event and clk_bus = '1' then
---- 06.07.2023:OCH: DIVMMC port E3 added to ZController
 			-- #xxE3
---- 08.07.2023:OCH: Due to confict with port (E3) of fddcontroller in cpm mode
---- block DIVMMC port E3 when in cpm
-			if (cpu_iorq_n = '0' and cpu_wr_n = '0' and cpu_a_bus(7 downto 0) = X"E3" and cpm = '0' and divmmc_en = '1') then	
+			if (cpu_iorq_n = '0' and cpu_wr_n = '0' and loa = x"E3" and cpm = '0' and divmmc_en = '1') then	
 				port_e3_reg <=cpu_do_bus(7) & (port_e3_reg(6) or cpu_do_bus(6)) & cpu_do_bus(5 downto 0);
 			end if;		
 			
@@ -1256,7 +1260,7 @@ begin
 			end if;
 			
 			-- #1FFD
-			if cs_1ffd = '1' and cpu_wr_n = '0' then -- #1FFD
+			if cs_1ffd = '1' and cpu_wr_n = '0' then
 			  port_1ffd_reg <= cpu_do_bus;
 			end if;
 
@@ -1319,7 +1323,7 @@ BEEPER <= speaker;
 TAPE_OUT <= port_xxfe_reg(3);
 				
 -- SAA1099
-saa_wr_n <= '0' when (cpu_iorq_n = '0' and cpu_wr_n = '0' and cpu_a_bus(7 downto 0) = X"FF" and dos_act = '0') else '1';
+saa_wr_n <= '0' when (cpu_iorq_n = '0' and cpu_wr_n = '0' and loa = x"FF" and dos_act = '0') else '1';
 
 ---------------------------------------------------------------------------------
 -- Port I/O
@@ -1327,11 +1331,11 @@ saa_wr_n <= '0' when (cpu_iorq_n = '0' and cpu_wr_n = '0' and cpu_a_bus(7 downto
 mc146818_wr <= '1' when (cs_rtc_ds = '1' and cpu_iorq_n = '0' and cpu_wr_n = '0' and cpu_m1_n = '1') else '0';
 
 
--- Z-controller + DIVMMC spi 
-zc_spi_start <= '1' when (cpu_a_bus(7 downto 0) = X"57" or (cpu_a_bus(7 downto 0) = X"EB" and cpm = '0' and divmmc_en = '1')) and cpu_iorq_n='0' and cpu_m1_n='1' and loader_act='0' else '0';
+-- SPI Z-controller + DivMMC 
+zc_spi_start <= '1' when (loa = x"57" or (loa = x"EB" and cpm = '0' and divmmc_en = '1')) and cpu_iorq_n='0' and cpu_m1_n='1' and loader_act='0' else '0';
 zc_wr_en <= '1' when zc_spi_start = '1' and cpu_wr_n='0' else '0';
 zc_rd_en <= '1' when zc_spi_start = '1' and cpu_rd_n='0' else '0';
-port77_wr <= '1' when (cpu_a_bus(7 downto 0) = X"77" or (cpu_a_bus(7 downto 0) = X"E7" and divmmc_en = '1')) and cpu_iorq_n='0' and cpu_m1_n='1' and cpu_wr_n='0' and loader_act='0' else '0';
+port77_wr <= '1' when (loa = x"77" or (loa = x"E7" and divmmc_en = '1')) and cpu_iorq_n='0' and cpu_m1_n='1' and cpu_wr_n='0' and loader_act='0' else '0';
 
 process (port77_wr, loader_act, reset, clk_bus)
 	begin
@@ -1339,7 +1343,7 @@ process (port77_wr, loader_act, reset, clk_bus)
 			zc_cs_n <= '1';
 		elsif clk_bus'event and clk_bus='1' then
 			if port77_wr='1' then
-				if cpu_a_bus(7 downto 0) = X"E7" then
+				if loa = x"E7" then
 					zc_cs_n <= cpu_do_bus(0);
 				else
 					zc_cs_n <= cpu_do_bus(1);
@@ -1348,7 +1352,7 @@ process (port77_wr, loader_act, reset, clk_bus)
 		end if;
 end process;
 
-U_ZC_SPI: entity work.zc_spi     -- SD
+U_ZC_SPI: entity work.zc_spi
 port map(
 	clc     		=> clk_bus,  -- 56
 	ena			=> ena_div2, -- 28
@@ -1378,11 +1382,11 @@ begin
 		map1F00 <= '1';
 	else
 		 if cpu_a_bus(15 downto 0) = x"0000"   or 
-									 cpu_a_bus(15 downto 0) = x"0008"   or 
-									 cpu_a_bus(15 downto 0) = x"0038"   or 
-									 cpu_a_bus(15 downto 0) = x"0066"   or 
-									 cpu_a_bus(15 downto 0) = x"04c6"   or 
-									 cpu_a_bus(15 downto 0) = x"0562" then 
+			 cpu_a_bus(15 downto 0) = x"0008"   or 
+			 cpu_a_bus(15 downto 0) = x"0038"   or 
+			 cpu_a_bus(15 downto 0) = x"0066"   or 
+			 cpu_a_bus(15 downto 0) = x"04c6"   or 
+			 cpu_a_bus(15 downto 0) = x"0562" then 
 			mapterm <= '1';
 		else 
 			mapterm <= '0';
@@ -1455,10 +1459,11 @@ selector <=
 	x"00" when (ram_oe_n = '0') else -- ram / rom
 	x"01" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and cs_rtc_ds = '1') else -- RTC MC146818A
 	x"02" when (cs_xxfe = '1' and cpu_rd_n = '0') else 									-- Keyboard, port #FE	
+	x"15" when (gs_oe_n = '0' and cpu_iorq_n = '0' and cpu_rd_n = '0') else -- gs
 	x"14" when (ide_oe_n = '0') else		-- ide
- 	x"03" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and (cpu_a_bus(7 downto 0) = X"57" or (cpu_a_bus(7 downto 0) = X"EB" and cpm = '0' and divmmc_en = '1')) ) else 	-- Z-Controller + DivMMC
-	x"04" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and cpu_a_bus(7 downto 0) = X"77") else 	-- Z-Controller
-	x"05" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and cpu_a_bus( 7 downto 0) = X"1F" and dos_act = '0' and cpm = '0' and joy_mode = "000") else -- Joystick, port #1F
+ 	x"03" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and (loa = x"57" or (loa = x"EB" and cpm = '0' and divmmc_en = '1')) ) else 	-- Z-Controller + DivMMC
+	x"04" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and loa = x"77") else 	-- Z-Controller
+	x"05" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and loa = x"1F" and dos_act = '0' and cpm = '0' and joy_mode = "000") else -- Joystick, port #1F
 	x"06" when (cs_fffd = '1' and cpu_rd_n = '0' and ssg_sel = '0') else 			-- TurboSound
 	x"07" when (cs_fffd = '1' and cpu_rd_n = '0' and ssg_sel = '1') else
 	x"08" when (cs_dffd = '1' and cpu_rd_n = '0') else										-- port #DFFD
@@ -1471,9 +1476,8 @@ selector <=
 	x"0F" when (cs_018b = '1' and cpu_rd_n = '0') else										-- port #018B
 	x"10" when (cs_028b = '1' and cpu_rd_n = '0') else										-- port #028B
 	x"11" when zifi_oe_n = '0' and cpu_iorq_n = '0' and cpu_rd_n = '0' else  		-- zifi
-	x"12" when (vid_pff_cs = '1' and cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_a_bus( 7 downto 0) = X"FF") and dos_act='0' and cpm = '0' and ds80 = '0' else -- Port FF select
+	x"12" when (vid_pff_cs = '1' and cpu_iorq_n = '0' and cpu_rd_n = '0' and loa = x"FF") and dos_act='0' and cpm = '0' and ds80 = '0' else -- Port FF select
 	x"13" when (fdd_oe_n = '0' and cpu_iorq_n = '0' and cpu_rd_n = '0') else 		-- fdd
-	x"15" when (gs_oe_n = '0' and cpu_iorq_n = '0' and cpu_rd_n = '0') else -- gs
 	(others => '1');
 
 -- FT812

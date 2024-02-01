@@ -9,10 +9,12 @@ module gs_top (
     input wire            clk_sys,
     input wire            clk_bus,
     input wire            ce,
+
 	 input wire 			  ds80,
 	 input wire 			  cpm,
 	 input wire 			  dos,
-	 input wire 			  fdd,
+	 input wire 			  rom14,
+
     input wire            reset,
     input wire            areset,
 
@@ -66,11 +68,12 @@ gs gs
 (
     .RESET(reset),
     .CLK(clk_bus),
-    .CE(ce), 
+    .CE(ce),
+	 
 	 .DS80(ds80),
 	 .CPM(cpm),
 	 .DOS(dos),
-	 .FDD(fdd),
+	 .ROM14(rom14),
     
     .A(a),
     .DI(di),

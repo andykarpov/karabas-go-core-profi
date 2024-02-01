@@ -115,6 +115,18 @@ profi_rdh_n <='0' when (RD_N='0' and loa=x"EB" and profi_ebl_n = '0') else '1'; 
 cs3fx_n 		<='0' when (WR_N='0' and loa=x"AB" and hia  = x"06" and profi_ebl_n = '0') else '1'; -- select CF register 8-15
 cs1fx_n 		<= profi_ior_n and profi_iow_n; 																		 -- select CF register 0-7
 
+-- NemoIDE ports description:
+--0XF0			;РЕГИСТР СОСТОЯНИЯ/РЕГИСТР КОМАНД
+--0XD0			;CHS-НОМЕР ГОЛОВЫ И УСТР/LBA АДРЕС 24-27
+--0XB0			;CHS-ЦИЛИНДР 8-15/LBA АДРЕС 16-23
+--0X90			;CHS-ЦИЛИНДР 0-7/LBA АДРЕС 8-15
+--0X70			;CHS-НОМЕР СЕКТОРА/LBA АДРЕС 0-7
+--0X50			;СЧЕТЧИК СЕКТОРОВ
+--0X30			;ПОРТ ОШИБОК/СВОЙСТВ
+--0X10			;ПОРТ ДАННЫХ
+--0XC8			;РЕГИСТР СОСТОЯНИЯ/УПРАВЛЕНИЯ
+--0X11			;СТАРШИЕ 8 БИТ
+
 --  Nemo HDD ports: 10, 30, 50, 70, 90, B0, D0, F0, C8, 11
 cs_nemo_ports <= '1' when (loa = x"F0" or loa = x"D0" or loa = x"B0" or loa = x"90" or loa = x"70" or 
 								   loa = x"50" or loa = x"30" or loa = x"10" or loa = x"C8" or loa = x"11") and 

@@ -1,7 +1,7 @@
 {
     "id": "profi",
     "name": "Karabas Pro +",
-    "build": "24013110",
+    "build": "24013119",
     "bitstream": "karabas_go.bin",
     "visible": true,
     "type": "osd",
@@ -32,6 +32,7 @@
         {"type": "S", "bits": 1, "name": "NemoIDE", "options": ["Off", "On"], "default": 0, "hotkey": "Menu+N"},
         {"type": "S", "bits": 1, "name": "Keyboard", "options": ["Profi XT", "Spectrum"], "default": 0, "hotkey": "Menu+K"},
         {"type": "N", "bits": 1, "name": "Pause", "options": ["Off", "On"], "default": 0, "hotkey": "Menu+P"},
+        {"type": "T", "bits": 1, "name": "GS Reset", "options": null, "default": 0, "hotkey": "Menu+G"},
         {"type": "T", "bits": 1, "name": "NMI", "options": null, "default": 0, "hotkey": "Menu+F12"},
         {"type": "T", "bits": 1, "name": "Reset", "options": null, "default": 0, "hotkey": "Ctrl+Alt+Del"}
     ]
