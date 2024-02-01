@@ -1,7 +1,7 @@
 {
     "id": "profi",
     "name": "Karabas Pro +",
-    "build": "24013119",
+    "build": "24020102",
     "bitstream": "karabas_go.bin",
     "visible": true,
     "type": "osd",
@@ -13,7 +13,7 @@
         {"filename": "roms/FDImage.rom", "address": 1179648},
         {"filename": "roms/ROMain_fatall_ramdisk_D.rom", "address": 1245184},
         {"filename": "roms/esxdos089.bin", "address": 1310720},
-        {"filename": "roms/gs105b.rom", "address": 2147483648}
+        {"filename": "roms/gs105a.rom", "address": 2147483648}
     ],
     "osd": [
         {"type": "S", "bits": 2, "name": "ROM Bank", "options": ["ROMain", "PQ-DOS", "FDImage", "FATALL"], "default": 0, "hotkey": "Menu+F1"},

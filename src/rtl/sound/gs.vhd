@@ -256,7 +256,7 @@ begin
 		ch_c_reg <= (others => '0');
 		ch_d_reg <= (others => '0');
 		
-	elsif CLK'event and CLK = '1' and CE = '1' then
+	elsif CLK'event and CLK = '1' then
 		if cpu_iorq_n = '0' and cpu_wr_n = '0' and cpu_a_bus(3 downto 0) = X"0" then port_xx00_reg <= cpu_do_bus; end if;
 		if cpu_iorq_n = '0' and cpu_wr_n = '0' and cpu_a_bus(3 downto 0) = X"3" then port_xx03_reg <= cpu_do_bus; end if;
 		if cpu_iorq_n = '0' and cpu_wr_n = '0' and cpu_a_bus(3 downto 0) = X"6" then port_xx06_reg <= cpu_do_bus(5 downto 0); end if;
