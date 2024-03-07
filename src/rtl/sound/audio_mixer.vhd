@@ -35,6 +35,11 @@ entity audio_mixer is
 		  
 		  gs_l : in std_logic_vector(8 downto 0);
 		  gs_r : in std_logic_vector(8 downto 0);
+		  
+		  fm_l : in std_logic_vector(15 downto 0);
+		  fm_r : in std_logic_vector(15 downto 0);
+		  
+		  fm_ena : in std_logic;
 
         audio_l : out std_logic_vector(15 downto 0);
         audio_r : out std_logic_vector(15 downto 0)
@@ -43,91 +48,107 @@ entity audio_mixer is
 end audio_mixer;
  
 architecture rtl of audio_mixer is
-    signal audio_mono		: std_logic_vector(15 downto 0);
+    signal mix_mono		   : std_logic_vector(23 downto 0);
+	 signal mix_l 				: std_logic_vector(23 downto 0);
+	 signal mix_r 				: std_logic_vector(23 downto 0);
+	 signal comp_l				: std_logic_vector(15 downto 0);
+	 signal comp_r 			: std_logic_vector(15 downto 0);
 begin
 
 process (clk)
 begin
     if rising_edge(clk) then
-        audio_mono <= 	
-				        ("0000000" & speaker & "00000000") +
---				        ("0000000" & tape_in & "00000000") +				
-				        ("000000"  & ssg0_a &        "00") + 
-				        ("000000"  & ssg0_b &        "00") + 
-				        ("000000"  & ssg0_c &        "00") + 
-				        ("000000"  & ssg1_a &        "00") + 
-				        ("000000"  & ssg1_b &        "00") + 
-				        ("000000"  & ssg1_c &        "00") + 
-				        ("000000"  & covox_a &       "00") + 
-				        ("000000"  & covox_b &       "00") + 
-				        ("000000"  & covox_c &       "00") + 
-				        ("000000"  & covox_d &       "00") + 
-				        ("000000"  & covox_fb &      "00") + 
-				        ("000000"  & saa_l &         "00") + 				
-				        ("000000"  & saa_r &         "00") + 
-						  ("00000"   & gs_l &          "00") + 
-						  ("00000"   & gs_r &          "00");
+        mix_mono <= 	
+				        ("0000000000000" & speaker & "0000000000") +
+				        ("000000000000"  & ssg0_a &        "0000") + 
+				        ("000000000000"  & ssg0_b &        "0000") + 
+				        ("000000000000"  & ssg0_c &        "0000") + 
+				        ("000000000000"  & ssg1_a &        "0000") + 
+				        ("000000000000"  & ssg1_b &        "0000") + 
+				        ("000000000000"  & ssg1_c &        "0000") + 
+				        ("000000000000"  & covox_a &       "0000") + 
+				        ("000000000000"  & covox_b &       "0000") + 
+				        ("000000000000"  & covox_c &       "0000") + 
+				        ("000000000000"  & covox_d &       "0000") + 
+				        ("000000000000"  & covox_fb &      "0000") + 
+				        ("000000000000"  & saa_l &         "0000") + 				
+				        ("000000000000"  & saa_r &         "0000") + 
+						  ("000000000000"  & gs_l &           "000") + 
+						  ("000000000000"  & gs_r &           "000");
 						  
 		  -- mute
 		  if mute = '1' then 
-			audio_l <= (others => '0');
-			audio_r <= (others => '0');
+			mix_l <= (others => '0');
+			mix_r <= (others => '0');
 
 		  -- mono
 		  elsif (mode = "10") then 
-			audio_l <= audio_mono;
-			audio_r <= audio_mono;
+			mix_l <= mix_mono;
+			mix_r <= mix_mono;
 
 		  -- ACB
 		  elsif (mode = "01") then 
-		   audio_l <= ("000000" & speaker & "000000000") + -- ACB: L = A + C/2
---				        ("0000000" & tape_in & "00000000") +	
-				        ("00000"  & ssg0_a &        "000") + 
-				        ("000000"  & ssg0_c &        "00") + 
-				        ("00000"  & ssg1_a &        "000") + 
-				        ("000000"  & ssg1_c &        "00") + 
-				        ("00000"  & covox_a &       "000") + 
-				        ("00000"  & covox_b &       "000") + 
-				        ("00000"  & covox_fb &      "000") + 
-				        ("00000"  & saa_l  &        "000") + 
-						  ("0000"   & gs_l &          "000");
-			audio_r <= ("000000" & speaker & "000000000") + -- ACB: R = B + C/2
---				        ("0000000" & tape_in & "00000000") +	
-				        ("00000"  & ssg0_b &        "000") + 
-				        ("000000"  & ssg0_c &        "00") + 
-				        ("00000"  & ssg1_b &        "000") + 
-				        ("000000"  & ssg1_c &        "00") + 
-				        ("00000"  & covox_c &       "000") + 
-				        ("00000"  & covox_d &       "000") + 
-				        ("00000"  & covox_fb &      "000") + 
-				        ("00000"  & saa_r &         "000") +
-						  ("0000"   & gs_r &          "000");
+		   mix_l <=   ("0000000000000" & speaker & "0000000000") + -- ACB: L = A + C/2
+				        ("000000000000"  & ssg0_a &        "0000") + 
+				        ("0000000000000"  & ssg0_c &        "000") + 
+				        ("000000000000"  & ssg1_a &        "0000") + 
+				        ("0000000000000"  & ssg1_c &        "000") + 
+				        ("000000000000"  & covox_a &       "0000") + 
+				        ("000000000000"  & covox_b &       "0000") + 
+				        ("000000000000"  & covox_fb &      "0000") + 
+				        ("000000000000"  & saa_l  &        "0000") + 
+						  ("000000000000"  & gs_l &           "000");
+			mix_r <=   ("0000000000000" & speaker & "0000000000") + -- ACB: R = B + C/2
+				        ("000000000000"  & ssg0_b &        "0000") + 
+				        ("0000000000000"  & ssg0_c &        "000") + 
+				        ("000000000000"  & ssg1_b &        "0000") + 
+				        ("0000000000000"  & ssg1_c &        "000") + 
+				        ("000000000000"  & covox_c &       "0000") + 
+				        ("000000000000"  & covox_d &       "0000") + 
+				        ("000000000000"  & covox_fb &      "0000") + 
+				        ("000000000000"  & saa_r &         "0000") +
+						  ("000000000000"  & gs_r &           "000");
 		  -- ABC
 		  else 
-		   audio_l <= ("000000" & speaker & "000000000") +  -- ABC: L = A + B/2
---				        ("0000000" & tape_in &    "00000000") +	
-				        ("00000"  & ssg0_a &        "000") + 
-				        ("000000"  & ssg0_b &        "00") + 
-				        ("00000"  & ssg1_a &        "000") + 
-				        ("000000"  & ssg1_b &        "00") + 
-				        ("00000"  & covox_a &       "000") + 
-				        ("00000"  & covox_b &       "000") + 
-				        ("00000"  & covox_fb &      "000") + 
-				        ("00000"  & saa_l  &        "000") +
-						  ("0000"   & gs_l &          "000");
-			audio_r <= ("000000" & speaker & "000000000") + -- ABC: R = C + B/2
---				        ("0000000" & tape_in & "00000000") +	
-				        ("00000"  & ssg0_c &        "000") + 
-				        ("000000"  & ssg0_b &        "00") + 
-				        ("00000"  & ssg1_c &        "000") + 
-				        ("000000"  & ssg1_b &        "00") + 
-				        ("00000"  & covox_c &       "000") + 
-				        ("00000"  & covox_d &       "000") + 
-				        ("00000"  & covox_fb &      "000") + 
-				        ("00000"  & saa_r &         "000") +
-						  ("0000"   & gs_r &          "000");
+		   mix_l <=   ("0000000000000" & speaker & "0000000000") +  -- ABC: L = A + B/2
+				        ("000000000000"  & ssg0_a &        "0000") + 
+				        ("0000000000000"  & ssg0_b &        "000") + 
+				        ("000000000000"  & ssg1_a &        "0000") + 
+				        ("0000000000000"  & ssg1_b &        "000") + 
+				        ("000000000000"  & covox_a &       "0000") + 
+				        ("000000000000"  & covox_b &       "0000") + 
+				        ("000000000000"  & covox_fb &      "0000") + 
+				        ("000000000000"  & saa_l  &        "0000") +
+						  ("000000000000"  & gs_l &           "000");
+			mix_r <=   ("0000000000000" & speaker & "0000000000") + -- ABC: R = C + B/2
+				        ("000000000000"  & ssg0_c &        "0000") + 
+				        ("0000000000000"  & ssg0_b &        "000") + 
+				        ("000000000000"  & ssg1_c &        "0000") + 
+				        ("0000000000000"  & ssg1_b &        "000") + 
+				        ("000000000000"  & covox_c &       "0000") + 
+				        ("000000000000"  & covox_d &       "0000") + 
+				        ("000000000000"  & covox_fb &      "0000") + 
+				        ("000000000000"  & saa_r &         "0000") +
+						  ("000000000000"  & gs_r &           "000");
 		  end if;
     end if;
 end process;
+
+u_comp_l: entity work.compressor
+port map(
+	clk => clk,
+	signal_in => mix_l(15 downto 0),
+	signal_out => comp_l
+);
+
+u_comp_r: entity work.compressor
+port map(
+	clk => clk,
+	signal_in => mix_r(15 downto 0),
+	signal_out => comp_r
+);
+
+audio_l <= fm_l when fm_ena = '1' else comp_l;
+audio_r <= fm_r when fm_ena = '1' else comp_r;
 
 end rtl;	

@@ -294,15 +294,18 @@ signal fdd_cs_pff_n	:std_logic;
 signal fdd_cs_n		:std_logic;
 
 -- TurboSound
-signal ssg_sel			: std_logic;
-signal ssg_cn0_bus	: std_logic_vector(7 downto 0);
+signal ts_do_bus		: std_logic_vector(7 downto 0);
 signal ssg_cn0_a		: std_logic_vector(7 downto 0);
 signal ssg_cn0_b		: std_logic_vector(7 downto 0);
 signal ssg_cn0_c		: std_logic_vector(7 downto 0);
-signal ssg_cn1_bus	: std_logic_vector(7 downto 0);
 signal ssg_cn1_a		: std_logic_vector(7 downto 0);
 signal ssg_cn1_b		: std_logic_vector(7 downto 0);
 signal ssg_cn1_c		: std_logic_vector(7 downto 0);
+signal ssg_cn0_fm		: std_logic_vector(15 downto 0);
+signal ssg_cn1_fm		: std_logic_vector(15 downto 0);
+signal ssg_fm_ena 	: std_logic;
+signal ts_enable 		: std_logic;
+signal ts_we			: std_logic;
 
 -- Covox
 signal covox_a			: std_logic_vector(7 downto 0);
@@ -332,7 +335,6 @@ signal clk_16 			: std_logic;
 signal clk_8 			: std_logic;
 signal clk_vid 		: std_logic;
 signal clk_sdr 		: std_logic;
-signal clk_gs 			: std_logic;
 
 signal ena_div2	: std_logic := '0';
 signal ena_div4	: std_logic := '0';
@@ -781,40 +783,47 @@ port map(
 ms_present <= '1';
 
 -- Audio I2S DAC
-U11: entity work.PCM5102
+U11: entity work.pcm5102
 port map (
 	clk => clk_bus,
+	reset => reset,
+	
 	left => audio_l,
 	right => audio_r,
-	din => DAC_DAT,
+	
+	lrck => DAC_LRCK,
 	bck => DAC_BCK,
-	lrck => DAC_LRCK
+	din => DAC_DAT
 );
 DAC_MUTE <= '1';
 
 -- TurboSound
 U12: entity work.turbosound
 port map (
-	I_CLK				=> clk_bus,
-	I_ENA				=> ena_div32,
-	I_ADDR			=> cpu_a_bus,
-	I_DATA			=> cpu_do_bus,
-	I_WR_N			=> cpu_wr_n,
-	I_IORQ_N			=> cpu_iorq_n,
-	I_M1_N			=> cpu_m1_n,
-	I_RESET_N		=> cpu_reset_n,
-	O_SEL				=> ssg_sel,
-	I_MODE 			=> kb_psg_type,
-	-- ssg0
-	O_SSG0_DA		=> ssg_cn0_bus,
-	O_SSG0_AUDIO_A	=> ssg_cn0_a,
-	O_SSG0_AUDIO_B	=> ssg_cn0_b,
-	O_SSG0_AUDIO_C	=> ssg_cn0_c,
-	-- ssg1
-	O_SSG1_DA		=> ssg_cn1_bus,
-	O_SSG1_AUDIO_A	=> ssg_cn1_a,
-	O_SSG1_AUDIO_B	=> ssg_cn1_b,
-	O_SSG1_AUDIO_C	=> ssg_cn1_c);
+	RESET 			=> reset,
+	CLK 				=> clk_bus,
+	CE					=> ena_div16, -- 3.5
+	BDIR 				=> ts_we,
+	BC 				=> cpu_a_bus(14),
+	DI					=> cpu_do_bus,
+	DO 				=> ts_do_bus,
+	AY_MODE 			=> kb_psg_type,
+	
+	SSG0_AUDIO_A	=> ssg_cn0_a,
+	SSG0_AUDIO_B	=> ssg_cn0_b,
+	SSG0_AUDIO_C	=> ssg_cn0_c,
+	
+	SSG1_AUDIO_A	=> ssg_cn1_a,
+	SSG1_AUDIO_B	=> ssg_cn1_b,
+	SSG1_AUDIO_C	=> ssg_cn1_c,
+	
+	SSG0_AUDIO_FM  => ssg_cn0_fm,
+	SSG1_AUDIO_FM  => ssg_cn1_fm,
+	SSG_FM_ENA     => ssg_fm_ena	
+);
+
+ts_enable <= '1' when cpu_iorq_n = '0' and cpu_a_bus(15) = '1' and cpu_a_bus(3 downto 0) = "1101" else '0';
+ts_we     <= '1' when ts_enable = '1' and cpu_wr_n = '0' else '0';
 	
 -- Covox / Soundrive
 U13: entity work.covox
@@ -1013,6 +1022,10 @@ port map(
 	gs_l => gs_l,
 	gs_r => gs_r,
 	
+	fm_l => ssg_cn0_fm,
+	fm_r => ssg_cn1_fm,
+	fm_ena => ssg_fm_ena,
+	
 	audio_l => audio_l,
 	audio_r => audio_r
 );
@@ -1150,7 +1163,7 @@ hdd_type <= port_028b_reg(1);										-- 1 	- HDD type Profi/Nemo
 turbo_fdc_off <= not port_028b_reg(2) and kb_turbofdc;	-- 2 	- TURBO_FDC_off
 fdc_swap <= port_028b_reg(3) or kb_swap_fdd;					-- 3 	- Floppy Disk Drive Selector Change
 sound_off <= port_028b_reg(4);									-- 4 	- Sound_off
-turbo_mode <= kb_turbo; -- '0' & port_028b_reg(6 downto 5);	-- 5,6- Turbo Mode Selector 
+turbo_mode <= '0' & port_028b_reg(6 downto 5);				-- 5,6- Turbo Mode Selector 
 lock_dffd <= port_028b_reg(7);								 	-- 7 	- Lock port DFFD
 ext_rom_bank_pq <= ext_rom_bank when rom0 = '0' else "01";	-- ROMBANK ALT
 
@@ -1424,7 +1437,7 @@ end process;
 -------------------------------------------------------------------------------
 -- CPU Data bus
 
-process (selector, cpu_a_bus, gx0, serial_ms_do_bus, ram_do_bus, mc146818_do_bus, kb_do_bus, zc_do_bus, ssg_cn0_bus, ssg_cn1_bus, port_7ffd_reg, port_dffd_reg,
+process (selector, cpu_a_bus, gx0, serial_ms_do_bus, ram_do_bus, mc146818_do_bus, kb_do_bus, zc_do_bus, ts_do_bus, port_7ffd_reg, port_dffd_reg,
 			vid_attr, port_eff7_reg, joy_bus, ms_z, ms_b, ms_x, ms_y, port_xxC7_reg, port_008b_reg,
 			port_018b_reg, port_028b_reg, gs_do_bus, ide_do_bus, fdd_do_bus, TAPE_IN)
 begin
@@ -1435,8 +1448,7 @@ begin
 		when x"03" => cpu_di_bus <= zc_do_bus;
 		when x"04" => cpu_di_bus <= "11111100";	
 		when x"05" => cpu_di_bus <= joy_bus;
-		when x"06" => cpu_di_bus <= ssg_cn0_bus;
-		when x"07" => cpu_di_bus <= ssg_cn1_bus;
+		when x"06" => cpu_di_bus <= ts_do_bus;
 		when x"08" => cpu_di_bus <= port_dffd_reg;
 		when x"09" => cpu_di_bus <= port_7ffd_reg;
 		when x"0A" => cpu_di_bus <= ms_z(3 downto 0) & '1' & not(ms_b(2)) & not(ms_b(0)) & not(ms_b(1)); -- D0=right, D1 = left, D2 = middle, D3 = fourth, D4..D7 - wheel
@@ -1464,8 +1476,7 @@ selector <=
  	x"03" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and (loa = x"57" or (loa = x"EB" and cpm = '0' and divmmc_en = '1')) ) else 	-- Z-Controller + DivMMC
 	x"04" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and loa = x"77") else 	-- Z-Controller
 	x"05" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and loa = x"1F" and dos_act = '0' and cpm = '0' and joy_mode = "000") else -- Joystick, port #1F
-	x"06" when (cs_fffd = '1' and cpu_rd_n = '0' and ssg_sel = '0') else 			-- TurboSound
-	x"07" when (cs_fffd = '1' and cpu_rd_n = '0' and ssg_sel = '1') else
+	x"06" when (ts_enable = '1' and cpu_rd_n = '0') else 									-- TurboSound
 	x"08" when (cs_dffd = '1' and cpu_rd_n = '0') else										-- port #DFFD
 	x"09" when (cs_7ffd = '1' and cpu_rd_n = '0') else										-- port #7FFD
 	x"0A" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_a_bus = X"FADF" and ms_present = '1' and cpm='0') else	-- Mouse0 port key, z
