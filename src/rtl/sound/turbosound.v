@@ -43,7 +43,8 @@ module turbosound
 	output reg [7:0] SSG1_AUDIO_C,
 	output reg [15:0] SSG1_AUDIO_FM,
 
-	output reg SSG_FM_ENA
+	output reg SSG_FM_ENA,
+	output wire MIDI_TX
 );
 
 
@@ -116,6 +117,7 @@ wire  [7:0] psg_ch_b_0;
 wire  [7:0] psg_ch_c_0;
 wire signed [15:0] opn_0;
 wire  [7:0] DO_0;
+wire [7:0] port_a;
 
 jt03 ym2203_0
 (
@@ -124,7 +126,7 @@ jt03 ym2203_0
 	.cen(CE),
 	.din(ym_di),
 	.addr((BDIR_s|ym_wr) ? ~BC_s : stat_sel),
-	.cs_n(ay_select),
+	.cs_n(~ay_select),
 	.wr_n(~ym_wr),
 	.dout(DO_0),
 	.ay_mode(AY_MODE),
@@ -132,9 +134,12 @@ jt03 ym2203_0
 	.psg_A(psg_ch_a_0),
 	.psg_B(psg_ch_b_0),
 	.psg_C(psg_ch_c_0),
+	.IOA_out(port_a),
 
 	.fm_snd(opn_0)
 );
+
+assign MIDI_TX = port_a[2];
 
 wire  [7:0] psg_ch_a_1;
 wire  [7:0] psg_ch_b_1;
@@ -149,7 +154,7 @@ jt03 ym2203_1
 	.cen(CE),
 	.din(ym_di),
 	.addr((BDIR_s|ym_wr) ? ~BC_s : stat_sel),
-	.cs_n(~ay_select),
+	.cs_n(ay_select),
 	.wr_n(~ym_wr),
 	.dout(DO_1),
 	.ay_mode(AY_MODE),

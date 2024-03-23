@@ -42,10 +42,12 @@ use unisim.vcomponents.all;
 
 entity karabas_go is
     Port ( CLK_50MHZ : in  STD_LOGIC;
-           TAPE_IN : in  STD_LOGIC;
+           
+			  TAPE_IN : in  STD_LOGIC;
            TAPE_OUT : out  STD_LOGIC;
            BEEPER : out  STD_LOGIC;
-           DAC_LRCK : out  STD_LOGIC;
+           
+			  DAC_LRCK : out  STD_LOGIC;
            DAC_DAT : out  STD_LOGIC;
            DAC_BCK : out  STD_LOGIC;
            DAC_MUTE : out  STD_LOGIC;
@@ -62,11 +64,13 @@ entity karabas_go is
            WWR_N : out  STD_LOGIC;
            WRESET_N : out  STD_LOGIC;
            WD : inout  STD_LOGIC_VECTOR (15 downto 0);
-           MA : out  STD_LOGIC_VECTOR (20 downto 0);
+           
+			  MA : out  STD_LOGIC_VECTOR (20 downto 0);
            MD : inout  STD_LOGIC_VECTOR (15 downto 0);
            MWR_N : out  STD_LOGIC_VECTOR (1 downto 0);
            MRD_N : out  STD_LOGIC_VECTOR (1 downto 0);
-           SDR_BA : out  STD_LOGIC_VECTOR (1 downto 0);
+           
+			  SDR_BA : out  STD_LOGIC_VECTOR (1 downto 0);
            SDR_A : out  STD_LOGIC_VECTOR (12 downto 0);
            SDR_CLK : out  STD_LOGIC;
            SDR_DQM : out  STD_LOGIC_VECTOR (1 downto 0);
@@ -74,7 +78,8 @@ entity karabas_go is
            SDR_CAS_N : out  STD_LOGIC;
            SDR_RAS_N : out  STD_LOGIC;
            SDR_DQ : inout  STD_LOGIC_VECTOR (15 downto 0);
-           SD_CS_N : out  STD_LOGIC;
+           
+			  SD_CS_N : out  STD_LOGIC;
            SD_DI : inout  STD_LOGIC;
            SD_DO : inout  STD_LOGIC;
            SD_CLK : out  STD_LOGIC;
@@ -99,16 +104,31 @@ entity karabas_go is
            FT_INT_N : inout  STD_LOGIC;
            FT_CLK : inout  STD_LOGIC;
            FT_OE_N : out  STD_LOGIC;
-           VGA_R : out  STD_LOGIC_VECTOR (7 downto 0);
+           
+			  VGA_R : out  STD_LOGIC_VECTOR (7 downto 0);
            VGA_G : out  STD_LOGIC_VECTOR (7 downto 0);
            VGA_B : out  STD_LOGIC_VECTOR (7 downto 0);
            VGA_HS : out  STD_LOGIC;
            VGA_VS : out  STD_LOGIC;
            V_CLK : out  STD_LOGIC;
-           MCU_CS_N : in  STD_LOGIC;
+           
+			  MCU_CS_N : in  STD_LOGIC;
            MCU_SCK : in  STD_LOGIC;
            MCU_MOSI : in  STD_LOGIC;
-           MCU_MISO : out  STD_LOGIC);
+           MCU_MISO : out  STD_LOGIC;
+			  MCU_IO : in std_logic_vector(3 downto 0);
+			  
+			  MIDI_TX : out std_logic;
+			  MIDI_CLK : out std_logic;
+			  MIDI_RESET_N : out std_logic;
+			  
+			  FLASH_CS_N : out std_logic;
+			  FLASH_DO : in std_logic;
+			  FLASH_DI : out std_logic;
+			  FLASH_SCK : out std_logic;
+			  FLASH_WP_N : out std_logic;
+			  FLASH_HOLD_N : out std_logic
+			  );
 end karabas_go;
 
 architecture Behavioral of karabas_go is
@@ -335,6 +355,7 @@ signal clk_16 			: std_logic;
 signal clk_8 			: std_logic;
 signal clk_vid 		: std_logic;
 signal clk_sdr 		: std_logic;
+signal clk_12        : std_logic;
 
 signal ena_div2	: std_logic := '0';
 signal ena_div4	: std_logic := '0';
@@ -456,6 +477,7 @@ port map(
 	CLK_16 	=> clk_16,
 	CLK_8 	=> clk_8,
 	CLK_SDR  => clk_sdr, -- 84
+	CLK_12   => clk_12,
 
 	ENA_DIV2 => ena_div2, -- 28 / 24
 	ENA_DIV4 => ena_div4, -- 14 / 12
@@ -819,7 +841,8 @@ port map (
 	
 	SSG0_AUDIO_FM  => ssg_cn0_fm,
 	SSG1_AUDIO_FM  => ssg_cn1_fm,
-	SSG_FM_ENA     => ssg_fm_ena	
+	SSG_FM_ENA     => ssg_fm_ena,
+	MIDI_TX        => MIDI_TX
 );
 
 ts_enable <= '1' when cpu_iorq_n = '0' and cpu_a_bus(15) = '1' and cpu_a_bus(3 downto 0) = "1101" else '0';
@@ -1524,6 +1547,28 @@ vid_scandoubler_enable <= not(kb_video);
 divmmc_en <= kb_divmmc_en;
 nemoide_en <= kb_nemoide_en;
 
+FLASH_CS_N <= '1';
+FLASH_DI <= '1';
+FLASH_SCK <= '1';
+FLASH_WP_N <= '1';
+FLASH_HOLD_N <= '1';
+
+MIDI_RESET_N <= not reset;
+
+u_midi_clk: ODDR2 
+port map(
+	Q => MIDI_CLK,
+	C0 => clk_12,
+	C1 => not clk_12,
+	CE => '1',
+	D0 => '1',
+	D1 => '0',
+	R => '0',
+	S => '0'
+);
+
+--MIDI_CLK <= clk_12;
+--MIDI_TX <= '1';
 
 end Behavioral;
 

@@ -20,6 +20,7 @@ port (
 	CLK_16 		: buffer std_logic; -- 16
 	CLK_8			: buffer std_logic; -- 8
 	CLK_SDR		: buffer std_logic; -- 84 (sdram)
+	CLK_12      : buffer std_logic; -- 12
 	
 	ENA_DIV2		: buffer std_logic;
 	ENA_DIV4		: buffer std_logic;
@@ -51,6 +52,7 @@ port map (
 	CLK_OUT2 		=> clk_48,
 	CLK_OUT3 		=> clk_16,
 	CLK_OUT4			=> clk_sdr,
+	CLK_OUT5       => clk_12,
 	LOCKED			=> locked
 	);
 
