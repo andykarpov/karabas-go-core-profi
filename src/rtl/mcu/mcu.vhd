@@ -19,6 +19,8 @@ entity mcu is
     MCU_MISO    : out std_logic := 'Z';
     MCU_SCK     : in std_logic;
 	 MCU_SS 		 : in std_logic;
+	 MCU_SPI_FT_SS 		 : in std_logic;
+	 MCU_SPI_SD2_SS 		 : in std_logic;	 
 
 	 -- usb mouse
 	 MS_X 	 	: out std_logic_vector(7 downto 0) := "00000000";
@@ -73,6 +75,21 @@ entity mcu is
     -- osd command
 	 OSD_COMMAND: out std_logic_vector(15 downto 0);
 	 
+	 -- ft812 exclusive access by mcu
+	 FT_SPI_ON : buffer std_logic := '0'; -- spi access on
+	 FT_VGA_ON : buffer std_logic := '0'; -- vga access on
+
+	 FT_SCK	  : out std_logic := '1';
+	 FT_MOSI	  : out std_logic := '1';
+	 FT_MISO	  : in  std_logic := '1';
+	 FT_CS_N   : out std_logic := '1';
+	 
+	 -- sd2 exclusive access by mcu
+	 SD2_SCK	  : out std_logic := '1';
+	 SD2_MOSI	  : out std_logic := '1';
+	 SD2_MISO	  : in  std_logic := '1';
+	 SD2_CS_N   : out std_logic := '1';	 
+	 
 	 -- busy
 	 BUSY: buffer std_logic := '1'
 	 
@@ -89,6 +106,7 @@ architecture rtl of mcu is
 	constant CMD_ROMBANK    : std_logic_vector(7 downto 0) := x"06";
 	constant CMD_ROMDATA    : std_logic_vector(7 downto 0) := x"07";
 	constant CMD_ROMLOADER  : std_logic_vector(7 downto 0) := x"08";
+	constant CMD_CONTROL    : std_logic_vector(7 downto 0) := x"09";
 
 	-- 11, 12 - usb gamepad, joy : todo
 
@@ -174,7 +192,20 @@ begin
 
 	spi_di <= queue_do; -- when queue_rd_empty = '0' else x"FFFFFF";
 --	queue_rd_req <= spi_di_req;
-	MCU_MISO	<= spi_miso when MCU_SS = '0' else 'Z';
+	
+	MCU_MISO <= 
+		spi_miso when MCU_SS = '0' else 
+		SD2_MISO when MCU_SPI_SD2_SS = '0' else
+		FT_MISO when MCU_SPI_FT_SS = '0' else 
+		'1';		
+	
+	FT_SCK <= MCU_SCK;
+	FT_CS_N <= MCU_SPI_FT_SS;
+	FT_MOSI <= MCU_MOSI;
+	
+	SD2_SCK <= MCU_SCK;
+	SD2_CS_N <= MCU_SPI_SD2_SS;
+	SD2_MOSI <= MCU_MOSI;	
 	
 	-- pull queue data  
 	process (CLK, spi_di_req)
@@ -293,6 +324,11 @@ begin
 
 					-- init done
 					when CMD_INIT_DONE => BUSY <= '0';
+
+					-- ft812 / SD spi control
+					when CMD_CONTROL => 
+								FT_SPI_ON <= spi_do(0);
+								FT_VGA_ON <= spi_do(1);
 
 					-- nope
 					when CMD_NOPE => null;

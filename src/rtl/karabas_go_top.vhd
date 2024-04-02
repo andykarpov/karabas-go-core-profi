@@ -116,7 +116,9 @@ entity karabas_go is
            MCU_SCK : in  STD_LOGIC;
            MCU_MOSI : in  STD_LOGIC;
            MCU_MISO : out  STD_LOGIC;
-			  MCU_IO : in std_logic_vector(3 downto 0);
+			  MCU_SPI_FT_CS_N : in  STD_LOGIC;
+			  MCU_SPI_SD2_CS_N : in  STD_LOGIC;
+			  MCU_SPI_IO : inout  std_logic_vector(1 downto 0);
 			  
 			  MIDI_TX : out std_logic;
 			  MIDI_CLK : out std_logic;
@@ -674,6 +676,8 @@ port map(
 	MCU_MISO => MCU_MISO,
 	MCU_SCK => MCU_SCK,
 	MCU_SS => MCU_CS_N,
+	MCU_SPI_FT_SS => MCU_SPI_FT_CS_N,
+	MCU_SPI_SD2_SS => MCU_SPI_SD2_CS_N,
 	
 	MS_X => hid_ms_x,
 	MS_Y => hid_ms_y,
@@ -715,6 +719,20 @@ port map(
 	
 	SOFTSW_COMMAND => softsw_command,	
 	OSD_COMMAND => osd_command,
+
+	-- ft by mcu isn't supported by this core
+	FT_VGA_ON => open,
+	FT_SPI_ON => open,
+	FT_CS_N => open,
+	FT_MOSI => open,
+	FT_MISO => '1',
+	FT_SCK => open,
+
+	-- sd2 isn't supported by this core
+	SD2_CS_N => open,
+	SD2_MOSI => open,
+	SD2_MISO => '1',
+	SD2_SCK => open,
 	
 	BUSY => mcu_busy
 	

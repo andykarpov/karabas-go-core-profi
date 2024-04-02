@@ -17,6 +17,8 @@ rom_font/implement/xst.scr
 rom_font/simulation/addr_gen.vhd
 rom_font/simulation/bmg_stim_gen.vhd
 rom_font/simulation/bmg_tb_pkg.vhd
+rom_font/simulation/checker.vhd
+rom_font/simulation/data_gen.vhd
 rom_font/simulation/functional/simcmds.tcl
 rom_font/simulation/functional/simulate_isim.sh
 rom_font/simulation/functional/simulate_mti.bat
@@ -46,6 +48,7 @@ rom_font.asy
 rom_font.gise
 rom_font.mif
 rom_font.ngc
+rom_font.sym
 rom_font.v
 rom_font.veo
 rom_font.xco
