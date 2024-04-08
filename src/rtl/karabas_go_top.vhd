@@ -41,7 +41,10 @@ library unisim;
 use unisim.vcomponents.all;
 
 entity karabas_go is
-    Port ( CLK_50MHZ : in  STD_LOGIC;
+	generic (
+		ENABLE_GS : boolean := false
+	);
+    port ( CLK_50MHZ : in  STD_LOGIC;
            
 			  TAPE_IN : in  STD_LOGIC;
            TAPE_OUT : out  STD_LOGIC;
@@ -1072,6 +1075,7 @@ port map(
 );
 
 -- General Sound
+G_GS: if ENABLE_GS generate
 U20: entity work.gs_top
 port map(
 	clk_sys => clk_sdr,
@@ -1115,6 +1119,19 @@ port map(
 	out_r => gs_r
 	
 );
+end generate G_GS;
+
+G_NOGS: if not(ENABLE_GS) generate
+	SDR_CLK <= '0';
+	SDR_DQ <= (others => 'Z');
+	SDR_A <= (others => '0');
+	SDR_DQM <= (others => '0');
+	SDR_BA <= (others => '0');
+	SDR_WE_N <= '1';
+	SDR_RAS_N <= '1';
+	SDR_CAS_N <= '1';
+	gs_oe_n <= '1';
+end generate G_NOGS;
 
 -------------------------------------------------------------------------------
 -- Global signals

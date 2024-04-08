@@ -233,6 +233,7 @@ port map(
 UART_receiver: entity work.uart_rx
 port map(
 	i_Clk => CLK,
+	i_DS80 => DS80,
 	i_RX_Serial => UART_RX,
 	o_RX_DV => zifi_fifo_rx_wr_req,
 	o_RX_Byte => zifi_fifo_rx_di
@@ -241,6 +242,7 @@ port map(
 UART_transmitter: entity work.uart_tx
 port map(
 	i_Clk => CLK,
+	i_DS80 => DS80,
 	i_TX_DV => zifi_tx_begin_req,
 	i_TX_Byte => zifi_fifo_tx_do,
 	o_TX_Active => zifi_txbusy,

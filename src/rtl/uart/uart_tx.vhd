@@ -17,10 +17,12 @@ use ieee.numeric_std.all;
  
 entity UART_TX is
   generic (
-    g_CLKS_PER_BIT : integer := 243     -- Needs to be set correctly
+    g_CLKS_PER_BIT : integer := 486;     
+    g_CLKS_PER_BIT_DS80 : integer := 416 
     );
   port (
     i_Clk       : in  std_logic;
+	 i_DS80      : in  std_logic;
     i_TX_DV     : in  std_logic;
     i_TX_Byte   : in  std_logic_vector(7 downto 0);
     o_TX_Active : out std_logic;
@@ -70,7 +72,7 @@ begin
           o_TX_Serial <= '0';
  
           -- Wait g_CLKS_PER_BIT-1 clock cycles for start bit to finish
-          if r_Clk_Count < g_CLKS_PER_BIT-1 then
+          if (i_DS80 = '1' and r_Clk_Count < g_CLKS_PER_BIT_DS80-1) or (i_DS80 = '0' and r_Clk_Count < g_CLKS_PER_BIT-1) then
             r_Clk_Count <= r_Clk_Count + 1;
             r_SM_Main   <= s_TX_Start_Bit;
           else
@@ -82,7 +84,7 @@ begin
         when s_TX_Data_Bits =>
           o_TX_Serial <= r_TX_Data(r_Bit_Index);
            
-          if r_Clk_Count < g_CLKS_PER_BIT-1 then
+          if (i_DS80 = '1' and r_Clk_Count < g_CLKS_PER_BIT_DS80-1) or (i_DS80 = '0' and r_Clk_Count < g_CLKS_PER_BIT-1) then
             r_Clk_Count <= r_Clk_Count + 1;
             r_SM_Main   <= s_TX_Data_Bits;
           else
@@ -103,7 +105,7 @@ begin
           o_TX_Serial <= '1';
  
           -- Wait g_CLKS_PER_BIT-1 clock cycles for Stop bit to finish
-          if r_Clk_Count < g_CLKS_PER_BIT-1 then
+          if (i_DS80 = '1' and r_Clk_Count < g_CLKS_PER_BIT_DS80-1) or (i_DS80 = '0' and r_Clk_Count < g_CLKS_PER_BIT-1) then
             r_Clk_Count <= r_Clk_Count + 1;
             r_SM_Main   <= s_TX_Stop_Bit;
           else
