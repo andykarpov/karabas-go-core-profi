@@ -57,7 +57,8 @@ port map (
 	);
 
 -- clock switch
-U2 : BUFGMUX_1
+-- U2 : BUFGMUX_1
+U2 : BUFGMUX
 port map (
  I0      => clk_56,
  I1      => clk_48,

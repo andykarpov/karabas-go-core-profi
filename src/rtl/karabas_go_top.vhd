@@ -82,10 +82,10 @@ entity karabas_go is
            SDR_RAS_N : out  STD_LOGIC;
            SDR_DQ : inout  STD_LOGIC_VECTOR (15 downto 0);
            
-			  SD_CS_N : out  STD_LOGIC;
-           SD_DI : inout  STD_LOGIC;
-           SD_DO : inout  STD_LOGIC;
-           SD_CLK : out  STD_LOGIC;
+			  SD_CS_N : out  STD_LOGIC := '1';
+           SD_DI : out  STD_LOGIC := '1';
+           SD_DO : in  STD_LOGIC;
+           SD_CLK : out  STD_LOGIC := '1';
            SD_DET_N : in  STD_LOGIC;
 
            FDC_INDEX : in  STD_LOGIC;
@@ -1167,8 +1167,8 @@ cpu_wait <= '1' when zc_busy = '1' or
 -- SD Card
 
 SD_CS_N	<= zc_cs_n;
-sd_CLK 	<= zc_sclk;
-SD_DI 	<= zc_mosi;
+sd_CLK 	<= zc_sclk when zc_cs_n = '0' else '1';
+SD_DI 	<= zc_mosi when zc_cs_n = '0' else '1';
 
 -------------------------------------------------------------------------------
 -- Ports
@@ -1425,20 +1425,17 @@ end process;
 
 U_ZC_SPI: entity work.zc_spi
 port map(
-	clc     		=> clk_bus,  -- 56
-	ena			=> ena_div2, -- 28
-	
-	di				=> cpu_do_bus,
-	start 		=> zc_spi_start,
-	miso			=> SD_DO,
-	wr_en			=> zc_wr_en,
-	
-	do				=> zc_do_bus,
-	sck			=> zc_sclk,
-	mosi			=> zc_mosi
+	clk_sys => clk_bus, -- 56
+	ena => ena_div2, -- 28
+	tx => zc_wr_en,
+	rx => zc_rd_en,
+	din => cpu_do_bus,
+	dout => zc_do_bus,
+	spi_clk => zc_sclk,
+	spi_di => SD_DO,
+	spi_do => zc_mosi,
+	spi_wait => zc_busy
 );
-
-zc_busy <= '0';
 
 ------------------------ divmmc-----------------------------
 -- Engineer:   Mario Prato
@@ -1601,9 +1598,6 @@ port map(
 	R => '0',
 	S => '0'
 );
-
---MIDI_CLK <= clk_12;
---MIDI_TX <= '1';
 
 end Behavioral;
 

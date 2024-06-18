@@ -11,7 +11,7 @@ use IEEE.std_logic_unsigned.all;
 entity hid_parser is
 	generic 
 	(
-		NUM_KEYS : integer range 1 to 6 := 2; -- number of simultaneously pressed keys to process
+		NUM_KEYS : integer range 1 to 6 := 6; -- number of simultaneously pressed keys to process
 		ALLOW_KEYCODE : boolean := true -- allow ps/2 keycode (tsconf standard)
 	);
 	port
