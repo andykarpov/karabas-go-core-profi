@@ -11,6 +11,9 @@ use IEEE.std_logic_unsigned.all;
 use IEEE.numeric_std.all; 
 
 entity zifi is
+generic(
+	SINGLE_CLOCK : integer := 0
+);
 port(
     CLK         : in std_logic;
     RESET       : in std_logic;
@@ -231,6 +234,9 @@ port map(
 -- esp8266 uart
 
 UART_receiver: entity work.uart_rx
+generic map(
+	SINGLE_CLOCK => SINGLE_CLOCK
+)
 port map(
 	i_Clk => CLK,
 	i_DS80 => DS80,
@@ -240,6 +246,9 @@ port map(
 );
 
 UART_transmitter: entity work.uart_tx
+generic map(
+	SINGLE_CLOCK => SINGLE_CLOCK
+)
 port map(
 	i_Clk => CLK,
 	i_DS80 => DS80,

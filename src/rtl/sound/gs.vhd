@@ -74,6 +74,9 @@ use IEEE.numeric_std.all;
 use IEEE.STD_LOGIC_ARITH.all;
 
 entity gs is
+	generic(
+		SINGLE_CLOCK : integer := 0
+	);
 	Port ( 
 		RESET		: in std_logic;
 		CLK			: in std_logic; -- 56 / 48
@@ -168,7 +171,7 @@ process (CLK, CE)
 begin
 	if CLK'event and CLK = '1' and CE = '1' then
 		cnt <= cnt + 1;
-		if (ds80 = '0' and cnt >= "0101110101") or (ds80 = '1' and cnt >= "0101000000") then	-- 14MHz / 373 (12 MHz / 320) = 0.0375MHz = 37.5kHz, 
+		if (ds80 = '0' and cnt >= "0101110101") or (ds80 = '1' and SINGLE_CLOCK=0 and cnt >= "0101000000") then	-- 14MHz / 373 (12 MHz / 320) = 0.0375MHz = 37.5kHz, 
 			cnt <= (others => '0');
 		end if;
 	end if;
@@ -180,7 +183,7 @@ begin
 	if cpu_iorq_n = '0' and cpu_m1_n = '0' then
 		int_n <= '1';
 	elsif CLK'event and CLK = '1' and CE = '1' then
-		if (ds80 = '0' and cnt >= "0101110101") or (ds80 = '1' and cnt >= "0101000000") then
+		if (ds80 = '0' and cnt >= "0101110101") or (ds80 = '1' and SINGLE_CLOCK=0 and cnt >= "0101000000") then
 			int_n <= '0';
 		end if;
 	end if;

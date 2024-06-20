@@ -12,6 +12,9 @@ library unisim;
 use unisim.vcomponents.all;
 
 entity clock is
+generic (
+	SINGLE_CLOCK : integer := 0
+);
 port (
 	CLK			: in std_logic;
 	DS80			: in std_logic;
@@ -57,15 +60,26 @@ port map (
 	);
 
 -- clock switch
--- U2 : BUFGMUX_1
+G_MUX: if SINGLE_CLOCK=0 generate 
 U2 : BUFGMUX
+generic map(
+	CLK_SEL_TYPE => "ASYNC"
+)
 port map (
  I0      => clk_56,
  I1      => clk_48,
  O       => clk_bus,
  S       => ds80
 );
+end generate G_MUX;
 
+G_NO_MUX: if SINGLE_CLOCK=1 generate
+U2: BUFG
+port map(
+	I => clk_56,
+	O => clk_bus
+);
+end generate G_NO_MUX;
 	
 ARESET 		<= not locked;
 
@@ -113,12 +127,5 @@ begin
 		end if;
 	end if;
 end process;
-
---U_BUFG_DIV2: BUFGCE
---port map (
---	O => CLK_DIV2,
---	I => clk_bus,
---	CE => ena_div2
---);
 
 end rtl;

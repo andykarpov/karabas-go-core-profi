@@ -35,11 +35,13 @@ module vga_scandoubler (
   input wire hsync_ext_n,
   input wire vsync_ext_n,
   input wire csync_ext_n,
+  input wire blanki,
   output reg [5:0] ro,
   output reg [5:0] go,
   output reg [5:0] bo,
   output reg hsync,
-  output reg vsync
+  output reg vsync,
+  output reg blank
   );
  
   parameter [31:0] CLKVIDEO = 12000;
@@ -164,6 +166,9 @@ module vga_scandoubler (
       bo = {bi,bi};
       hsync = csync_ext_n;
       vsync = 1'b1;
+		//hsync = hsync_ext_n;
+		//vsync = vsync_ext_n;
+		blank = blanki;
     end
     else begin  // VGA output
       ro = {ro_vga,ro_vga};
@@ -171,6 +176,7 @@ module vga_scandoubler (
       bo = {bo_vga,bo_vga};
       hsync = hsync_vga;
       vsync = vsync_vga;
+		blank = ((hsync_vga == 1'b0) || (vsync_vga == 1'b0));
     end
   end
     

@@ -53,6 +53,8 @@ module gs_top (
 
 );
 
+parameter SINGLE_CLOCK = 0;
+
 // gs
 
 wire [20:0] gs_mem_addr;
@@ -64,7 +66,7 @@ wire        gs_mem_wr_n;
 wire [8:0] gs_l, gs_r;
 wire [7:0] out_a, out_b, out_c, out_d;
 
-gs gs 
+gs #(.SINGLE_CLOCK(SINGLE_CLOCK)) gs
 (
     .RESET(reset),
     .CLK(clk_bus),

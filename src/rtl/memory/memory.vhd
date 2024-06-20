@@ -8,6 +8,9 @@ use IEEE.std_logic_arith.conv_integer;
 use IEEE.numeric_std.all;
 
 entity memory is
+generic (
+	SINGLE_CLOCK : boolean := false
+);
 port (
 	CLK_BUS		: in std_logic;
 

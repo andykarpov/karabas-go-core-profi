@@ -8,6 +8,9 @@ use IEEE.numeric_std.ALL;
 use IEEE.std_logic_unsigned.all;
 
 entity profi_video is
+	generic (
+		SINGLE_CLOCK : integer := 0
+	);
 	port (
 		CLK_BUS	: in std_logic; -- 48
 		ENA_28	: in std_logic; -- 24
@@ -27,6 +30,7 @@ entity profi_video is
 		pFF_CS	: out std_logic; -- port FF select
 		ATTR_O	: out std_logic_vector(7 downto 0); -- attribute register output
 		BLANK 	: out std_logic;
+		PIX_START : out std_logic;
 		HSYNC		: out std_logic;
 		VSYNC		: out std_logic;		
 		HCNT 		: out std_logic_vector(9 downto 0);
@@ -75,6 +79,7 @@ architecture rtl of profi_video is
 	constant pcpm_v_sync_off_60: natural := (pcpm_scr_v + pcpm_brd_bot_60 + pcpm_blk_down_60 + pcpm_sync_v_60);
 	constant pcpm_v_blk_off_60	: natural := (pcpm_scr_v + pcpm_brd_bot_60 + pcpm_blk_down_60 + pcpm_sync_v_60 + pcpm_blk_up_60);
 	constant pcpm_v_end_60		: natural := 263;
+	constant pcpm_v_end_sc		: natural := 319;
 
 	constant pcpm_h_int_on		: natural := 656; --pspec_sync_h+8;
 	constant pcpm_v_int_on		: natural := 257; --pspec_v_blk_off - 1;
@@ -119,7 +124,9 @@ begin
 				end if;
 			
 				if (h_cnt = pcpm_h_sync_on) then
-					if (v_cnt = pcpm_v_end and mode60 = '0') or (v_cnt = pcpm_v_end_60 and mode60 = '1') then
+					if (v_cnt = pcpm_v_end and mode60 = '0' and SINGLE_CLOCK=0) or 
+						(v_cnt = pcpm_v_end_sc and mode60 = '0' and SINGLE_CLOCK=1) or
+						(v_cnt = pcpm_v_end_60 and mode60 = '1') then
 						v_cnt <= (others => '0');
 					else
 						v_cnt <= v_cnt + 1;
@@ -220,5 +227,10 @@ HCNT <= std_logic_vector(h_cnt);
 VCNT <= std_logic_vector(v_cnt);
 ISPAPER <= '1' when paper='1' and blank1 = '0' else '0';
 BLANK <= blank1;
+
+-- left top pixel start point
+PIX_START <= '1' when h_cnt = pcpm_h_blk_off and v_cnt = pcpm_v_blk_off and mode60 = '0' else 
+				 '1' when h_cnt = pcpm_h_blk_off and v_cnt = pcpm_v_blk_off_60 and mode60 = '1' else 
+				 '0';
 
 end architecture;

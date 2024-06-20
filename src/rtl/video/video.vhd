@@ -8,6 +8,9 @@ use IEEE.numeric_std.ALL;
 use IEEE.std_logic_unsigned.all;
 
 entity video is
+	generic (
+		SINGLE_CLOCK : integer := 0
+	);
 	port (
 		CLK_BUS 	: in std_logic; -- 56 MHz
 		ENA_28	: in std_logic; -- 28 MHz
@@ -33,6 +36,8 @@ entity video is
 		
 		HSYNC		: out std_logic;
 		VSYNC		: out std_logic;
+		BLANK 	: out std_logic;
+		PIX_START : out std_logic;
 		
 		DS80		: in std_logic; -- 1 = Profi CP/M mode. 0 = standard mode
 		CS7E 		: in std_logic := '0';
@@ -80,6 +85,7 @@ architecture rtl of video is
 	signal hsync_profi : std_logic;
 	signal vsync_profi : std_logic;
 	signal blank_profi : std_logic;
+	signal pix_start_profi : std_logic;
 	signal pFF_CS_profi : std_logic;
 	signal attr_o_profi : std_logic_vector(7 downto 0);
 	
@@ -95,6 +101,8 @@ architecture rtl of video is
 	signal i_spec : std_logic;
 	signal hsync_spec : std_logic;
 	signal vsync_spec : std_logic;
+	signal blank_spec : std_logic;
+	signal pix_start_spec : std_logic;
 	signal pFF_CS_spec : std_logic;
 	signal attr_o_spec : std_logic_vector(7 downto 0);
 
@@ -105,6 +113,9 @@ architecture rtl of video is
 begin
 
 	U_PENT: entity work.pentagon_video 
+	generic map (
+		SINGLE_CLOCK => SINGLE_CLOCK
+	)
 	port map (
 		CLK_BUS => CLK_BUS, -- 56
 		ENA_28 => ENA_28, -- 28
@@ -127,6 +138,8 @@ begin
 		
 		HSYNC => hsync_spec,
 		VSYNC => vsync_spec,
+		BLANK => blank_spec,
+		PIX_START => pix_start_spec,
 
 		HCNT => hcnt_spec,
 		VCNT => vcnt_spec,
@@ -138,6 +151,9 @@ begin
 	);
 
 	U_PROFI: entity work.profi_video 
+	generic map (
+		SINGLE_CLOCK => SINGLE_CLOCK
+	)	
 	port map (
 		CLK_BUS => CLK_BUS, -- 48
 		ENA_28 => ENA_28, -- 24
@@ -159,6 +175,7 @@ begin
 		RGB => rgb_profi,
 		I 	 => i_profi,
 		BLANK => blank_profi,
+		PIX_START => pix_start_profi,
 		
 		HSYNC => hsync_profi,
 		VSYNC => vsync_profi,
@@ -178,6 +195,8 @@ begin
 
 	HSYNC <= hsync_profi when ds80 = '1' else hsync_spec;
 	VSYNC <= vsync_profi when ds80 = '1' else vsync_spec;	
+	BLANK <= blank_profi when ds80 = '1' else blank_spec;
+	PIX_START <= pix_start_profi when ds80 = '1' else pix_start_spec;	
 	
 	HCNT <= hcnt_profi when ds80 = '1' else hcnt_spec;
 	VCNT <= vcnt_profi when ds80 = '1' else vcnt_spec;

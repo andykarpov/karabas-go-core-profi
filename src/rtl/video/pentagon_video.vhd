@@ -8,6 +8,9 @@ use IEEE.numeric_std.ALL;
 use IEEE.std_logic_unsigned.all;
 
 entity pentagon_video is
+	generic (
+		SINGLE_CLOCK : integer := 0
+	);
 	port (
 		CLK_BUS 	: in std_logic; -- 56 MHz
 		ENA_28	: in std_logic; -- 28 MHz
@@ -29,8 +32,10 @@ entity pentagon_video is
 		I			: out std_logic; -- brightness
 		HSYNC		: out std_logic;
 		VSYNC		: out std_logic;
-		HCNT 		: out std_logic_vector(9 downto 0);
-		VCNT 		: out std_logic_vector(8 downto 0);	
+		BLANK 	: out std_logic;
+		PIX_START : out std_logic;
+		HCNT 		: buffer std_logic_vector(9 downto 0);
+		VCNT 		: buffer std_logic_vector(8 downto 0);	
 		ISPAPER 	: out std_logic := '0';
 		BLINK 	: out std_logic;
 		SCREEN_MODE : in std_logic_vector(1 downto 0) := "00"; -- screen mode: 00 = pentagon, 01 - 128 classic, 10, 11 - reserver
@@ -298,5 +303,10 @@ begin
 	BLINK <= invert(4);
 	
 	COUNT_BLOCK <= '1' when paper = '0' and (chr_col_cnt(2) = '0' or hor_cnt(0) = '0') else '0';
+
+	-- left top pixel start point
+	PIX_START <= '1' when HCNT = 256+64+64 and VCNT = 192+48+16 else '0';
+	
+	BLANK <= blank_r;
 
 end architecture;
