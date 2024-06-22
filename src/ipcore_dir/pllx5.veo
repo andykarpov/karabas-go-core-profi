@@ -60,7 +60,7 @@
 //----------------------------------------------------------------------------
 // "Input Clock   Freq (MHz)    Input Jitter (UI)"
 //----------------------------------------------------------------------------
-// __primary__________28.000_____________0.01
+// __primary__________28.000____________0.010
 
 // The following must be inserted into your Verilog file for this
 // core to be instantiated. Change the instance name and port connections
@@ -75,6 +75,5 @@
     .CLK_OUT1(CLK_OUT1),     // OUT
     .CLK_OUT2(CLK_OUT2),     // OUT
     // Status and control signals
-    .RESET(RESET),// IN
     .LOCKED(LOCKED));      // OUT
 // INST_TAG_END ------ End INSTANTIATION Template ---------

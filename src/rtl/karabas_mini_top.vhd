@@ -512,7 +512,7 @@ port map(
 	CLK_IN1 => v_clk_int,
 	CLK_OUT1 => clk_hdmi,
 	CLK_OUT2 => clk_hdmi_n,
-	RESET => hdmi_reset,
+--	RESET => hdmi_reset,
 	LOCKED => lockedx5
 );	
 
@@ -688,8 +688,8 @@ port map(
 	go => int_vga_g(7 downto 2),
 	bo => int_vga_b(7 downto 2),
 	hsync => int_vga_hs,
-	vsync => int_vga_vs
---	blank => int_vga_blank
+	vsync => int_vga_vs,
+	blank => int_vga_blank
 );
 
 int_vga_r(1 downto 0) <= (others => '0');
@@ -706,7 +706,7 @@ port map(
 	ds80 => ds80,
 	pix_start => vid_pix_start,
 	screen_mode => kb_screen_mode,
-	blank => int_vga_blank
+	blank => open --int_vga_blank
 );
 
 -- TODO: multiplex with FT signals
@@ -916,8 +916,8 @@ port map(
 	sd_rx => ADC_DOUT,
 	l_data_tx => (others => '0'),
 	r_data_tx => (others => '0'),
-	l_data_rx => adc_l,
-	r_data_rx => adc_r
+	l_data_rx => open, -- adc_l,
+	r_data_rx => open --adc_r
 );
 
 -- ADC_CLK output buf

@@ -68,7 +68,6 @@ module pllx5_exdes
   // High bits of counters driven by clocks
   output [2:1]  COUNT,
   // Status and control signals
-  input         RESET,
   output        LOCKED
  );
 
@@ -79,7 +78,7 @@ module pllx5_exdes
   localparam    NUM_C     = 2;
   genvar        count_gen;
   // When the clock goes out of lock, reset the counters
-  wire          reset_int = !LOCKED || RESET || COUNTER_RESET;
+  wire          reset_int = !LOCKED || COUNTER_RESET;
 
    reg [NUM_C:1] rst_sync;
    reg [NUM_C:1] rst_sync_int;
@@ -108,7 +107,6 @@ module pllx5_exdes
     .CLK_OUT1           (clk_int[1]),
     .CLK_OUT2           (clk_int[2]),
     // Status and control signals
-    .RESET              (RESET),
     .LOCKED             (LOCKED));
 
 genvar clk_out_pins;

@@ -54,7 +54,6 @@ create_clock -name CLK_IN1 -period 35.714 [get_ports CLK_IN1]
 set_propagated_clock CLK_IN1
 set_input_jitter CLK_IN1 0.35714
 
-set_false_path -from [get_ports "RESET"]
 
 # Derived clock periods. These are commented out because they are 
 #   automatically propogated by the tools

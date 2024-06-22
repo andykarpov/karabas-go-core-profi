@@ -179,7 +179,7 @@ module vga_scandoubler (
 		blank = ((hsync_vga == 1'b0) || (vsync_vga == 1'b0));
     end
   end
-    
+  
 endmodule
 
 // Una memoria de doble puerto: uno para leer, y otro para

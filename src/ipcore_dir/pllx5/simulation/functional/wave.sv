@@ -105,7 +105,7 @@ group set -comment {}
 group clear 0 end
 
 group insert \
-   {nc::pllx5_tb.RESET}    {nc::pllx5_tb.LOCKED}
+   {nc::pllx5_tb.LOCKED}
 
 
 set id [waveform add -signals [list {nc::pllx5_tb.COUNT} ]]
