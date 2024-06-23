@@ -336,6 +336,8 @@ signal adc_r 			: std_logic_vector(23 downto 0);
 -- Output audio mix
 signal audio_mix_l	: std_logic_vector(15 downto 0);
 signal audio_mix_r	: std_logic_vector(15 downto 0);
+signal audio_mix_l_r	: std_logic_vector(15 downto 0);
+signal audio_mix_r_r	: std_logic_vector(15 downto 0);
 
 -- SAA1099
 signal saa_wr_n		: std_logic;
@@ -918,8 +920,8 @@ port map(
 	sd_rx => ADC_DOUT,
 	l_data_tx => (others => '0'),
 	r_data_tx => (others => '0'),
-	l_data_rx => open, -- adc_l,
-	r_data_rx => open --adc_r
+	l_data_rx => adc_l,
+	r_data_rx => adc_r
 );
 
 -- ADC_CLK output buf
@@ -946,8 +948,8 @@ port map(
 	I_HSYNC => host_vga_hs,
 	I_VSYNC => host_vga_vs,
 	I_AUDIO_ENABLE => '1',
-	I_AUDIO_PCM_L => audio_mix_l(15 downto 0),
-	I_AUDIO_PCM_R => audio_mix_r(15 downto 0),
+	I_AUDIO_PCM_L => audio_mix_l_r(15 downto 0),
+	I_AUDIO_PCM_R => audio_mix_r_r(15 downto 0),
 	O_RED => tmds_red,
 	O_GREEN => tmds_green,
 	O_BLUE => tmds_blue
@@ -1133,7 +1135,7 @@ port map(
 -- Audio mixer
 U19: entity work.audio_mixer
 port map(
-	clk => v_clk_int,
+	clk => clk_bus,
 
 	mute => loader_act or kb_pause or sound_off,
 	mode => kb_psg_mix,
@@ -1171,6 +1173,14 @@ port map(
 	audio_l => audio_mix_l,
 	audio_r => audio_mix_r
 );
+
+process (v_clk_int)
+begin
+	if falling_edge(v_clk_int) then 
+		audio_mix_l_r <= audio_mix_l;
+		audio_mix_r_r <= audio_mix_r;
+	end if;
+end process;
 
 -- General Sound
 G_GS: if ENABLE_GS generate

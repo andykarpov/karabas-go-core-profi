@@ -65,11 +65,14 @@ module vga_scandoubler (
 
   // в режиме профи горизонтальная и вертикальная синхра начинается после front porche,
   // поэтому в условиях blank_h и blank_v при ds80=1 условие чуть сложнее
-  parameter [9:0] PROF_BLANK_H = 128; // (32 fp + 64 hs + 64 bp)
+  parameter [9:0] PROF_BLANK_H = 128; //224; // (32 fp + 64 hs + 64 bp)
   parameter [9:0] PROF_BLANK_V = 64; // (16 fp + 32 vs + 32 bp)
 
 	// счетчики
   reg [10:0] hcnt = 11'd0, vcnt = 11'd0;  
+  
+  // spec: 896x640 full, hdmi 576p: 768x576 (896-768=128, 640-576=64)
+  // profi:768x640 full, hdmi 576p: 544x576 (768-544=224, 640-576=64)
 
 	// сигналы горизонтального и вертикального blank
   wire blank_h = (ds80) ? (hcnt < PROF_BLANK_H) : (hcnt < SPEC_BLANK_H);

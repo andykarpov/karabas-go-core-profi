@@ -58,9 +58,9 @@ architecture rtl of audio_mixer is
 	 signal comp_r 			: std_logic_vector(15 downto 0);
 begin
 
-process (clk)
+process (mute, mode, speaker, ssg0_a, ssg0_b, ssg0_c, ssg1_a, ssg1_b, ssg1_c, covox_a, covox_b, covox_c, covox_d, covox_fb, saa_l, saa_r, gs_l, gs_r)
 begin
-    if rising_edge(clk) then
+--    if rising_edge(clk) then
         mix_mono <= 	
 				        ("0000000000000" & speaker & "0000000000") +
 				        ("000000000000"  & ssg0_a &        "0000") + 
@@ -77,9 +77,9 @@ begin
 				        ("000000000000"  & saa_l &         "0000") + 				
 				        ("000000000000"  & saa_r &         "0000") + 
 						  ("000000000000"  & gs_l &           "000") + 
-						  ("000000000000"  & gs_r &           "000") +
-						  ("000000000000"  & adc_l(23 downto 16) & "000") + 
-						  ("000000000000"  & adc_r(23 downto 16) & "000");
+						  ("000000000000"  & gs_r &           "000");-- +
+--						  ("000000000000"  & adc_l(23 downto 16) & "000") + 
+--						  ("000000000000"  & adc_r(23 downto 16) & "000");
 						  
 		  -- mute
 		  if mute = '1' then 
@@ -102,8 +102,8 @@ begin
 				        ("000000000000"  & covox_b &       "0000") + 
 				        ("000000000000"  & covox_fb &      "0000") + 
 				        ("000000000000"  & saa_l  &        "0000") + 
-						  ("000000000000"  & gs_l &           "000") +
-						  ("000000000000"  & adc_l(23 downto 16) & "000");
+						  ("000000000000"  & gs_l &           "000");-- +
+--						  ("000000000000"  & adc_l(23 downto 16) & "000");
 			mix_r <=   ("0000000000000" & speaker & "0000000000") + -- ACB: R = B + C/2
 				        ("000000000000"  & ssg0_b &        "0000") + 
 				        ("0000000000000"  & ssg0_c &        "000") + 
@@ -113,8 +113,8 @@ begin
 				        ("000000000000"  & covox_d &       "0000") + 
 				        ("000000000000"  & covox_fb &      "0000") + 
 				        ("000000000000"  & saa_r &         "0000") +
-						  ("000000000000"  & gs_r &           "000") +
-						  ("000000000000"  & adc_r(23 downto 16) & "000");
+						  ("000000000000"  & gs_r &           "000");-- +
+--						  ("000000000000"  & adc_r(23 downto 16) & "000");
 		  -- ABC
 		  else 
 		   mix_l <=   ("0000000000000" & speaker & "0000000000") +  -- ABC: L = A + B/2
@@ -126,8 +126,8 @@ begin
 				        ("000000000000"  & covox_b &       "0000") + 
 				        ("000000000000"  & covox_fb &      "0000") + 
 				        ("000000000000"  & saa_l  &        "0000") +
-						  ("000000000000"  & gs_l &           "000") +
-						  ("000000000000"  & adc_l(23 downto 16) & "000");
+						  ("000000000000"  & gs_l &           "000");-- +
+--						  ("000000000000"  & adc_l(23 downto 16) & "000");
 			mix_r <=   ("0000000000000" & speaker & "0000000000") + -- ABC: R = C + B/2
 				        ("000000000000"  & ssg0_c &        "0000") + 
 				        ("0000000000000"  & ssg0_b &        "000") + 
@@ -137,10 +137,10 @@ begin
 				        ("000000000000"  & covox_d &       "0000") + 
 				        ("000000000000"  & covox_fb &      "0000") + 
 				        ("000000000000"  & saa_r &         "0000") +
-						  ("000000000000"  & gs_r &           "000") +
-						  ("000000000000"  & adc_r(23 downto 16) & "000");
+						  ("000000000000"  & gs_r &           "000");-- +
+--						  ("000000000000"  & adc_r(23 downto 16) & "000");
 		  end if;
-    end if;
+--    end if;
 end process;
 
 u_comp_l: entity work.compressor
@@ -157,7 +157,7 @@ port map(
 	signal_out => comp_r
 );
 
-audio_l <= fm_l when fm_ena = '1' else comp_l;
-audio_r <= fm_r when fm_ena = '1' else comp_r;
+audio_l <= fm_l when fm_ena = '1' else mix_l(15 downto 0); -- comp_l;
+audio_r <= fm_r when fm_ena = '1' else mix_r(15 downto 0); --comp_r;
 
 end rtl;	

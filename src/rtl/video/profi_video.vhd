@@ -42,19 +42,20 @@ entity profi_video is
 end entity;
 
 architecture rtl of profi_video is
+-- 896
 -- Profi-CPM screen mode
 	constant pcpm_scr_h			: natural := 512;
-	constant pcpm_brd_right		: natural :=  48;	-- 32 для выравнивания из-за задержки на чтение vid_reg и attr_reg задано на 8 точек больше
-	constant pcpm_blk_front		: natural :=  32; -- 48
+	constant pcpm_brd_right		: natural :=  128; -- 48;	-- 32 для выравнивания из-за задержки на чтение vid_reg и attr_reg задано на 8 точек больше
+	constant pcpm_blk_front		: natural :=  0; --32; -- 48
 	constant pcpm_sync_h			: natural :=  64; -- 64
-	constant pcpm_blk_back		: natural :=  64; -- 80
-	constant pcpm_brd_left		: natural :=  48;	-- 32 для выравнивания из-за задержки на чтение vid_reg и attr_reg задано на 8 точек меньше
+	constant pcpm_blk_back		: natural :=  64; -- 64 -- 80
+	constant pcpm_brd_left		: natural :=  128; --48;	-- 32 для выравнивания из-за задержки на чтение vid_reg и attr_reg задано на 8 точек меньше
 
 	constant pcpm_scr_v			: natural := 240;
 	constant pcpm_brd_bot		: natural :=  16;--16
-	constant pcpm_blk_down		: natural :=  8;--8
+	constant pcpm_blk_down		: natural :=  0; --8;--8
 	constant pcpm_sync_v			: natural :=  16;--16
-	constant pcpm_blk_up			: natural :=  16;--16
+	constant pcpm_blk_up			: natural :=  16+8;--16
 	constant pcpm_brd_top		: natural :=  16;--16
 	
 	constant pcpm_brd_bot_60	: natural :=  0;--16
@@ -67,7 +68,7 @@ architecture rtl of profi_video is
 	constant pcpm_h_sync_on		: natural := (pcpm_scr_h + pcpm_brd_right + pcpm_blk_front) - 1;
 	constant pcpm_h_sync_off	: natural := (pcpm_scr_h + pcpm_brd_right + pcpm_blk_front + pcpm_sync_h);
 	constant pcpm_h_blk_off		: natural := (pcpm_scr_h + pcpm_brd_right + pcpm_blk_front + pcpm_sync_h + pcpm_blk_back);
-	constant pcpm_h_end			: natural := 767;
+	constant pcpm_h_end			: natural := 895; --767;
 
 	constant pcpm_v_blk_on		: natural := (pcpm_scr_v + pcpm_brd_bot) - 1;
 	constant pcpm_v_sync_on		: natural := (pcpm_scr_v + pcpm_brd_bot + pcpm_blk_down) - 1;
