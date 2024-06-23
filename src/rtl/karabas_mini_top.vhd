@@ -677,6 +677,8 @@ port map(
 	clk14en => ena_div4,
 	enable_scandoubling => '1',
 	disable_scaneffect => '1',
+	ds80 => ds80,
+	screen_mode => kb_screen_mode,
 	ri => vid_rgb_osd(8 downto 6),
 	gi => vid_rgb_osd(5 downto 3),
 	bi => vid_rgb_osd(2 downto 0),
