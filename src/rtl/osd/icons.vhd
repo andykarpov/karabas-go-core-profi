@@ -2,12 +2,12 @@ library IEEE;
 use IEEE.std_logic_1164.all; 
 use IEEE.numeric_std.ALL;
 use IEEE.std_logic_unsigned.all;
+library unisim;
+use unisim.vcomponents.all;
 
 entity icons is
 	port (
 		CLK		: in std_logic;
-		ENA_28	: in std_logic;
-		ENA_14 	: in std_logic;
 		RGB_I 	: in std_logic_vector(8 downto 0);
 		RGB_O 	: out std_logic_vector(8 downto 0);
 		DS80		: in std_logic;
@@ -40,8 +40,8 @@ architecture rtl of icons is
 
 	 constant icon_color: std_logic_vector(8 downto 0) := "000011001";
 	 
-	 constant icons_start_profi_h : natural := 264;
-	 constant icons_start_spec_h : natural := 288;
+	 constant icons_start_profi_h : natural := 256 + 8;
+	 constant icons_start_spec_h : natural := 256 + 32;
 	 constant icons_start_v : natural := 0;
 	 constant icon_w : natural := 16;
 	 constant icon_h : natural := 16;
@@ -61,7 +61,7 @@ begin
 	 U_FONT_ICONS: entity work.rom_font2
     port map (
         addra  => icon_addr,
-        clka   => CLK and ena_14,
+        clka   => clk,
         douta  => icon_pixel
     );
 		
@@ -83,25 +83,23 @@ begin
 	 icon_addr <= icon_y(3) & icon_pos &  not(icon_x(3)) & icon_y(2 downto 0) & icon_x(2 downto 0) when DS80='1' else 
 					  icon_y(3) & icon_pos &  icon_x(3) & icon_y(2 downto 0) & icon_x(2 downto 0); --spectrum pos shifter 8 px
 
-	 process(CLK, ENA_28, ENA_14, STATUS_FD, STATUS_SD, STATUS_CF)
+	 process(clk, STATUS_FD, STATUS_SD, STATUS_CF)
 	 begin 
-		if (rising_edge(CLK)) then
-			if (ENA_28 = '1' and ENA_14 = '1') then
-				if (STATUS_FD = '1') then 
-					cnt_icon_fd <= (others => '0');
-				elsif (cnt_icon_fd < "111111111111111111111") then 
-					cnt_icon_fd <= cnt_icon_fd + 1;
-				end if;
-				if (STATUS_SD = '1') then 
-					cnt_icon_sd <= (others => '0');
-				elsif (cnt_icon_sd < "111111111111111111111") then 
-					cnt_icon_sd <= cnt_icon_sd + 1;
-				end if;
-				if (STATUS_CF = '1') then 
-					cnt_icon_cf <= (others => '0');
-				elsif (cnt_icon_cf < "111111111111111111111") then 
-					cnt_icon_cf <= cnt_icon_cf + 1;
-				end if;
+		if (rising_edge(clk)) then
+			if (STATUS_FD = '1') then 
+				cnt_icon_fd <= (others => '0');
+			elsif (cnt_icon_fd < "111111111111111111111") then 
+				cnt_icon_fd <= cnt_icon_fd + 1;
+			end if;
+			if (STATUS_SD = '1') then 
+				cnt_icon_sd <= (others => '0');
+			elsif (cnt_icon_sd < "111111111111111111111") then 
+				cnt_icon_sd <= cnt_icon_sd + 1;
+			end if;
+			if (STATUS_CF = '1') then 
+				cnt_icon_cf <= (others => '0');
+			elsif (cnt_icon_cf < "111111111111111111111") then 
+				cnt_icon_cf <= cnt_icon_cf + 1;
 			end if;
 		end if;
 	 end process;

@@ -8,10 +8,13 @@ use IEEE.numeric_std.ALL;
 use IEEE.std_logic_unsigned.all;
 
 entity profi_video is
+	generic (
+		TEST : integer := 0
+	);
 	port (
-		CLK_BUS	: in std_logic; -- 48
-		ENA_28	: in std_logic; -- 24
-		ENA_14	: in std_logic; -- 12					
+		CLK		: in std_logic; -- 12
+		VMODE		: in std_logic_vector(3 downto 0);
+		
 		TURBO 	: in std_logic_vector(2 downto 0) := "000";
 		INTA		: in std_logic;
 		INT		: out std_logic;
@@ -23,16 +26,15 @@ entity profi_video is
 		
 		RGB		: out std_logic_vector(2 downto 0);	-- RGB
 		I 			: out std_logic;
-		MODE60	: in std_logic := '0'; -- 
 		pFF_CS	: out std_logic; -- port FF select
 		ATTR_O	: out std_logic_vector(7 downto 0); -- attribute register output
 		BLANK 	: out std_logic;
+
+		ACTIVE 	: out std_logic;
+		LOCK 		: out std_logic;
+
 		HSYNC		: out std_logic;
-		VSYNC		: out std_logic;		
-		HCNT 		: out std_logic_vector(9 downto 0);
-		VCNT 		: out std_logic_vector(8 downto 0);	
-		ISPAPER  : out std_logic := '0';
-		DS80 		: in std_logic
+		VSYNC		: out std_logic
 
 	);
 end entity;
@@ -75,7 +77,7 @@ architecture rtl of profi_video is
 	constant pcpm_v_sync_off_60: natural := (pcpm_scr_v + pcpm_brd_bot_60 + pcpm_blk_down_60 + pcpm_sync_v_60);
 	constant pcpm_v_blk_off_60	: natural := (pcpm_scr_v + pcpm_brd_bot_60 + pcpm_blk_down_60 + pcpm_sync_v_60 + pcpm_blk_up_60);
 	constant pcpm_v_end_60		: natural := 263;
-
+	
 	constant pcpm_h_int_on		: natural := 656; --pspec_sync_h+8;
 	constant pcpm_v_int_on		: natural := 257; --pspec_v_blk_off - 1;
 	constant pcpm_h_int_on_turbo	: natural := 706;
@@ -104,102 +106,107 @@ architecture rtl of profi_video is
 	signal i78				: std_logic;
 	signal selector 		: std_logic_vector(2 downto 0);
 	signal blank1 			: std_logic;
+	signal mode60 			: std_logic;
+	signal ds80				: std_logic;
 
 begin
+
+ds80   <= vmode(3);
+mode60 <= vmode(0);
 
 -- sync, counters
-process (CLK_BUS, ENA_28, ENA_14)
+process (CLK)
 begin
-	if rising_edge(CLK_BUS) then
-			if (ENA_28 = '1' and ENA_14 = '1') then		-- 12MHz			
-				if (h_cnt = pcpm_h_end) then
-					h_cnt <= (others => '0');
-				else
-					h_cnt <= h_cnt + 1;
-				end if;
-			
-				if (h_cnt = pcpm_h_sync_on) then
-					if (v_cnt = pcpm_v_end and mode60 = '0') or (v_cnt = pcpm_v_end_60 and mode60 = '1') then
-						v_cnt <= (others => '0');
-					else
-						v_cnt <= v_cnt + 1;
-					end if;
-				end if;
-
-				if (v_cnt = pcpm_v_sync_on and mode60 = '0') or (v_cnt = pcpm_v_sync_on_60 and mode60 = '1') then
-					v_sync <= '0';
-				elsif (v_cnt = pcpm_v_sync_off and mode60 = '0') or (v_cnt = pcpm_v_sync_off_60 and mode60 = '1') then
-					v_sync <= '1';
-				end if;
-
-				if (h_cnt = pcpm_h_sync_on) then
-					h_sync <= '0';
-				elsif (h_cnt = pcpm_h_sync_off) then
-					h_sync <= '1';
-				end if;
-
-				
-				if (h_cnt > pcpm_h_int_on and v_cnt = pcpm_v_int_on and turbo = "000") or (h_cnt > pcpm_h_int_on_turbo and v_cnt = pcpm_v_int_on and turbo /= "000") then -- or (h_cnt < pcpm_h_int_off and v_cnt = pcpm_v_int_off) then
-					int_sig <= '0';
-				else
-					int_sig <= '1';
-				end if;
-				
-				--BL_INT
-				if INTA = '0' then
-					bl_int <= '1';
-				elsif h_cnt(4)= '1' then
-					bl_int <= not int_sig;
-				end if;
-				
+	if rising_edge(CLK) then
+		if (h_cnt = pcpm_h_end) then
+			h_cnt <= (others => '0');
+		else
+			h_cnt <= h_cnt + 1;
+		end if;
+	
+		if (h_cnt = pcpm_h_sync_on) then
+			if (v_cnt = pcpm_v_end and mode60 = '0') or 
+				(v_cnt = pcpm_v_end_60 and mode60 = '1') then
+				v_cnt <= (others => '0');
+			else
+				v_cnt <= v_cnt + 1;
 			end if;
+		end if;
+
+		if (v_cnt = pcpm_v_sync_on and mode60 = '0') or (v_cnt = pcpm_v_sync_on_60 and mode60 = '1') then
+			v_sync <= '0';
+		elsif (v_cnt = pcpm_v_sync_off and mode60 = '0') or (v_cnt = pcpm_v_sync_off_60 and mode60 = '1') then
+			v_sync <= '1';
+		end if;
+
+		if (h_cnt = pcpm_h_sync_on) then
+			h_sync <= '0';
+		elsif (h_cnt = pcpm_h_sync_off) then
+			h_sync <= '1';
+		end if;
+
+		
+		if (h_cnt > pcpm_h_int_on and v_cnt = pcpm_v_int_on and turbo = "000") or 
+			(h_cnt > pcpm_h_int_on_turbo and v_cnt = pcpm_v_int_on and turbo /= "000") then -- or (h_cnt < pcpm_h_int_off and v_cnt = pcpm_v_int_off) then
+			int_sig <= '0';
+		else
+			int_sig <= '1';
+		end if;
+		
+		--BL_INT
+		if INTA = '0' then
+			bl_int <= '1';
+		elsif h_cnt(4)= '1' then
+			bl_int <= not int_sig;
+		end if;
 	end if;
 end process;
 
 -- pixel / attr registers
-process( CLK_BUS, ENA_28, ENA_14, h_cnt )
-	begin
-		if rising_edge(CLK_BUS) then
-			if ENA_28 = '1' and ENA_14 = '1' then
-				if h_cnt(2 downto 0) = 7 then
-					pixel_reg <= vid_reg;
-					attr_reg <= at_reg;
-					paper1 <= paper;
-					blank1 <= blank_sig;
-				end if;
-			end if;
-		end if;
-	end process;
-
--- memory read
-process(CLK_BUS, ENA_28, ENA_14, h_cnt)
+process( CLK)
 begin
-	if rising_edge(CLK_BUS) then 
-		if (ENA_28 = '1' and ENA_14 = '1') then 
-			case h_cnt(2 downto 0) is 
-				when "001" => VID_RD <= '0'; A <= std_logic_vector((not h_cnt(3)) & v_cnt(7 downto 6)) & std_logic_vector(v_cnt(2 downto 0)) & std_logic_vector(v_cnt(5 downto 3)) & std_logic_vector(h_cnt(8 downto 4));
-				when "010" => vid_reg <= DI;
-				when "011" => VID_RD <= '1'; A <= std_logic_vector((not h_cnt(3)) & v_cnt(7 downto 6)) & std_logic_vector(v_cnt(2 downto 0)) & std_logic_vector(v_cnt(5 downto 3)) & std_logic_vector(h_cnt(8 downto 4));
-				when "100" => at_reg <= DI;
-				when others => null;
-			end case;
+	if rising_edge(CLK) then
+		if h_cnt(2 downto 0) = 7 then
+			pixel_reg <= vid_reg;
+			attr_reg <= at_reg;
+			paper1 <= paper;
+			blank1 <= blank_sig;
 		end if;
 	end if;
 end process;
 
-process (CLK_BUS, ENA_28, ENA_14, blank_sig, paper1, pixel_reg, h_cnt, attr_reg, BORDER)
+-- memory read
+process(CLK)
+begin
+	if rising_edge(CLK) then 
+		case h_cnt(2 downto 0) is 
+			when "001" => VID_RD <= '0'; A <= std_logic_vector((not h_cnt(3)) & v_cnt(7 downto 6)) & std_logic_vector(v_cnt(2 downto 0)) & std_logic_vector(v_cnt(5 downto 3)) & std_logic_vector(h_cnt(8 downto 4));
+			when "010" => vid_reg <= DI;
+			when "011" => VID_RD <= '1'; A <= std_logic_vector((not h_cnt(3)) & v_cnt(7 downto 6)) & std_logic_vector(v_cnt(2 downto 0)) & std_logic_vector(v_cnt(5 downto 3)) & std_logic_vector(h_cnt(8 downto 4));
+			when "100" => at_reg <= DI;
+			when others => null;
+		end case;
+	end if;
+end process;
+
+process (CLK, blank_sig, paper1, pixel_reg, h_cnt, attr_reg, BORDER)
 begin 
-	if rising_edge(CLK_BUS) then 
-		if ENA_28 = '1' and ENA_14 = '1' then
-			if (blank1 = '1') then 
-				rgbi <= "0000";
-			elsif paper1 = '1' and (pixel_reg(7 - to_integer(h_cnt(2 downto 0)))) = '0' then 
-				rgbi <= attr_reg(4) & attr_reg(5) & attr_reg(3) & i78;
-			elsif paper1 = '1' and (pixel_reg(7 - to_integer(h_cnt(2 downto 0)))) = '1' then 
-				rgbi <= attr_reg(1) & attr_reg(2) & attr_reg(0) & attr_reg(6);
-			else
-				rgbi <= not BORDER(1) & not BORDER(2) & not BORDER(0) & (not BORDER(3) and bl_int);
-			end if;
+	if rising_edge(CLK) then 
+		if (blank1 = '1') then 
+			rgbi <= "0000";
+			ACTIVE <= '0';
+		elsif paper1 = '1' and TEST=1 then
+			rgbi <= std_logic_vector(h_cnt(7 downto 5)) & std_logic_vector(h_cnt(8 downto 8));
+			ACTIVE <= '1';
+		elsif paper1 = '1' and (pixel_reg(7 - to_integer(h_cnt(2 downto 0)))) = '0' then 
+			rgbi <= attr_reg(4) & attr_reg(5) & attr_reg(3) & i78;
+			ACTIVE <= '1';
+		elsif paper1 = '1' and (pixel_reg(7 - to_integer(h_cnt(2 downto 0)))) = '1' then 
+			rgbi <= attr_reg(1) & attr_reg(2) & attr_reg(0) & attr_reg(6);
+			ACTIVE <= '1';
+		else
+			rgbi <= not BORDER(1) & not BORDER(2) & not BORDER(0) & (not BORDER(3) and bl_int);
+			ACTIVE <= '1';
 		end if;
 	end if;
 end process;
@@ -216,9 +223,11 @@ RGB 			<= rgbi(3 downto 1);
 I 				<= rgbi(0);
 HSYNC 		<= h_sync;
 VSYNC 		<= v_sync;
-HCNT <= std_logic_vector(h_cnt);
-VCNT <= std_logic_vector(v_cnt);
-ISPAPER <= '1' when paper='1' and blank1 = '0' else '0';
 BLANK <= blank1;
+
+-- end of hdmi frame (h/v blank start)
+LOCK 		 <= '1' when h_cnt = pcpm_h_blk_off and v_cnt = pcpm_v_sync_off and mode60 = '0' else    -- profi 768x312 50Hz
+				 '1' when h_cnt = pcpm_h_blk_off and v_cnt = pcpm_v_sync_off_60 and mode60 = '1' else -- profi 768x264 60Hz
+				 '0';
 
 end architecture;

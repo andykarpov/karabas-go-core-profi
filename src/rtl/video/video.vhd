@@ -8,17 +8,18 @@ use IEEE.numeric_std.ALL;
 use IEEE.std_logic_unsigned.all;
 
 entity video is
+	generic (
+		TEST : integer := 0
+	);
 	port (
-		CLK_BUS 	: in std_logic; -- 56 MHz
-		ENA_28	: in std_logic; -- 28 MHz
-		ENA_14	: in std_logic; -- 14 MHz
-		ENA_7		: in std_logic; -- 7 MHz 
+		CLK_BUS	: in std_logic; -- 56
+		CLK 		: in std_logic; -- 7 / 12 MHz
 		RESET 	: in std_logic := '0';
+		VMODE 	: in std_logic_vector(3 downto 0) := "0000";
 
 		BORDER	: in std_logic_vector(7 downto 0);	-- bordr color (port #xxFE)
 		TURBO 	: in std_logic_vector(2 downto 0) := "000"; -- 01 = turbo 2x mode, 10 - turbo 4x mode, 11 - turbo 8x mode, 00 = normal mode
 		INTA		: in std_logic := '0'; -- int request for turbo mode
-		MODE60	: in std_logic := '0'; -- 
 		INT		: out std_logic; -- int output
 		ATTR_O	: out std_logic_vector(7 downto 0); -- attribute register output
 		pFF_CS	: out std_logic; -- port FF select
@@ -33,21 +34,18 @@ entity video is
 		
 		HSYNC		: out std_logic;
 		VSYNC		: out std_logic;
+		BLANK 	: out std_logic;
 		
-		DS80		: in std_logic; -- 1 = Profi CP/M mode. 0 = standard mode
+		ACTIVE 	: out std_logic;
+		LOCK 		: out std_logic;
+		
 		CS7E 		: in std_logic := '0';
 		BUS_A 	: in std_logic_vector(15 downto 8);
 		BUS_D 	: in std_logic_vector(7 downto 0);
 		BUS_WR_N : in std_logic;
 		GX0 		: out std_logic;
 		
-		SCREEN_MODE : in std_logic_vector(1 downto 0);
-		COUNT_BLOCK : out std_logic;
-		
-		HCNT : out std_logic_vector(9 downto 0);
-		VCNT : out std_logic_vector(8 downto 0);
-		ISPAPER : out std_logic;
-		BLINK : out std_logic		
+		COUNT_BLOCK : out std_logic
 	);
 end entity;
 
@@ -83,10 +81,9 @@ architecture rtl of video is
 	signal pFF_CS_profi : std_logic;
 	signal attr_o_profi : std_logic_vector(7 downto 0);
 	
-	signal hcnt_profi : std_logic_vector(9 downto 0);
-	signal vcnt_profi : std_logic_vector(8 downto 0);
-	signal ispaper_profi : std_logic;
-
+	signal active_profi : std_logic;
+	signal lock_profi : std_logic;	
+	
 	-- spectrum videocontroller signals
 	signal vid_a_spec : std_logic_vector(13 downto 0);
 	signal vid_rd_spec : std_logic;
@@ -95,26 +92,30 @@ architecture rtl of video is
 	signal i_spec : std_logic;
 	signal hsync_spec : std_logic;
 	signal vsync_spec : std_logic;
+	signal blank_spec : std_logic;
 	signal pFF_CS_spec : std_logic;
 	signal attr_o_spec : std_logic_vector(7 downto 0);
 
-	signal hcnt_spec : std_logic_vector(9 downto 0);
-	signal vcnt_spec : std_logic_vector(8 downto 0);
-	signal ispaper_spec : std_logic;
+	signal active_spec : std_logic;
+	signal lock_spec : std_logic;
+
+	signal ds80 : std_logic;
 
 begin
 
+	ds80 <= vmode(3);
+
 	U_PENT: entity work.pentagon_video 
+	generic map (
+		TEST => TEST
+	)
 	port map (
-		CLK_BUS => CLK_BUS, -- 56
-		ENA_28 => ENA_28, -- 28
-		ENA_14 => ENA_14, -- 14
-		ENA_7 => ENA_7, -- 7
+		CLK => CLK, -- 7
+		VMODE => VMODE,
 		BORDER => BORDER(2 downto 0),
 		TURBO => TURBO,
 		INTA => INTA,
 		INT => int_spec,
-		MODE60 => MODE60,
 		pFF_CS => pFF_CS_spec,
 		ATTR_O => attr_o_spec, 
 
@@ -127,21 +128,22 @@ begin
 		
 		HSYNC => hsync_spec,
 		VSYNC => vsync_spec,
+		BLANK => blank_spec,
 
-		HCNT => hcnt_spec,
-		VCNT => vcnt_spec,
-		ISPAPER => ispaper_spec,
-		BLINK => BLINK,
-		
-		SCREEN_MODE => SCREEN_MODE,		
+		ACTIVE => active_spec,
+		LOCK => lock_spec,
+
 		COUNT_BLOCK => COUNT_BLOCK
 	);
 
 	U_PROFI: entity work.profi_video 
+	generic map (
+		TEST => TEST
+	)
 	port map (
-		CLK_BUS => CLK_BUS, -- 48
-		ENA_28 => ENA_28, -- 24
-		ENA_14 => ENA_14, -- 12
+		CLK => CLK, -- 12
+		VMODE => VMODE,
+
 		TURBO => TURBO,
 		BORDER => BORDER(3 downto 0),
 
@@ -151,21 +153,18 @@ begin
 
 		INTA => INTA,
 		INT => int_profi,
-		MODE60 => MODE60,
 		pFF_CS => pFF_CS_profi,
 		ATTR_O => attr_o_profi,
-		DS80 => DS80,
 
 		RGB => rgb_profi,
 		I 	 => i_profi,
 		BLANK => blank_profi,
+
+		ACTIVE => active_profi,
+		LOCK => lock_profi,
 		
 		HSYNC => hsync_profi,
-		VSYNC => vsync_profi,
-
-		HCNT => hcnt_profi,
-		VCNT => vcnt_profi,
-		ISPAPER => ispaper_profi		
+		VSYNC => vsync_profi
 	);
 
 	A <= vid_a_profi when ds80 = '1' else vid_a_spec;
@@ -178,10 +177,9 @@ begin
 
 	HSYNC <= hsync_profi when ds80 = '1' else hsync_spec;
 	VSYNC <= vsync_profi when ds80 = '1' else vsync_spec;	
-	
-	HCNT <= hcnt_profi when ds80 = '1' else hcnt_spec;
-	VCNT <= vcnt_profi when ds80 = '1' else vcnt_spec;
-	ISPAPER <= ispaper_profi when ds80 = '1' else ispaper_spec;
+	BLANK <= blank_profi when ds80 = '1' else blank_spec;
+	ACTIVE <= active_profi when ds80 = '1' else active_spec;
+	LOCK <= lock_profi when ds80 = '1' else lock_spec;
 	
 	ATTR_O <= attr_o_profi when ds80 = '1' else attr_o_spec;
 	pFF_CS <= pFF_CS_profi when ds80 = '1' else pFF_CS_spec;
@@ -194,7 +192,7 @@ begin
 	-- 4) при чтении адресом выступает код цвета от видеоконтроллера - YGRB
 			
 	-- запись палитры
-	process(CLK_BUS, ENA_14, reset, palette_wr, palette_a, palette_wr_data, palette)
+	process(CLK_BUS, reset)
 	begin
 		if reset = '1' then 
 			-- set default palette on reset
@@ -219,9 +217,9 @@ begin
 	GX0 <= palette_grb(6) xor palette_grb(0) when ds80 = '1' else '1';
 	
 	-- применяем blank для профи, ибо в видеоконтроллере он после палитры
-	process(CLK_BUS, ENA_14, blank_profi, palette_grb, ds80) 
+	process(blank_profi, vmode) 
 	begin 
-		if (blank_profi = '1' and ds80='1') then
+		if (blank_profi = '1' and VMODE(3) = '1') then
 			palette_grb_reg <= (others => '0');
 		else
 			palette_grb_reg <= palette_grb;
