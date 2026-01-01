@@ -117,7 +117,10 @@ wire  [7:0] psg_ch_b_0;
 wire  [7:0] psg_ch_c_0;
 wire signed [15:0] opn_0;
 wire  [7:0] DO_0;
+
+// midi out
 wire [7:0] port_a;
+assign MIDI_TX = port_a[2];
 
 jt03 ym2203_0
 (
@@ -138,8 +141,6 @@ jt03 ym2203_0
 
 	.fm_snd(opn_0)
 );
-
-assign MIDI_TX = port_a[2];
 
 wire  [7:0] psg_ch_a_1;
 wire  [7:0] psg_ch_b_1;
@@ -166,7 +167,7 @@ jt03 ym2203_1
 	.fm_snd(opn_1)
 );
 
-assign DO = ay_select ? DO_1 : DO_0;
+assign DO = ay_select ? DO_0 : DO_1;
 
 always @(*) begin
 	SSG0_AUDIO_A <= psg_ch_a_0;

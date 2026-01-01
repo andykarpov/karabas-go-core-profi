@@ -7,9 +7,10 @@
 -- V2.0.0	23.07.2014	Доработано до SDRAM 4 Meg x 16 x 4 banks
 -- V2.1.0	24.07.2014	Убран temp
 --          12.01.2024  Removed auto-refresh
+--				01.01.2026  Added clock transfer regs				
 
 -- CLK		= 84 MHz	= 11,9047619047619 ns
--- WR/RD	= 6T		= 71,42857142857143 ns
+-- WR/RD		= 6T		= 71,42857142857143 ns
 -- RFSH		= 6T		= 71,42857142857143 ns
 
 library IEEE;
@@ -27,7 +28,7 @@ entity sdram is
 		RD				: in std_logic;
 		RFSH			: in std_logic;
 		RFSHREQ			: out std_logic;
-		IDLE			: out std_logic;
+		IDLE			: buffer std_logic;
 		-- SDRAM Pin
 		CK				: out std_logic;
 		RAS_n			: out std_logic;
@@ -71,7 +72,14 @@ architecture rtl of sdram is
 	signal sdr_dqmh		: std_logic;
 	signal sdr_a		: std_logic_vector(12 downto 0);
 	signal sdr_dq		: std_logic_vector(15 downto 0);
-
+	
+	-- clock transfer regs
+	signal rd_r : std_logic_vector(1 downto 0);
+	signal wr_r : std_logic_vector(1 downto 0);
+	signal rfsh_r : std_logic_vector(1 downto 0);
+	signal di_r : std_logic_vector(7 downto 0);
+	signal a_r : std_logic_vector(24 downto 0);
+	
 	constant SdrCmd_xx 	: std_logic_vector(2 downto 0) := "111"; -- no operation
 	constant SdrCmd_ac 	: std_logic_vector(2 downto 0) := "011"; -- activate
 	constant SdrCmd_rd 	: std_logic_vector(2 downto 0) := "101"; -- read
@@ -85,10 +93,22 @@ architecture rtl of sdram is
 -- pr xx xx re xx xx xx xx xx re xx xx xx xx xx ms xx xx xx xx		xx/ac/re	xx rd xx xx		xx wr xx xx		xx xx xx xx
 
 begin
+
+	-- tranfer input signals to CLK clock domain
 	process (CLK)
 	begin
-		if CLK'event and CLK = '1' then
-			temp <= RD & WR & RFSH;
+		if rising_edge(CLK) then
+			rd_r <= rd_r(0) & rd;
+			wr_r <= wr_r(0) & wr;
+			rfsh_r <= rfsh_r(0) & rfsh;
+			di_r <= di;
+			a_r <= a;
+		end if;
+	end process;
+
+	process (CLK)
+	begin
+		if rising_edge(CLK) then
 			case state is
 				-- Init
 				when "00000" =>						-- s00
@@ -111,27 +131,24 @@ begin
 					sdr_cmd <= SdrCmd_xx;			-- NOP
 					sdr_dq <= (others => 'Z');
 					idle1 <= '1';
-					if temp(2) /= RD and RD = '1' then					
-					--if RD = '1' then
+					if rd_r = "01" then
 						idle1 <= '0';
-						address <= A;
+						address <= a_r;
 						sdr_cmd <= SdrCmd_ac;		-- ACTIVE
-						sdr_ba <= A(11 downto 10);
-						sdr_a <= A(24 downto 12);					 
+						sdr_ba <= a_r(11 downto 10);
+						sdr_a <= a_r(24 downto 12);					 
 						state <= "10101";			-- s15 Read
 
-					elsif temp(1) /= WR and WR = '1' then
-					--elsif WR = '1' then
+					elsif wr_r = "01" then
 						idle1 <= '0';
-						address <= A;
-						data <= DI;
+						address <= a_r;
+						data <= di_r;
 						sdr_cmd <= SdrCmd_ac;		-- ACTIVE
-						sdr_ba <= A(11 downto 10);
-						sdr_a <= A(24 downto 12);
+						sdr_ba <= a_r(11 downto 10);
+						sdr_a <= a_r(24 downto 12);
 						state <= "10111";			-- s17 Write
 
-					elsif temp(0) /= RFSH and RFSH = '1' then
-					--elsif RFSH = '1' then
+					elsif rfsh_r = "01" then
 						idle1 <= '0';
 						rfsh_req <= '0';
 						sdr_cmd <= SdrCmd_re;		-- REFRESH
@@ -161,6 +178,15 @@ begin
 				when others =>
 					sdr_dq <= (others => 'Z');
 					sdr_cmd <= SdrCmd_xx;			-- NOP
+					
+					-- pre idle
+--					if (state = "10011") then 
+--						if ((idle1 = '0' and temp = "000") or (idle1 = '1')) then  -- wait the end of host mem cycle
+--							state <= state + 1;
+--						end if;
+--					else
+--						state <= state + 1;
+--					end if;
 					state <= state + 1;
 			end case;
 
@@ -177,7 +203,7 @@ begin
 	
 	process (CLK, state, DQ, data_reg, idle1)
 	begin
-		if CLK'event and CLK = '0' and idle1 = '0' then
+		if falling_edge(CLK) and idle1 = '0' then
 			if state = "10100" then					-- s14
 				if address(0) = '0' then
 					data_reg <= DQ(7 downto 0);
@@ -188,28 +214,19 @@ begin
 		end if;
 	end process;
 	
-	IDLE	<= idle1;
+	IDLE		<= idle1;
 	DO 		<= data_reg;
 	RFSHREQ	<= rfsh_req;
 	RAS_n 	<= sdr_cmd(2);
 	CAS_n 	<= sdr_cmd(1);
-	WE_n 	<= sdr_cmd(0);
-	DQML 	<= sdr_dqml;
-	DQMH 	<= sdr_dqmh;
-	BA	 	<= sdr_ba;
+	WE_n 		<= sdr_cmd(0);
+	DQML 		<= sdr_dqml;
+	DQMH 		<= sdr_dqmh;
+	BA	 		<= sdr_ba;
 	MA 		<= sdr_a;
 	DQ 		<= sdr_dq;
 	
 u_ddr: ODDR2 -- negative clock
-port map(
-	Q => CK,
-	C0 => CLK,
-	C1 => not(CLK),
-	CE => '1',
-	D0 => '0',
-	D1 => '1',
-	R => '0',
-	S => '0'
-);
+port map(Q => CK, C0 => CLK, C1 => not(CLK), CE => '1', D0 => '0', D1 => '1', R => '0', S => '0');
 
 end rtl;

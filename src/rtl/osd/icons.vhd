@@ -58,11 +58,16 @@ architecture rtl of icons is
 begin
 
 	 -- 
-	 U_FONT_ICONS: entity work.rom_font2
+	 U_FONT_ICONS: entity work.sprom
+	 generic map (
+		DATAWIDTH => 1,
+		ADDRWIDTH => 11,
+		MEM_INIT_FILE => "rtl/osd/icons.bit"
+	 )
     port map (
-        addra  => icon_addr,
-        clka   => clk,
-        douta  => icon_pixel
+		clock => clk,
+      address_a  => icon_addr,
+      q_a  => icon_pixel
     );
 		
 	 icon_x <= hcnt(3 downto 0);

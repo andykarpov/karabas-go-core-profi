@@ -25,9 +25,10 @@
 -- @author Doctor Max <https://github.com/drmax-gc>
 -- EU, 2024, 2025
 
--- TODO: audio mixer из tsconf
--- TODO: GS включить
--- TODO: CF клоки
+-- TODO: сделать profi.vhd со всеми кишками внутри, top-level файлы только со спецификой
+-- TODO: отвязаться от ipcores, заюзать fifo, pll, vram - все через v/vhd реализацию
+-- TODO: CF клоки - проверить
+-- TODO: divmmc sd reboots пофиксить
 
 ------------------------------------------------------------------------------------------------------------------
 
@@ -41,7 +42,7 @@ use unisim.vcomponents.all;
 
 entity karabas_mini is
 	generic (
-		ENABLE_GS : boolean := false
+		ENABLE_GS : boolean := true
 	);
     port ( CLK_50MHZ : in  STD_LOGIC;
            
@@ -346,9 +347,9 @@ signal saa_out_l			: std_logic_vector(7 downto 0);
 signal saa_out_r			: std_logic_vector(7 downto 0);
 
 -- gs
-signal gs_l 				: std_logic_vector(8 downto 0);
-signal gs_r 				: std_logic_vector(8 downto 0);
-signal gs_oe_n 			: std_logic := '1';
+signal gs_l 				: std_logic_vector(14 downto 0);
+signal gs_r 				: std_logic_vector(14 downto 0);
+signal gs_oe 				: std_logic := '0';
 signal gs_do_bus	 		: std_logic_vector(7 downto 0);
 
 -- adc
@@ -844,7 +845,7 @@ U_DAC_L: entity work.dac
 port map(
 	I_CLK 			=> clk_bus,
 	I_RESET 			=> areset,
-	I_DATA 			=> "00" & not(audio_mix_l(15)) & audio_mix_l(14 downto 4) & "00",
+	I_DATA 			=> not(audio_mix_l(15)) & audio_mix_l(14 downto 0),
 	O_DAC 			=> AUDIO_L
 );
 
@@ -852,7 +853,7 @@ U_DAC_R: entity work.dac
 port map(
 	I_CLK 			=> clk_bus,
 	I_RESET 			=> areset,
-	I_DATA 			=> "00" & not(audio_mix_r(15)) & audio_mix_r(14 downto 4) & "00",
+	I_DATA 			=> not(audio_mix_r(15)) & audio_mix_r(14 downto 0),
 	O_DAC 			=> AUDIO_R
 );
 
@@ -1080,6 +1081,12 @@ port map(
 	fm_r 				=> ssg_cn1_fm,
 	fm_ena 			=> ssg_fm_ena,
 	
+	adc_l				=> adc_l(23 downto 8),
+	adc_r				=> adc_r(23 downto 8),
+	
+--	esp_l				=> (others => '0'),
+--	esp_r				=> (others => '0'),
+	
 	audio_l 			=> audio_mix_l,
 	audio_r 			=> audio_mix_r
 );
@@ -1091,11 +1098,7 @@ port map(
 	clk_sys 			=> clk_sdr,
 	clk_bus 			=> clk_bus, -- 56/48
 	ce 				=> ena_div2 and ena_div4, -- 14/12
-
-	ds80 				=> ds80,
-	cpm 				=> cpm,
-	dos 				=> dos_act,
-	rom14 			=> rom14,
+	ds80				=> ds80,
 
 	reset 			=> kb_gs_reset or loader_act or mcu_busy,
 	areset 			=> areset,
@@ -1108,7 +1111,7 @@ port map(
 	rd_n 				=> cpu_rd_n,
 	wr_n 				=> cpu_wr_n,
 	
-	oe_n 				=> gs_oe_n,
+	oe 				=> gs_oe,
 	do_bus 			=> gs_do_bus,
 	
 	sdram_clk 		=> SDR_CLK,
@@ -1140,7 +1143,7 @@ G_NOGS: if not(ENABLE_GS) generate
 	SDR_WE_N <= '1';
 	SDR_RAS_N <= '1';
 	SDR_CAS_N <= '1';
-	gs_oe_n <= '1';
+	gs_oe <= '0';
 end generate G_NOGS;
 
 -------------------------------------------------------------------------------
@@ -1535,8 +1538,8 @@ selector <=
 	x"00" when (ram_oe_n = '0') else -- ram / rom
 	x"01" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and cs_rtc_ds = '1') else -- RTC MC146818A
 	x"02" when (cs_xxfe = '1' and cpu_rd_n = '0') else 									-- Keyboard, port #FE	
-	x"15" when (gs_oe_n = '0' and cpu_iorq_n = '0' and cpu_rd_n = '0') else -- gs
-	x"14" when (ide_oe_n = '0') else		-- ide
+	x"15" when (gs_oe = '1' and cpu_m1_n = '1' and cpu_iorq_n = '0' and cpu_rd_n = '0') else -- gs
+	x"14" when (ide_oe_n = '0' and cpu_iorq_n = '0' and cpu_rd_n = '0') else		-- ide
  	x"03" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and (loa = x"57" or (loa = x"EB" and cpm = '0' and divmmc_en = '1')) ) else 	-- Z-Controller + DivMMC
 	x"04" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and loa = x"77") else 	-- Z-Controller
 	x"05" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and loa = x"1F" and dos_act = '0' and cpm = '0' and joy_mode = "000") else -- Joystick, port #1F

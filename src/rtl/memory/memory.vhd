@@ -80,7 +80,7 @@ architecture RTL of memory is
 	signal is_romDIVMMC : std_logic;
 	signal is_ramDIVMMC : std_logic;
 	
-	signal vid_wr : std_logic_vector(0 downto 0);
+	signal vid_wr : std_logic := '0';
 	signal vid_wr_a_bus, vid_rd_a_bus: std_logic_vector(15 downto 0);
 	signal vid_wr_attr : std_logic;
 	signal vid_wr_page : std_logic;
@@ -88,22 +88,30 @@ architecture RTL of memory is
 begin
 
 	-- video ram 64k
-	U_VRAM: entity work.vram
+	U_VRAM: entity work.dpram
+	generic map(
+		DATAWIDTH 	=> 8,
+		ADDRWIDTH	=> 16
+	)
 	port map(
-		clka => CLK_BUS,
-		wea => vid_wr,
-		addra => vid_wr_a_bus,
-		dina => D,
-		clkb => CLK_BUS,
-		addrb => vid_rd_a_bus,
-		doutb => VID_DO
+		clock 		=> CLK_BUS,
+		
+		address_a 	=> vid_wr_a_bus,
+		data_a 		=> D,
+		wren_a 		=> vid_wr,
+		q_a 			=> open,
+		
+		address_b 	=> vid_rd_a_bus,
+		data_b 		=> "00000000",
+		wren_b 		=> '0',
+		q_b 			=> VID_DO
 	);
 
 	-- video mem write: 
-	vid_wr <= "1" when ENA_CPU = '1' and DS80 = '0' and N_MREQ = '0' and N_WR = '0' and A(13) = '0' and (ram_page = "000000101" or ram_page = "000000111") else -- spectrum pix / att
-				 "1" when ENA_CPU = '1' and DS80 = '1' and N_MREQ = '0' and N_WR = '0' and (ram_page = "000000100" or ram_page = "000000110") else -- profi pix
-				 "1" when ENA_CPU = '1' and DS80 = '1' and N_MREQ = '0' and N_WR = '0' and (ram_page = "000111000" or ram_page = "000111010") else -- profi att
-				 "0";
+	vid_wr <= '1' when ENA_CPU = '1' and DS80 = '0' and N_MREQ = '0' and N_WR = '0' and A(13) = '0' and (ram_page = "000000101" or ram_page = "000000111") else -- spectrum pix / att
+				 '1' when ENA_CPU = '1' and DS80 = '1' and N_MREQ = '0' and N_WR = '0' and (ram_page = "000000100" or ram_page = "000000110") else -- profi pix
+				 '1' when ENA_CPU = '1' and DS80 = '1' and N_MREQ = '0' and N_WR = '0' and (ram_page = "000111000" or ram_page = "000111010") else -- profi att
+				 '0';
 
 	-- detect profi attr write
 	vid_wr_attr <= '1' when (ram_page = "000111000" or ram_page = "000111010") else '0';
