@@ -25,10 +25,10 @@
 -- @author Doctor Max <https://github.com/drmax-gc>
 -- EU, 2024, 2025
 
--- TODO: сделать profi.vhd со всеми кишками внутри, top-level файлы только со спецификой
--- TODO: отвязаться от ipcores, заюзать fifo, pll, vram - все через v/vhd реализацию
+-- TODO: сделать profi.vhd со всеми кишками внутри, top-level файлы только со спецификой (ацп, цап, шим, FT мультиплексор итп)
 -- TODO: CF клоки - проверить
--- TODO: divmmc sd reboots пофиксить
+-- TODO: GS - пофиксить работу
+-- TODO: ADC - пофиксить гул
 
 ------------------------------------------------------------------------------------------------------------------
 
@@ -41,9 +41,6 @@ library unisim;
 use unisim.vcomponents.all;
 
 entity karabas_mini is
-	generic (
-		ENABLE_GS : boolean := true
-	);
     port ( CLK_50MHZ : in  STD_LOGIC;
            
            UART_RX : inout  STD_LOGIC;
@@ -372,8 +369,11 @@ signal ena_div4			: std_logic := '0';
 signal ena_div8			: std_logic := '0';
 signal ena_div16			: std_logic := '0';
 signal ena_div32  		: std_logic := '0';
+signal ena_div64 			: std_logic := '0';
 signal ena_cpu 			: std_logic := '0';
 signal ena_rgb				: std_logic := '0';
+signal ena_saa				: std_logic := '0';
+signal ce_14				: std_logic := '0';
 
 -- System
 signal reset				: std_logic;
@@ -472,7 +472,9 @@ signal ide_busy 			: std_logic := '0';
 signal fdd_do_bus 		: std_logic_vector(7 downto 0);
 signal fdd_oe_n 			: std_logic := '1';
 signal fdd_mode 			: std_logic_vector(1 downto 0);
+
 signal loa 					: std_logic_vector(7 downto 0);
+signal hia					: std_logic_vector(15 downto 8);
 
 begin
 
@@ -484,21 +486,24 @@ port map(
 	
 	DS80 				=> ds80,
 	
-	CLK_BUS 			=> clk_bus, -- 56 / 48
+	CLK_BUS 			=> clk_bus, -- 112 / 96
 	CLK_16 			=> clk_16,
-	CLK_8 			=> clk_8,
 	CLK_SDR  		=> clk_sdr, -- 84
 	CLK_12   		=> clk_12,
 	CLK_RGB  		=> clk_rgb,
 	CLK_VGA			=> clk_vga,
 
-	ENA_DIV2 		=> ena_div2, -- 28 / 24
-	ENA_DIV4 		=> ena_div4, -- 14 / 12
-	ENA_DIV8 		=> ena_div8, -- 7 / 6
-	ENA_DIV16 		=> ena_div16, -- 3.5 / 3
-	ENA_DIV32 		=> ena_div32, -- 1.75 / 1.5
+	ENA_DIV2 		=> ena_div2, -- 56 / 48
+	ENA_DIV4 		=> ena_div4, -- 28 / 24
+	ENA_DIV8 		=> ena_div8, -- 14 / 12
+	ENA_DIV16 		=> ena_div16, -- 7 / 6
+	ENA_DIV32 		=> ena_div32, -- 3.5 / 3
+	ENA_DIV64		=> ena_div64, -- 1.75 / 1.5
 	ENA_CPU 			=> ena_cpu,
 	ENA_RGB 			=> ena_rgb,
+	ENA_SAA			=> ena_saa,
+	
+	CE_14 			=> ce_14,
 	
 	TURBO 			=> turbo_mode,
 	WAIT_CPU 		=> cpu_wait
@@ -597,7 +602,7 @@ port map (
 -- Video Spectrum/Pentagon
 U4: entity work.video
 port map (
-	CLK_BUS 			=> clk_bus, 	-- 56 / 48
+	CLK_BUS 			=> clk_bus, 	-- 112 / 96
 	CLK 				=> clk_rgb,		-- 7 / 12
 	RESET 			=> reset,
 	VMODE				=> vmode,
@@ -651,7 +656,6 @@ port map (
 -- HDMI Scandoubler
 U6: entity work.hdmi_frame
 port map(
-	clk 				=> clk_bus,
 	clk_rgb 			=> clk_rgb,
 	clk_vga 			=> clk_vga,
 	reset 			=> areset,
@@ -859,9 +863,12 @@ port map(
 
 -- ADC
 U_ADC: entity work.i2s_transceiver
+generic map(
+	mclk_sclk_ratio => 4
+)
 port map(
 	reset_n 			=> not areset,
-	mclk 				=> adc_clk_int,	
+	mclk 				=> ce_14,
 	sclk 				=> ADC_BCK,
 	ws					=> ADC_LRCK,
 	sd_rx 			=> ADC_DOUT,
@@ -870,6 +877,9 @@ port map(
 	l_data_rx 		=> adc_l,
 	r_data_rx 		=> adc_r
 );
+
+-- TODO: гудит
+--adc_clk_int <= ce_14;
 
 -- ADC_CLK output buf
 U_ADC_CLK: ODDR2 
@@ -889,7 +899,7 @@ U12: entity work.turbosound
 port map (
 	RESET 			=> reset,
 	CLK 				=> clk_bus,
-	CE					=> ena_div16, -- 3.5
+	CE					=> ena_div32, -- 3.5
 	BDIR 				=> ts_we,
 	BC 				=> cpu_a_bus(14),
 	DI					=> cpu_do_bus,
@@ -934,17 +944,18 @@ port map (
 );
 
 -- SAA1099 sound generator
---U14: entity work.saa1099
---port map(
---	clk				=> clk_8,
---	rst_n				=> not reset,
---	cs_n				=> '0',
---	a0					=> cpu_a_bus(8),		-- 0=data, 1=address
---	wr_n				=> saa_wr_n,
---	din				=> cpu_do_bus,
---	out_l				=> saa_out_l,
---	out_r				=> saa_out_r
---);
+U14: entity work.saa1099
+port map(
+	clk				=> clk_bus,
+	ena				=> ena_saa,
+	rst_n				=> not reset,
+	cs_n				=> '0',
+	a0					=> cpu_a_bus(8),		-- 0=data, 1=address
+	wr_n				=> saa_wr_n,
+	din				=> cpu_do_bus,
+	out_l				=> saa_out_l,
+	out_r				=> saa_out_r
+);
 
 	
 -- Serial mouse emulation
@@ -959,6 +970,7 @@ port map(
 	RD_N 				=> cpu_rd_n,
 	IORQ_N 			=> cpu_iorq_n,
 	M1_N 				=> cpu_m1_n,
+	DS80				=> ds80,
 	CPM 				=> cpm,
 	DOS 				=> dos_act,
 	ROM14 			=> rom14,
@@ -1092,15 +1104,14 @@ port map(
 );
 
 -- General Sound
-G_GS: if ENABLE_GS generate
 U20: entity work.gs_top
 port map(
-	clk_sys 			=> clk_sdr,
-	clk_bus 			=> clk_bus, -- 56/48
-	ce 				=> ena_div2 and ena_div4, -- 14/12
+	clk_sys 			=> clk_bus,
+	clk_bus 			=> clk_bus, -- 112/96
+	ce 				=> ena_div2 and ena_div4 and ena_div8, -- 14
 	ds80				=> ds80,
 
-	reset 			=> kb_gs_reset or loader_act or mcu_busy,
+	reset 			=> areset or kb_gs_reset or loader_act or mcu_busy,
 	areset 			=> areset,
 	
 	a 					=> cpu_a_bus,
@@ -1132,26 +1143,14 @@ port map(
 	out_r 			=> gs_r
 	
 );
-end generate G_GS;
-
-G_NOGS: if not(ENABLE_GS) generate
-	SDR_CLK <= '0';
-	SDR_DQ <= (others => 'Z');
-	SDR_A <= (others => '0');
-	SDR_DQM <= (others => '0');
-	SDR_BA <= (others => '0');
-	SDR_WE_N <= '1';
-	SDR_RAS_N <= '1';
-	SDR_CAS_N <= '1';
-	gs_oe <= '0';
-end generate G_NOGS;
 
 -------------------------------------------------------------------------------
 -- Global signals
 
 reset <= areset or kb_reset or loader_act or mcu_busy or rom_bank_reset; -- hot reset
 
-loa <= cpu_a_bus(7 downto 0); -- low cpu address
+hia <= cpu_a_bus(15 downto 8); -- high cpu address
+loa <= cpu_a_bus(7 downto 0);  -- low cpu address
 
 -- CPU reset
 process (clk_bus)
@@ -1190,8 +1189,8 @@ SD_DI 	<= zc_mosi when zc_cs_n = '0' else '1';
 -- IN A, (#FD) - read a value from a hardware port 
 -- OUT (#FD), A - writes the value of the second operand into the port given by the first operand.
 fd_sel <= '0' when (
-	(loa(7 downto 4) = "1101" and loa(2 downto 0) = "011") or 
-	(loa(7 downto 4) = "1101" and loa(2 downto 0) = "011")) else '1'; 
+	(cpu_do_bus(7 downto 4) = "1101" and cpu_do_bus(2 downto 0) = "011") or 
+	(cpu_di_bus(7 downto 4) = "1101" and cpu_di_bus(2 downto 0) = "011")) else '1'; 
 
 process(fd_sel, reset, cpu_m1_n)
 begin
@@ -1233,8 +1232,8 @@ hdd_off <= port_028b_reg(0);										-- 0 	- HDD_off
 hdd_type <= port_028b_reg(1);										-- 1 	- HDD type Profi/Nemo
 turbo_fdc_off <= not port_028b_reg(2) and kb_turbofdc;	-- 2 	- TURBO_FDC_off
 fdc_swap <= port_028b_reg(3) or kb_swap_fdd;					-- 3 	- Floppy Disk Drive Selector Change
-sound_off <= port_028b_reg(4);									-- 4 	- Sound_off
-turbo_mode <= '0' & port_028b_reg(6 downto 5);				-- 5,6- Turbo Mode Selector 
+--sound_off <= port_028b_reg(4);									-- 4 	- Sound_off
+turbo_mode <= port_028b_reg(4) & port_028b_reg(6 downto 5);	-- 4,6,5 - Turbo Mode Selector 
 lock_dffd <= port_028b_reg(7);								 	-- 7 	- Lock port DFFD
 ext_rom_bank_pq <= ext_rom_bank when rom0 = '0' else "01";	-- ROMBANK ALT
 
@@ -1260,8 +1259,11 @@ cs_dffd <= '1' when cpu_iorq_n = '0' and cpu_m1_n = '1' and cpu_a_bus = X"DFFD" 
 cs_7ffd <= '1' when cpu_iorq_n = '0' and cpu_m1_n = '1' and cpu_a_bus = X"7FFD" and fd_port = '1' else '0';
 cs_1ffd <= '1' when cpu_iorq_n = '0' and cpu_m1_n = '1' and cpu_a_bus = X"1FFD" and fd_port = '1' else '0';
 -- OCH: change decoding of #FD port when Nemo enabled
-cs_xxfd <= '1' when (cpu_iorq_n = '0' and cpu_m1_n = '1' and cpu_a_bus(15) = '0' and loa(1) = '0' and nemoide_en = '0') or
-						  (cpu_iorq_n = '0' and cpu_m1_n = '1' and cpu_a_bus(15) = '0' and loa = x"FD" and nemoide_en = '1') else '0';						  
+--cs_xxfd <= '1' when (cpu_iorq_n = '0' and cpu_m1_n = '1' and hia(15) = '0' and loa(1) = '0' and nemoide_en = '0') or
+--						  (cpu_iorq_n = '0' and cpu_m1_n = '1' and hia(15) = '0' and loa = x"FD" and nemoide_en = '1') else '0';						  
+cs_xxfd <= '1' when (cpu_iorq_n = '0' and cpu_m1_n = '1' and hia(15) = '0' and loa(1) = '0' and loa /= x"BB" and loa /= x"B3" and nemoide_en = '0') or
+						  (cpu_iorq_n = '0' and cpu_m1_n = '1' and hia(15) = '0' and loa = x"FD" and nemoide_en = '1') else '0';						  
+
 
 -- RTC AS reg (address)
 cs_rtc_as <= '1' when cpu_iorq_n = '0' and cpu_m1_n = '1' and
@@ -1387,7 +1389,7 @@ begin
 			if cs_028b = '1' and cpu_wr_n='0' then
 				port_028b_reg <= cpu_do_bus;
 			elsif kb_turbo /= kb_turbo_old then
-				port_028b_reg (6 downto 5) <= kb_turbo (1 downto 0);
+				port_028b_reg (6 downto 4) <= kb_turbo (1 downto 0) & kb_turbo(2);
 				kb_turbo_old <= kb_turbo;
 			end if;
 			
@@ -1437,8 +1439,8 @@ end process;
 
 U_ZC_SPI: entity work.zc_spi
 port map(
-	clk_sys => clk_bus, -- 56
-	ena => ena_div2, -- 28
+	clk_sys => clk_bus, -- 112/96
+	ena => ena_div2 and ena_div4, -- 28
 	tx => zc_wr_en,
 	rx => zc_rd_en,
 	din => cpu_do_bus,
@@ -1521,7 +1523,7 @@ begin
 		when x"0A" => cpu_di_bus <= ms_z(3 downto 0) & '1' & not(ms_b(2)) & not(ms_b(0)) & not(ms_b(1)); -- D0=right, D1 = left, D2 = middle, D3 = fourth, D4..D7 - wheel
 		when x"0B" => cpu_di_bus <= ms_x;
 		when x"0C" => cpu_di_bus <= ms_y;
-		when x"0D" => cpu_di_bus <= serial_ms_do_bus;
+--		when x"0D" => cpu_di_bus <= serial_ms_do_bus;
 		when x"0E" => cpu_di_bus <= port_008b_reg;
 		when x"0F" => cpu_di_bus <= port_018b_reg;
 		when x"10" => cpu_di_bus <= port_028b_reg;
@@ -1535,25 +1537,30 @@ begin
 end process;
 
 selector <= 	
+	-- память и пзу
 	x"00" when (ram_oe_n = '0') else -- ram / rom
-	x"01" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and cs_rtc_ds = '1') else -- RTC MC146818A
-	x"02" when (cs_xxfe = '1' and cpu_rd_n = '0') else 									-- Keyboard, port #FE	
-	x"15" when (gs_oe = '1' and cpu_m1_n = '1' and cpu_iorq_n = '0' and cpu_rd_n = '0') else -- gs
-	x"14" when (ide_oe_n = '0' and cpu_iorq_n = '0' and cpu_rd_n = '0') else		-- ide
- 	x"03" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and (loa = x"57" or (loa = x"EB" and cpm = '0' and divmmc_en = '1')) ) else 	-- Z-Controller + DivMMC
-	x"04" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and loa = x"77") else 	-- Z-Controller
-	x"05" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and loa = x"1F" and dos_act = '0' and cpm = '0' and joy_mode = "000") else -- Joystick, port #1F
-	x"06" when (ts_enable = '1' and cpu_rd_n = '0') else 									-- TurboSound
+
+	-- порты с полной дешифрацией
 	x"08" when (cs_dffd = '1' and cpu_rd_n = '0') else										-- port #DFFD
 	x"09" when (cs_7ffd = '1' and cpu_rd_n = '0') else										-- port #7FFD
-	x"0A" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_a_bus = X"FADF" and ms_present = '1' and cpm='0') else	-- Mouse0 port key, z
-	x"0B" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_a_bus = X"FBDF" and ms_present = '1' and cpm='0') else	-- Mouse0 port x
-	x"0C" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_a_bus = X"FFDF" and ms_present = '1' and cpm='0') else	-- Mouse0 port y 
-	x"0D" when (serial_ms_oe_n = '0') else -- Serial mouse
+	x"0A" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_a_bus = X"FADF" and cpm='0') else	-- Mouse z,b
+	x"0B" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_a_bus = X"FBDF" and cpm='0') else	-- Mouse x
+	x"0C" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_a_bus = X"FFDF" and cpm='0') else	-- Mouse y 
 	x"0E" when (cs_008b = '1' and cpu_rd_n = '0') else										-- port #008B
 	x"0F" when (cs_018b = '1' and cpu_rd_n = '0') else										-- port #018B
 	x"10" when (cs_028b = '1' and cpu_rd_n = '0') else										-- port #028B
 	x"11" when zifi_oe_n = '0' and cpu_iorq_n = '0' and cpu_rd_n = '0' else  		-- zifi
+
+	-- порты с укороченной дешифрацией
+	x"15" when (gs_oe = '1') else -- gs
+	x"14" when (ide_oe_n = '0' and cpu_iorq_n = '0' and cpu_rd_n = '0') else		-- ide
+	x"06" when (ts_enable = '1' and cpu_rd_n = '0') else 									-- TurboSound
+	x"01" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and cs_rtc_ds = '1') else -- rtc
+ 	x"03" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and (loa = x"57" or (loa = x"EB" and cpm = '0' and divmmc_en = '1')) ) else 	-- Z-Controller + DivMMC
+	x"04" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and loa = x"77") else 	-- Z-Controller
+	x"05" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and loa = x"1F" and dos_act = '0' and cpm = '0' and joy_mode = "000") else -- Joystick, port #1F
+--	x"0D" when (serial_ms_oe_n = '0') else -- Serial mouse - конфликт с GS, поэтому GS только ds80=0, мышь - ds80=1
+	x"02" when (cs_xxfe = '1' and cpu_rd_n = '0') else 	-- Keyboard, port #FE
 	x"12" when (vid_pff_cs = '1' and cpu_iorq_n = '0' and cpu_rd_n = '0' and loa = x"FF") and dos_act='0' and cpm = '0' and ds80 = '0' else -- Port FF select
 --	x"13" when (fdd_oe_n = '0' and cpu_iorq_n = '0' and cpu_rd_n = '0') else 		-- fdd
 	(others => '1');
@@ -1587,20 +1594,8 @@ FLASH_DI <= '1';
 FLASH_SCK <= '1';
 FLASH_WP_N <= '1';
 FLASH_HOLD_N <= '1';
-
 MIDI_RESET_N <= not reset;
-
-u_midi_clk: ODDR2 
-port map(
-	Q => MIDI_CLK,
-	C0 => clk_12,
-	C1 => not clk_12,
-	CE => '1',
-	D0 => '1',
-	D1 => '0',
-	R => '0',
-	S => '0'
-);
+u_midi_clk: ODDR2 port map(Q => MIDI_CLK, C0 => clk_12, C1 => not clk_12, CE => '1', D0 => '1', D1 => '0', R => '0', S => '0');
 
 end Behavioral;
 

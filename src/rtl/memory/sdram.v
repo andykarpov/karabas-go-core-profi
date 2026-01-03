@@ -2,11 +2,10 @@
 // sdram.v
 //
 // sdram controller implementation for the MiST board
-// https://github.com/mist-devel/mist-board
+// http://code.google.com/p/mist-board/
 // 
 // Copyright (c) 2013 Till Harbaum <till@harbaum.org> 
-// Copyright (c) 2019 Gyorgy Szombathelyi
-//
+// 
 // This source file is free software: you can redistribute it and/or modify 
 // it under the terms of the GNU General Public License as published 
 // by the Free Software Foundation, either version 3 of the License, or 
@@ -24,40 +23,31 @@
 module sdram (
 
 	// interface to the MT48LC16M16 chip
-	inout  reg [15:0] SDRAM_DQ,   // 16 bit bidirectional data bus
-	output reg [12:0] SDRAM_A,    // 13 bit multiplexed address bus
-	output reg        SDRAM_DQML, // two byte masks
-	output reg        SDRAM_DQMH, // two byte masks
-	output reg [1:0]  SDRAM_BA,   // two banks
-	output            SDRAM_nCS,  // a single chip select
-	output            SDRAM_nWE,  // write enable
-	output            SDRAM_nRAS, // row address select
-	output            SDRAM_nCAS, // columns address select
+	inout wire [15:0]    sd_data,    // 16 bit bidirectional data bus
+	output reg [12:0]   sd_addr,    // 13 bit multiplexed address bus
+	output reg [1:0]    sd_dqm,     // two byte masks
+	output reg [1:0]    sd_ba,      // two banks
+	output wire         sd_cs,      // a single chip select
+	output wire         sd_we,      // write enable
+	output wire         sd_ras,     // row address select
+	output wire         sd_cas,     // columns address select
+	output wire         sd_clk,	  // clock
 
 	// cpu/chipset interface
-	input             init_n,     // init signal after FPGA config to initialize RAM
-	input             clk,        // sdram clock
-	input             clkref,
-
-	input             port1_req,
-	output            port1_ack,
-	input             port1_we,
-	input      [23:1] port1_a,
-	input       [1:0] port1_ds,
-	input      [15:0] port1_d,
-	output     [15:0] port1_q,
-
-	input             port2_req,
-	output            port2_ack,
-	input             port2_we,
-	input      [23:1] port2_a,
-	input       [1:0] port2_ds,
-	input      [15:0] port2_d,
-	output     [15:0] port2_q
+	input wire          init,			// init signal after FPGA config to initialize RAM
+	input wire          clk,			// sdram is accessed at up to 128MHz
+	
+	input wire [7:0]    din,			// data input from chipset/cpu
+	output reg [7:0]    dout,       // data output to chipset/cpu
+	input wire [24:0]   addr,       // 25 bit byte address
+	input wire          oe,         // cpu/chipset requests read
+	input wire          we,         // cpu/chipset requests write
+	output reg          busy        // chip busy 
 );
 
-localparam RASCAS_DELAY   = 3'd3;   // tRCD=20ns -> 2 cycles@<=100MHz, 3 cycles@>100MHz
-localparam BURST_LENGTH   = 3'b000; // 000=1, 001=2, 010=4, 011=8
+// no burst configured
+localparam RASCAS_DELAY   = 3'd3;   // tRCD>=20ns -> 3 cycles@112MHz
+localparam BURST_LENGTH   = 3'b000; // 000=none, 001=2, 010=4, 011=8
 localparam ACCESS_TYPE    = 1'b0;   // 0=sequential, 1=interleaved
 localparam CAS_LATENCY    = 3'd3;   // 2/3 allowed
 localparam OP_MODE        = 2'b00;  // only 00 (standard operation) allowed
@@ -65,62 +55,32 @@ localparam NO_WRITE_BURST = 1'b1;   // 0= write burst enabled, 1=only single acc
 
 localparam MODE = { 3'b000, NO_WRITE_BURST, OP_MODE, CAS_LATENCY, ACCESS_TYPE, BURST_LENGTH}; 
 
-// 64ms/8192 rows = 7.8us -> 842 cycles@108MHz
-localparam RFRSH_CYCLES = 10'd842;
-
 // ---------------------------------------------------------------------
 // ------------------------ cycle state machine ------------------------
 // ---------------------------------------------------------------------
 
-/*
- SDRAM state machine for 2 bank interleaved access
- 1 word burst, CL3
-cmd issued  registered
- 0 RAS0     
- 1          ras0 data1 returned
- 2 RAS1     
- 3 CAS0     ras1
- 4          cas0
- 5 CAS1    
- 6          cas1
- 7          data 0 returned
-*/
+localparam STATE_IDLE      = 3'd0;   // first state in cycle
+localparam STATE_CMD_CONT  = STATE_IDLE + RASCAS_DELAY; // 2 command can be continued
+localparam STATE_CMD_READ  = STATE_CMD_CONT + CAS_LATENCY + 1'd1; // 5
+localparam STATE_LAST      = 3'd5;   // last state in cycle
 
-localparam STATE_RAS0      = 3'd0;   // first state in cycle
-localparam STATE_RAS1      = 3'd2;   // Second ACTIVE command after RAS0 + tRRD (15ns)
-localparam STATE_CAS0      = STATE_RAS0 + RASCAS_DELAY; // CAS phase - 3
-localparam STATE_DS0       = STATE_RAS0 + RASCAS_DELAY + 1'd1; // 2 cycles before data required
-localparam STATE_CAS1      = STATE_RAS1 + RASCAS_DELAY; // CAS phase - 5
-localparam STATE_DS1       = STATE_RAS1 + RASCAS_DELAY + 1'd1; // 2 cycles before data required
-localparam STATE_READ0     = 3'd0; //STATE_CAS0 + CAS_LATENCY + 1'd1;
-localparam STATE_READ1     = 3'd1 + 3'd1;
-localparam STATE_LAST      = 3'd7;
-
-reg [2:0] t;
-
+reg [2:0] q;
 always @(posedge clk) begin
-	t <= t + 1'd1;
-	if (t == STATE_LAST) t <= STATE_RAS0;
-	//if (t == STATE_RAS1 && !oe_latch[0] && !we_latch[0] && !need_refresh && next_port[1] == PORT_NONE) t <= STATE_RAS0;
-	if (clkref) t <= 3'd6;
+	q <= q + 1'd1;
+	if (q == STATE_LAST) q <= 0;
 end
 
 // ---------------------------------------------------------------------
 // --------------------------- startup/reset ---------------------------
 // ---------------------------------------------------------------------
 
-// wait 1ms (32 8Mhz cycles) after FPGA config is done before going
+// wait 1ms (32 clkref cycles) after FPGA config is done before going
 // into normal operation. Initialize the ram in the last 16 reset cycles (cycles 15-0)
-reg [4:0]  reset;
-reg        init = 1'b1;
-always @(posedge clk, negedge init_n) begin
-	if(!init_n) begin
-		reset <= 5'h1f;
-		init <= 1'b1;
-	end else begin
-		if((t == STATE_LAST) && (reset != 0)) reset <= reset - 5'd1;
-		init <= !(reset == 0);
-	end
+reg [4:0] reset;
+always @(posedge clk, posedge init) begin
+	if(init)	reset <= 5'h1f;
+	else if((q == STATE_LAST) && (reset != 0))
+		reset <= reset - 5'd1;
 end
 
 // ---------------------------------------------------------------------
@@ -138,178 +98,67 @@ localparam CMD_PRECHARGE       = 4'b0010;
 localparam CMD_AUTO_REFRESH    = 4'b0001;
 localparam CMD_LOAD_MODE       = 4'b0000;
 
-reg  [3:0] sd_cmd;   // current command sent to sd ram
-reg [15:0] sd_din;
+reg [3:0] sd_cmd;   // current command sent to sd ram
+
 // drive control signals according to current command
-assign SDRAM_nCS  = sd_cmd[3];
-assign SDRAM_nRAS = sd_cmd[2];
-assign SDRAM_nCAS = sd_cmd[1];
-assign SDRAM_nWE  = sd_cmd[0];
+assign sd_cs  = sd_cmd[3];
+assign sd_ras = sd_cmd[2];
+assign sd_cas = sd_cmd[1];
+assign sd_we  = sd_cmd[0];
 
-reg [24:1] addr_latch[2];
-reg [24:1] addr_latch_next[2];
-reg [15:0] din_latch[2];
-reg  [1:0] oe_latch;
-reg  [1:0] we_latch;
-reg  [1:0] ds[2];
-reg  [1:0] state;
-
-localparam PORT_NONE  = 1'd0;
-localparam PORT_REQ   = 1'd1;
-
-reg  [1:0] next_port;
-reg  [1:0] port;
-
-reg        port1_ack_reg;
-reg [15:0] port1_q_reg;
-
-reg        port2_ack_reg;
-reg [15:0] port2_q_reg;
-
-reg        refresh;
-reg [10:0] refresh_cnt;
-wire       need_refresh = (refresh_cnt >= RFRSH_CYCLES);
-
-// PORT1: bank 0,1
-always @(*) begin
-	if (refresh) begin
-		next_port[0] = PORT_NONE;
-		addr_latch_next[0] = addr_latch[0];
-	end else if (port1_req ^ state[0]) begin
-		next_port[0] = PORT_REQ;
-		addr_latch_next[0] = { 1'b0, port1_a };
-	end else begin
-		next_port[0] = PORT_NONE;
-		addr_latch_next[0] = addr_latch[0];
-	end
-end
-
-// PORT2: bank 2,3
-always @(*) begin
-	if (port2_req ^ state[1]) begin
-		next_port[1] = PORT_REQ;
-		addr_latch_next[1] = { 1'b1, port2_a };
-	end else begin
-		next_port[1] = PORT_NONE;
-		addr_latch_next[1] = addr_latch[1];
-	end
-end
+wire [12:0] reset_addr = (reset == 13)?13'b0010000000000:MODE;
+reg oe_latch, we_latch;
+reg oe_old, we_old;
+wire oe_next = ~oe_old & oe;
+wire we_next = ~we_old & we;
+reg [15:0] sd_data_r;
+assign sd_data = sd_data_r;
 
 always @(posedge clk) begin
+	sd_cmd <= CMD_INHIBIT;
+	sd_data_r <= 16'bZZZZZZZZZZZZZZZZ;
 
-	// permanently latch ram data to reduce delays
-	sd_din <= SDRAM_DQ;
-	SDRAM_DQ <= 16'bZZZZZZZZZZZZZZZZ;
-	{ SDRAM_DQMH, SDRAM_DQML } <= 2'b11;
-	sd_cmd <= CMD_NOP;  // default: idle
-	refresh_cnt <= refresh_cnt + 1'd1;
-
-	if(init) begin
-		// initialization takes place at the end of the reset phase
-		if(t == STATE_RAS0) begin
-
-			if(reset == 15) begin
-				sd_cmd <= CMD_PRECHARGE;
-				SDRAM_A[10] <= 1'b1;      // precharge all banks
-			end
-
-			if(reset == 10 || reset == 8) begin
-				sd_cmd <= CMD_AUTO_REFRESH;
-			end
-
-			if(reset == 2) begin
-				sd_cmd <= CMD_LOAD_MODE;
-				SDRAM_A <= MODE;
-				SDRAM_BA <= 2'b00;
-			end
+	if(reset != 0) begin
+		busy <= 1'b1;
+		{oe_latch, we_latch} <= 0;
+		sd_dqm <= 2'b11;
+		sd_addr <= reset_addr;
+		if(q == STATE_IDLE) begin
+			if(reset == 13)  sd_cmd <= CMD_PRECHARGE;
+			if(reset ==  2)  sd_cmd <= CMD_LOAD_MODE;
 		end
 	end else begin
-		// RAS phase
-		// bank 0,1
-		if(t == STATE_RAS0) begin
-			addr_latch[0] <= addr_latch_next[0];
-			port[0] <= next_port[0];
-			{ oe_latch[0], we_latch[0] } <= 2'b00;
-
-			if (next_port[0] != PORT_NONE) begin
-				state[0] <= port1_req;
+		sd_dqm <= 2'b00;
+		if(q == STATE_IDLE) begin
+			busy <= 1'b0;
+			oe_old <= oe;
+			we_old <= we;
+			{oe_latch, we_latch} <= {oe_next, we_next};
+			if(we_next || oe_next) begin
+				busy <= 1'b1;
 				sd_cmd <= CMD_ACTIVE;
-				SDRAM_A <= addr_latch_next[0][22:10];
-				SDRAM_BA <= addr_latch_next[0][24:23];
-				{ oe_latch[0], we_latch[0] } <= { ~port1_we, port1_we };
-				ds[0] <= port1_ds;
-				din_latch[0] <= port1_d;
+				sd_addr <= addr[21:9];
+				sd_ba <= addr[23:22];
 			end
-		end
-
-		// bank 2,3
-		if(t == STATE_RAS1) begin
-			refresh <= 0;
-			addr_latch[1] <= addr_latch_next[1];
-			{ oe_latch[1], we_latch[1] } <= 2'b00;
-			port[1] <= next_port[1];
-
-			if (next_port[1] != PORT_NONE) begin
-				state[1] <= port2_req;
-				sd_cmd <= CMD_ACTIVE;
-				SDRAM_A <= addr_latch_next[1][22:10];
-				SDRAM_BA <= addr_latch_next[1][24:23];
-				{ oe_latch[1], we_latch[1] } <= { ~port2_we, port2_we };
-				ds[1] <= port2_ds;
-				din_latch[1] <= port2_d;
-			end
-
-			if (next_port[1] == PORT_NONE && need_refresh && !we_latch[0] && !oe_latch[0]) begin
-				refresh <= 1;
-				refresh_cnt <= 0;
+			else begin
+				busy <= 1'b1;
 				sd_cmd <= CMD_AUTO_REFRESH;
 			end
-		end
-
-		// CAS phase
-		if(t == STATE_CAS0 && (we_latch[0] || oe_latch[0])) begin
-			sd_cmd <= we_latch[0]?CMD_WRITE:CMD_READ;
-			{ SDRAM_DQMH, SDRAM_DQML } <= ~ds[0];
-			if (we_latch[0]) begin
-				SDRAM_DQ <= din_latch[0];
-				port1_ack_reg <= port1_req;
+		end else if(q == STATE_CMD_CONT) begin
+			busy <= 1'b1;
+			if(we_latch || oe_latch) sd_addr <= { 4'b0010, addr[8:0]};
+			if(we_latch) begin
+				sd_cmd <= CMD_WRITE;
+				sd_data_r <= {din, din};
 			end
-			SDRAM_A <= { 4'b0010, addr_latch[0][9:1] };  // auto precharge
-			SDRAM_BA <= addr_latch[0][24:23];
-		end
-
-		if(t == STATE_CAS1 && (we_latch[1] || oe_latch[1])) begin
-			sd_cmd <= we_latch[1]?CMD_WRITE:CMD_READ;
-			{ SDRAM_DQMH, SDRAM_DQML } <= ~ds[1];
-			if (we_latch[1]) begin
-				SDRAM_DQ <= din_latch[1];
-				port2_ack_reg <= port2_req;
-			end
-			SDRAM_A <= { 4'b0010, addr_latch[1][9:1] };  // auto precharge
-			SDRAM_BA <= addr_latch[1][24:23];
-		end
-
-		// Data returned
-		if(t == STATE_DS0 && oe_latch[0])	{ SDRAM_DQMH, SDRAM_DQML } <= ~ds[0];
-
-		if(t == STATE_READ0 && oe_latch[0]) begin
-			port1_q_reg <= sd_din;
-			port1_ack_reg <= port1_req;
-		end
-
-		if(t == STATE_DS1 && oe_latch[1])	{ SDRAM_DQMH, SDRAM_DQML } <= ~ds[1];
-
-		if(t == STATE_READ1 && oe_latch[1]) begin
-			port2_q_reg <= sd_din;
-			port2_ack_reg <= port2_req;
+			else if(oe_latch) sd_cmd <= CMD_READ;
+		end else if(q == STATE_CMD_READ) begin
+			busy <= 1'b0;
+			if(oe_latch) dout <= sd_data[7:0];
 		end
 	end
 end
 
-assign port1_q   = (t == STATE_READ0 && oe_latch[0]) ? sd_din : port1_q_reg;
-assign port1_ack = (t == STATE_READ0 && oe_latch[0]) ? port1_req : port1_ack_reg;
-
-assign port2_q   = (t == STATE_READ1 && oe_latch[1]) ? sd_din : port2_q_reg;
-assign port2_ack = (t == STATE_READ1 && oe_latch[1]) ? port2_req : port2_ack_reg;
+ODDR2 clkbuf(.Q(sd_clk), .C0(clk), .C1(~clk), .CE(1'b1), .D0(1'b0), .D1(1'b1), .R(1'b0), .S(1'b0));
 
 endmodule

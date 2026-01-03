@@ -30,7 +30,7 @@ localparam INT = 373; // -- 14MHz / 373 = 0.0375MHz = 37.5kHz samplerate
 localparam INT_DS80 = 320; // -- 12MHz / 320
 
 // cs from host
-wire gs_sel = ~IORQ_n & M1_n & (A[7:4] == 4'hB && A[2:0] == 3'h3);
+wire gs_sel = ~IORQ_n & M1_n & (A[7:0] == 8'hB3 || A[7:0] == 8'hBB) & ~DS80; // 0xB3, 0xBB
 wire gs_cs_n = IORQ_n | ~gs_sel;
 wire a = A[3];
 
@@ -169,7 +169,7 @@ assign MDO = cpu_do_bus;
 assign MWE_n = cpu_wr_n || cpu_mreq_n || ~(mem[6] || mem[5] || mem[4] || mem[3] || mem[2] || mem[1]);
 assign MRD_n = cpu_rd_n || cpu_mreq_n;
 assign MRFSH_n = cpu_rfsh_n;
-assign OE = (~IORQ_n && ~RD_n && A[7:4] == 4'b1011 && A[2:0] == 3'b011) ? 1'b1 : 1'b0;
+assign OE = (~IORQ_n && ~RD_n && (A[7:0] == 8'hB3 || A[7:0] == 8'hBB) && ~DS80) ? 1'b1 : 1'b0;
 
 // sound mix
 reg signed [14:0] out_a, out_b, out_c, out_d;

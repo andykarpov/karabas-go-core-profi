@@ -19,6 +19,7 @@ port(
 	 RD_N 		: in std_logic := '1';
 	 IORQ_N 		: in std_logic := '1';
 	 M1_N 		: in std_logic := '1';
+	 DS80			: in std_logic := '0';
 	 CPM 			: in std_logic := '0';
 	 DOS 			: in std_logic := '0';
 	 ROM14 		: in std_logic := '0';
@@ -124,7 +125,7 @@ begin
 
 	--p4 <= '0' when A(7)='1' and A(4 downto 0)="10011" and cpm='1' and dos='0' and rom14='1' and IORQ_N='0' else '1';
 	p4 <= '0' when (A(7)='1' and A(4 downto 0)="10011" and IORQ_N='0') and ((cpm='1' and rom14='1') or (dos='1' and rom14='0')) else '1';
-	vv51_cs      <= not A(6) or p4;
+	vv51_cs      <= not A(6) or p4 or ds80;
 	vv51_cs_cmd  <= '0' when vv51_cs='0' and A(5) = '1' else '1';
 	vv51_cs_data <= '0' when vv51_cs='0' and A(5) = '0' else '1';
 	vv51_read <= '0' when vv51_cs_data = '0' and RD_N = '0' else '1';
@@ -294,6 +295,7 @@ begin
 		 RD_N		=> RD_N,
 		 IORQ_N  => IORQ_N,
 		 M1_N 	=> M1_N,
+		 DS80		=> DS80,
 		 CPM 		=> CPM,
 		 DOS 		=> DOS,
 		 ROM14 	=> ROM14,		 

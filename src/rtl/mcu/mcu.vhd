@@ -366,8 +366,10 @@ begin
    -- 000111 = 07 = Date of Month bin/bcd (1-31)
    -- 001000 = 08 = Month         bin/bcd (1-12)
 	-- 001001 = 09 = Year          bin/bcd (0-99)
-	-- 001010 = 0A = Register A RW 7-UIP, 6-DV2, 5-DV1, 4-DV0, 3-RS3, 2-RS2, 1-RS1, 0-RS0. (uip = update in progress, dv-dividers, rs-rate selection)
-	-- 001011 = 0B = Register B RW 7-SET, 6-PIE, 5-AIE, 4-UIE, 3-SQWE, 2-DM, 1-24/12. 0-DSE (SET=update mode,PIE=int en,AIE=alarm int en,UIE=update int en, SQWE, DM 1=bcd, 0=bin, 24/12 1=24,0=12, DSE=daylight saving mode 1/0)
+	-- 001010 = 0A = Register A RW 7-UIP, 6-DV2, 5-DV1, 4-DV0, 3-RS3, 2-RS2, 1-RS1, 0-RS0. 
+	--                             (UIP = update in progress, DV-dividers, RS-rate selection)
+	-- 001011 = 0B = Register B RW 7-SET, 6-PIE, 5-AIE, 4-UIE, 3-SQWE, 2-DM, 1-24/12. 0-DSE 
+	--                             (SET=update mode, PIE=int en, AIE=alarm int en, UIE=update int en, SQWE, DM 1=bcd, 0=bin, 24/12 1=24,0=12, DSE=daylight saving mode 1/0)
 	-- 001100 = 0C = Register C RO 7-IRFQ, 6-PF, 5-AF, 4-UF, 0000
 	-- 001101 = 0D = Register D RO 7-VRT, 0000000 (VRT = valid ram and time)
 	-- 001110 = 0E = Register E - memory, 50 bytes
@@ -432,7 +434,8 @@ begin
 			elsif UART_DLM_WR = '1' then -- send UART RLM reg
 				queue_wr_req <= '1';
 				queue_di <= CMD_UART & "00000010" & UART_DLM;
-			elsif RTC_WR_N = '0' AND RTC_CS = '1' and BUSY = '0' then -- add rtc register write to queue
+			--elsif RTC_WR_N = '0' AND RTC_CS = '1' and BUSY = '0' then -- add rtc register write to queue
+			elsif RTC_WR_N = '0' AND RTC_CS = '1' and BUSY = '0' and (RTC_A /= x"0C" and RTC_A < x"F0") then -- add rtc register write to queue
 				queue_wr_req <= '1';
 				queue_di <= CMD_RTC & RTC_A & RTC_DI;
 			elsif queue_rd_empty = '1' or queue_data_count < 5 then -- anti-empty queue

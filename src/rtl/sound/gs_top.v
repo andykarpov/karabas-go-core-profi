@@ -88,7 +88,7 @@ gs gs
 wire [24:0] sdr_a;
 wire [7:0] sdr_di;
 wire [7:0] sdr_do;
-wire sdr_wr, sdr_rd, sdr_rfsh_n;
+wire sdr_wr, sdr_rd, sdr_rfsh_n, sdr_busy;
 wire [7:0] gs_rom_dout;
 
 assign sdr_wr = (loader_act ?  loader_wr & loader_a[31] : ~gs_mem_wr_n);
@@ -97,7 +97,8 @@ assign sdr_a = (loader_act & loader_a[31]) ? {10'b0000000000, loader_a[14:0]} : 
 assign sdr_di = (loader_act & loader_a[31]) ? loader_d : gs_mem_dout;
 assign gs_mem_din = sdr_do;
 
-sdram sdram
+// sdram.vhd by MVV
+/*sdram sdram
 (
     .CLK(clk_sys),
 
@@ -108,8 +109,7 @@ sdram sdram
     .RD(sdr_rd),
     .RFSH(~loader_act & ~sdr_rfsh_n),
     .RFSHREQ(),
-    .IDLE(),
-    
+    .IDLE(),    
     .CK(sdram_clk),
     .RAS_n(sdram_ras_n),
     .CAS_n(sdram_cas_n),
@@ -119,7 +119,29 @@ sdram sdram
     .BA(sdram_ba),
     .MA(sdram_a),
     .DQ(sdram_dq)
-    
+);*/
+
+// sdram.v from MIST (CL=3 @ 112 MHz)
+sdram sdram(
+	.sd_data	(sdram_dq),
+	.sd_addr	(sdram_a),
+	.sd_dqm	(sdram_dqm),
+	.sd_ba	(sdram_ba),
+	.sd_cs	(),
+	.sd_we	(sdram_we_n),
+	.sd_ras	(sdram_ras_n),
+	.sd_cas	(sdram_cas_n),
+	.sd_clk	(sdram_clk),
+	
+	.init		(areset),
+	.clk		(clk_sys),
+	
+	.din		(sdr_di),
+	.dout		(sdr_do),
+	.addr		(sdr_a),
+	.oe		(sdr_rd),
+	.we		(sdr_wr),
+	.busy		(sdr_busy)
 );
 
 endmodule

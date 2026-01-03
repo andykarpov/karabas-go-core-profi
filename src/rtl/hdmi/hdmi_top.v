@@ -36,7 +36,7 @@ wire pll_reset;
 assign clk_pix = p_clk_int;
 
 hdmi_pll hdmi_pll (
-	.clk(clk), // 28/24
+	.clk(clk),
 	.reset(reset),
 	.ds80(ds80),
 	.clk_hdmi(clk_hdmi),

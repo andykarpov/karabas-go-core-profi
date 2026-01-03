@@ -1,4 +1,4 @@
--------------------------------------------------------------------[24.07.2014]
+-------------------------------------------------------------------[02.01.2026]
 -- SDRAM Controller
 -------------------------------------------------------------------------------
 -- Engineer: MVV
@@ -7,19 +7,26 @@
 -- V2.0.0	23.07.2014	Доработано до SDRAM 4 Meg x 16 x 4 banks
 -- V2.1.0	24.07.2014	Убран temp
 --          12.01.2024  Removed auto-refresh
---				01.01.2026  Added clock transfer regs				
+--				02.01.2026  Added registers for clock domain transfers
 
 -- CLK		= 84 MHz	= 11,9047619047619 ns
 -- WR/RD		= 6T		= 71,42857142857143 ns
 -- RFSH		= 6T		= 71,42857142857143 ns
 
+-- CLK		= 112 MHz = 8.9285714285714 ns
+-- WR/RD		= 6T		 = 53.5714285714 ns
+-- RFSH		= 6T		 = 53.5714285714 ns
+
 library IEEE;
 use IEEE.std_logic_1164.all;
 use IEEE.numeric_std.all;
 
+library unisim;
+use unisim.vcomponents.all;
+
 entity sdram is
 	port(
-		CLK				: in std_logic;
+		CLK			: in std_logic;
 		-- Memory port
 		A				: in std_logic_vector(24 downto 0);
 		DI				: in std_logic_vector(7 downto 0);
@@ -27,7 +34,7 @@ entity sdram is
 		WR				: in std_logic;
 		RD				: in std_logic;
 		RFSH			: in std_logic;
-		RFSHREQ			: out std_logic;
+		RFSHREQ		: out std_logic;
 		IDLE			: buffer std_logic;
 		-- SDRAM Pin
 		CK				: out std_logic;
@@ -43,19 +50,6 @@ end sdram;
 
 architecture rtl of sdram is
 
-  component ODDR2
-  port(
-          D0	: in std_logic;
-          D1	: in std_logic;
-          C0	: in std_logic;
-          C1	: in std_logic;
-          Q	: out std_logic;
-          CE    : in std_logic;
-          S     : in std_logic;
-          R	: in std_logic
-    );
-  end component;
-
 	signal state 		: unsigned(4 downto 0) := "00000";
 	signal address 		: std_logic_vector(24 downto 0);
 	signal rfsh_cnt 	: unsigned(9 downto 0) := "0000000000";
@@ -63,7 +57,9 @@ architecture rtl of sdram is
 	signal data_reg		: std_logic_vector(7 downto 0);
 	signal data			: std_logic_vector(7 downto 0);	
 	signal idle1		: std_logic;
-	signal temp			: std_logic_vector(2 downto 0);
+	signal a_r 			: std_logic_vector(24 downto 0);
+	signal di_r 		: std_logic_vector(7 downto 0);
+	signal rd_r, wr_r, rfsh_r : std_logic_vector(1 downto 0);
 	
 	-- SD-RAM control signals
 	signal sdr_cmd		: std_logic_vector(2 downto 0);
@@ -73,13 +69,6 @@ architecture rtl of sdram is
 	signal sdr_a		: std_logic_vector(12 downto 0);
 	signal sdr_dq		: std_logic_vector(15 downto 0);
 	
-	-- clock transfer regs
-	signal rd_r : std_logic_vector(1 downto 0);
-	signal wr_r : std_logic_vector(1 downto 0);
-	signal rfsh_r : std_logic_vector(1 downto 0);
-	signal di_r : std_logic_vector(7 downto 0);
-	signal a_r : std_logic_vector(24 downto 0);
-	
 	constant SdrCmd_xx 	: std_logic_vector(2 downto 0) := "111"; -- no operation
 	constant SdrCmd_ac 	: std_logic_vector(2 downto 0) := "011"; -- activate
 	constant SdrCmd_rd 	: std_logic_vector(2 downto 0) := "101"; -- read
@@ -87,6 +76,9 @@ architecture rtl of sdram is
 	constant SdrCmd_pr 	: std_logic_vector(2 downto 0) := "010"; -- precharge all
 	constant SdrCmd_re 	: std_logic_vector(2 downto 0) := "001"; -- refresh
 	constant SdrCmd_ms 	: std_logic_vector(2 downto 0) := "000"; -- mode regiser set
+	
+	constant CAS_LATENCY : std_logic_vector(2 downto 0) := "010"; -- 2
+	constant RASCAS_DELAY : std_logic_vector(2 downto 0) := "010"; -- 2
 
 -- Init-------------------------------------------------------		Idle		Read-------		Write------		Refresh----
 -- 00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F 10 11 12	13		14			15 16 12 13		17 18 12 13		10 11 12 13
@@ -94,21 +86,21 @@ architecture rtl of sdram is
 
 begin
 
-	-- tranfer input signals to CLK clock domain
+	-- latch input signals in CLK domain
 	process (CLK)
 	begin
 		if rising_edge(CLK) then
 			rd_r <= rd_r(0) & rd;
 			wr_r <= wr_r(0) & wr;
 			rfsh_r <= rfsh_r(0) & rfsh;
-			di_r <= di;
-			a_r <= a;
+			a_r <= A;
+			di_r <= DI;
 		end if;
 	end process;
 
 	process (CLK)
 	begin
-		if rising_edge(CLK) then
+		if CLK'event and CLK = '1' then
 			case state is
 				-- Init
 				when "00000" =>						-- s00
@@ -123,7 +115,8 @@ begin
 					state <= state + 1;
 				when "01111" =>						-- s0F
 					sdr_cmd <= SdrCmd_ms;			-- LOAD MODE REGISTER
-					sdr_a <= "000" & "1" & "00" & "010" & "0" & "000";				
+					-- 000, NO_WRITE_BURST, OP_MODE, CAS_LATENCY, ACCESS_TYPE, BURST_LEN
+					sdr_a <= "000" & "1" & "00" & CAS_LATENCY & "0" & "000";				
 					state <= state + 1;
 				
 				-- Idle
@@ -131,28 +124,28 @@ begin
 					sdr_cmd <= SdrCmd_xx;			-- NOP
 					sdr_dq <= (others => 'Z');
 					idle1 <= '1';
-					if rd_r = "01" then
+					if RD = '1' and rd_r(0) /= RD then				-- RD rising edge
 						idle1 <= '0';
-						address <= a_r;
+						address <= A;
 						sdr_cmd <= SdrCmd_ac;		-- ACTIVE
-						sdr_ba <= a_r(11 downto 10);
-						sdr_a <= a_r(24 downto 12);					 
-						state <= "10101";			-- s15 Read
+						sdr_ba <= A(11 downto 10);
+						sdr_a <= A(24 downto 12);					 
+						state <= "10101";				-- s15 Read
 
-					elsif wr_r = "01" then
+					elsif WR = '1' and wr_r(0) /= RD then			-- WR rising edge
 						idle1 <= '0';
-						address <= a_r;
-						data <= di_r;
+						address <= A;
+						data <= DI;
 						sdr_cmd <= SdrCmd_ac;		-- ACTIVE
-						sdr_ba <= a_r(11 downto 10);
-						sdr_a <= a_r(24 downto 12);
-						state <= "10111";			-- s17 Write
+						sdr_ba <= A(11 downto 10);
+						sdr_a <= A(24 downto 12);
+						state <= "10111";				-- s17 Write
 
-					elsif rfsh_r = "01" then
+					elsif RFSH = '1' and rfsh_r(0) /= RFSH then		-- RFSH rising edge
 						idle1 <= '0';
 						rfsh_req <= '0';
 						sdr_cmd <= SdrCmd_re;		-- REFRESH
-						state <= "10000";			-- s10
+						state <= "10000";				-- s10
 					end if;
 
 				-- A24 A23 A22 A21 A20 A19 A18 A17 A16 A15 A14 A13 A12 A11 A10 A9 A8 A7 A6 A5 A4 A3 A2 A1 A0
@@ -164,7 +157,7 @@ begin
 					sdr_a <= "0010" & address(9 downto 1);
 					sdr_dqml <= '0';
 					sdr_dqmh <= '0';
-					state <= "10010";				-- s12
+					state <= "10010";					-- s12
 					
 				-- Single write - with auto precharge
 				when "11000" =>						-- s18
@@ -173,37 +166,19 @@ begin
 					sdr_dq <= data & data;
 					sdr_dqml <= address(0);
 					sdr_dqmh <= not address(0);
-					state <= "10010";				-- s12
+					state <= "10010";					-- s12
 					
 				when others =>
 					sdr_dq <= (others => 'Z');
 					sdr_cmd <= SdrCmd_xx;			-- NOP
-					
-					-- pre idle
---					if (state = "10011") then 
---						if ((idle1 = '0' and temp = "000") or (idle1 = '1')) then  -- wait the end of host mem cycle
---							state <= state + 1;
---						end if;
---					else
---						state <= state + 1;
---					end if;
 					state <= state + 1;
 			end case;
-
-			-- Providing a distributed AUTO REFRESH command every 7.81us
-			--if rfsh_cnt = "1010010001" then			-- (CLK MHz * 1000 * 64 / 8192) = 657 %10 1001 0001
-			--	rfsh_cnt <= (others => '0');
-			--	rfsh_req <= '1';
-			--else
-			--	rfsh_cnt <= rfsh_cnt + 1;
-			--end if;
-		
 		end if;
 	end process;
 	
 	process (CLK, state, DQ, data_reg, idle1)
 	begin
-		if falling_edge(CLK) and idle1 = '0' then
+		if CLK'event and CLK = '0' and idle1 = '0' then
 			if state = "10100" then					-- s14
 				if address(0) = '0' then
 					data_reg <= DQ(7 downto 0);

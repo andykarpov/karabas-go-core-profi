@@ -2,7 +2,6 @@
 
 module hdmi_frame(
 
-	input wire clk, // 56 MHz bus
 	input wire clk_rgb, // 7 / 12 MHz
 	input wire clk_vga, // 28 / 24 MHz
 	input wire reset, 

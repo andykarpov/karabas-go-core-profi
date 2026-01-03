@@ -14,6 +14,7 @@ port(
 	 RD_N 		: in std_logic := '1';
 	 IORQ_N 		: in std_logic := '1';
 	 M1_N 		: in std_logic := '1';
+	 DS80			: in std_logic := '0';
 	 CPM 			: in std_logic := '0';
 	 DOS 			: in std_logic := '0';
 	 ROM14 		: in std_logic := '0';
@@ -45,7 +46,7 @@ architecture RTL of hw_int is
 		
 begin
 
-	p4i <= '0' when ((A(7 downto 0) = x"B3" or A(7 downto 0) = x"93") and IORQ_N='0') and ((cpm='1' and rom14='1') or (dos='1' and rom14='0')) else '1';	
+	p4i <= '0' when ((A(7 downto 0) = x"B3" or A(7 downto 0) = x"93") and IORQ_N='0') and DS80='1' and ((cpm='1' and rom14='1') or (dos='1' and rom14='0')) else '1';	
 	int_rq <= rxrdt or txrdt;
 	int <= '0' when int_rq='1' and CPM='1' and port93_b0='1' else '1';
 	fi <= '0' when M1_N='0' and IORQ_N = '0' and int = '0' else '1';
