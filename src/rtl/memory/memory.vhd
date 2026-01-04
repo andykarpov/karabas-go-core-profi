@@ -12,6 +12,7 @@ port (
 	CLK_BUS		: in std_logic;
 
 	ENA_CPU 		: in std_logic;
+	ENA_DIV2		: in std_logic;
 
 	A           : in std_logic_vector(15 downto 0); -- address bus
 	D 				: in std_logic_vector(7 downto 0);
@@ -21,8 +22,14 @@ port (
 	N_RD 			: in std_logic;
 	N_M1 			: in std_logic;
 	
+	GS_A			: in std_logic_vector(20 downto 0);
+	GS_D			: in std_logic_vector(7 downto 0);
+	GS_DO			: out std_logic_vector(7 downto 0);
+	GS_WR			: in std_logic;
+	GS_RD			: in std_logic;
+	
 	loader_act 	: in std_logic := '0';
-	loader_ram_a: in std_logic_vector(20 downto 0);
+	loader_ram_a: in std_logic_vector(31 downto 0);
 	loader_ram_do: in std_logic_vector(7 downto 0);
 	loader_ram_wr: in std_logic := '0';
 	
@@ -84,6 +91,12 @@ architecture RTL of memory is
 	signal vid_wr_a_bus, vid_rd_a_bus: std_logic_vector(15 downto 0);
 	signal vid_wr_attr : std_logic;
 	signal vid_wr_page : std_logic;
+
+	-- registers to share read/write requests between profi and gs
+	signal port1_a, port2_a: std_logic_vector(20 downto 0);
+	signal port1_rd, port1_wr, port2_rd, port2_wr : std_logic;
+	signal prev_port1_rd, prev_port1_wr, prev_port2_rd, prev_port2_wr : std_logic;
+	signal prev_n_mrd, prev_n_mwr: std_logic_vector(1 downto 0) := "11";
 	
 begin
 
@@ -94,13 +107,11 @@ begin
 		ADDRWIDTH	=> 16
 	)
 	port map(
-		clock 		=> CLK_BUS,
-		
+		clock 		=> CLK_BUS,		
 		address_a 	=> vid_wr_a_bus,
 		data_a 		=> D,
 		wren_a 		=> vid_wr,
 		q_a 			=> open,
-		
 		address_b 	=> vid_rd_a_bus,
 		data_b 		=> "00000000",
 		wren_b 		=> '0',
@@ -130,29 +141,119 @@ begin
 	vid_rd_a_bus <= 
 		"00" & VID_PAGE & VA(12 downto 0) when DS80 = '0' else -- spectrum video address
 		VID_RD & VID_PAGE & VA(13 downto 0); -- profi video address
-
-	N_MRD <= "11" when loader_act = '1' else
-				"10" when (is_rom = '1' and N_RD = '0') or -- read rom
-						(N_RD = '0' and N_MREQ = '0') else  -- read ram
-				"11";
-				
-	N_MWR <= '1' & not(loader_ram_wr) when loader_act = '1' else 
-				"10" when (is_ram = '1' or is_ramDIVMMC = '1') and N_WR = '0' else -- write ram
-				"11";
-
-	MA(20 downto 0) <=
-		loader_ram_a(20 downto 0) when loader_act = '1' else -- loader ram
-		"1010000" & A(13 downto 0) when is_romDIVMMC = '1' else -- DIVMMC rom
-		"11" & REG_E3(5 downto 0) & A(12 downto 0) when is_ramDIVMMC = '1' else -- DIVMMC ram 512 kB from #X180000 SRAM
-		"100" & EXT_ROM_BANK(1 downto 0) & rom_page(1 downto 0) & A(13 downto 0) when is_rom = '1' else -- rom from sram high bank 
-		ram_page(6 downto 0) & A(13 downto 0);  -- ram
 		
-	MD(7 downto 0) <= 
-		loader_ram_do when loader_act = '1' else -- loader DO
-		D(7 downto 0) when (is_ram = '1' or is_ramDIVMMC = '1' or (N_IORQ = '0' and N_M1 = '1')) and N_WR = '0' else  -- OCH: why (N_IORQ = '0' and N_M1 = '1') this used in memory controller? and in write mode
-		(others => 'Z');
+	-- memory arbiter by ena_div2: 1 (profi) / 0 (gs)
+	port1_rd <= '1' when (ENA_DIV2='1' and loader_act='0' and N_MREQ='0' and N_RD='0') else '0';
+	port1_wr <= '1' when (ENA_DIV2='1' and loader_act='0' and (is_ram='1' or is_ramDIVMMC='1') and N_WR='0') else '0';
+	port2_rd <= '1' when (ENA_DIV2='0' and loader_act='0' and GS_RD = '1') else '0';
+	port2_wr <= '1' when (ENA_DIV2='0' and loader_act='0' and GS_WR = '1') else '0';
+	port1_a <= "1010000" & A(13 downto 0) when is_romDIVMMC = '1' else
+						 "11" & REG_E3(5 downto 0) & A(12 downto 0) when is_ramDIVMMC = '1' else 
+						 "100" & EXT_ROM_BANK(1 downto 0) & rom_page(1 downto 0) & A(13 downto 0) when is_rom = '1' else
+						 ram_page(6 downto 0) & A(13 downto 0);
+	port2_a <= GS_A;
+	
+--	MA <= loader_ram_a(20 downto 0) when loader_act='1' else 
+--			port1_a when ENA_DIV2='1' else 
+--			port2_a;
 
-	DO <= MD(7 downto 0);
+--	MD <= "ZZZZZZZZ" & loader_ram_do when loader_act='1' and loader_ram_a(31)='0' else
+--			loader_ram_do & "ZZZZZZZZ" when loader_act='1' and loader_ram_a(31)='1' else
+--			"ZZZZZZZZ" & D WHEN port1_wr='1' and prev_port1_wr='0' else 
+--			GS_D & "ZZZZZZZZ" WHEN port2_wr='1' and prev_port2_wr='0' else 
+--			"ZZZZZZZZZZZZZZZZ";
+			
+--	N_MWR <= "10" when loader_act='1' and loader_ram_wr='1' and loader_ram_a(31)='0' else 
+--				"01" when loader_act='1' and loader_ram_wr='1' and loader_ram_a(31)='1' else
+--				"10" when loader_act='0' and port1_wr = '1' and prev_port1_wr='0' else
+--				"01" when loader_act='0' and port2_wr = '1' and prev_port2_wr='0' else
+--				"11";
+
+--	N_MRD <= "11" when loader_act='1' else
+--				"10" when loader_act='0' and port1_rd='1' and prev_port1_rd='0' else
+--				"01" when loader_act='0' and port2_rd='1' and prev_port2_rd='0' else
+--				"11";
+			
+	process (CLK_BUS)
+	begin
+		if rising_edge(CLK_BUS) then
+			N_MWR <= "11";
+			N_MRD <= "11";
+			MD <= (others => 'Z');
+
+			-- address
+			if loader_act='1' then
+				MA <= loader_ram_a(20 downto 0);
+			elsif ENA_DIV2 = '1' then 
+				MA <= port1_a;
+			else
+				MA <= port2_a;
+			end if;
+
+			-- data to write
+			if loader_act = '1' then 
+				if loader_ram_a(31) = '0' then 
+					MD(7 downto 0) <= loader_ram_do;
+				else
+					MD(15 downto 8) <= loader_ram_do;
+				end if;
+			elsif port1_wr='1' and prev_port1_wr='0' then
+				MD(7 downto 0) <= D;
+			elsif port2_wr='1' and prev_port2_wr='0' then 
+				MD(15 downto 8) <= GS_D;
+			end if;
+			
+			-- mem rd / wr
+			if loader_act='1' and loader_ram_wr='1' and loader_ram_a(31)='0' then 
+				N_MWR <= "10";
+			elsif loader_act='1' and loader_ram_wr='1' and loader_ram_a(31)='1' then
+				N_MWR <= "01";
+			elsif loader_act='0' and port1_wr = '1' and prev_port1_wr='0' then
+				N_MWR <= "10";
+			elsif loader_act='0' and port2_wr = '1' and prev_port2_wr='0' then 
+				N_MWR <= "01";
+			end if;
+
+			if loader_act='0' and port1_rd='1' and prev_port1_rd='0' then
+				N_MRD <= "10";
+			elsif loader_act='0' and port2_rd='1' and prev_port2_rd='0' then
+				N_MRD <= "01";
+			end if;
+			
+		end if;
+	end process;
+
+	process (CLK_BUS)
+	begin
+		if rising_edge(CLK_BUS) then
+			prev_port1_wr <= port1_wr;
+			prev_port1_rd <= port1_rd;
+			prev_port2_wr <= port2_wr;
+			prev_port2_rd <= port2_rd;
+			prev_n_mrd <= N_MRD;
+			prev_n_mwr <= N_MWR;
+		end if;
+	end process;
+				
+	-- mem read
+	process (CLK_BUS)
+	begin
+		if falling_edge(CLK_BUS) then
+			if N_MRD = "10" then
+				DO <= MD(7 downto 0);
+			elsif N_MWR = "10" then
+				DO <= D;
+			end if;
+			if N_MRD = "01" then
+				GS_DO <= MD(15 downto 8);
+			elsif N_MWR = "01" then
+				GS_DO <= GS_D;
+			end if;
+		end if;
+	end process;
+	
+--	DO <= MD(7 downto 0);
+--	GS_DO <= MD(15 downto 8);
 		
 	is_romDIVMMC <= '1' when DIVMMC_EN = '1' and N_MREQ = '0' and (AUTOMAP ='1' or REG_E3(7) = '1') and A(15 downto 13) = "000" else '0';
 	is_ramDIVMMC <= '1' when DIVMMC_EN = '1' and N_MREQ = '0' and (AUTOMAP ='1' or REG_E3(7) = '1') and A(15 downto 13) = "001" else '0';
@@ -167,7 +268,7 @@ begin
 
 	rom_page <= (not(TRDOS)) & ROM_BANK when DIVMMC_EN = '0' else "11";
 			
-	N_OE <= '0' when (is_ram = '1' or is_rom = '1') and N_RD = '0' else '1';
+	N_OE <= '0' when (is_ram = '1' or is_rom = '1') and N_RD = '0' and ENA_DIV2='1' else '1';
 		
 	mux <= A(15 downto 14);
 		

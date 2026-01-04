@@ -33,6 +33,13 @@ port (
 	ENA_RGB 		: buffer std_logic; -- 7/12
 	ENA_SAA		: buffer std_logic; -- 8
 	
+	ENA_DIV2N	: buffer std_logic;
+	ENA_DIV4N	: buffer std_logic;
+	ENA_DIV8N	: buffer std_logic;
+	ENA_DIV16N	: buffer std_logic;
+	ENA_DIV32N	: buffer std_logic;
+	ENA_DIV64N	: buffer std_logic;
+	
 	CE_14			: buffer std_logic;
 	
 	TURBO			: in std_logic_vector(2 downto 0);
@@ -128,12 +135,22 @@ end process;
 process (clk_bus)
 begin
 	if rising_edge(clk_bus) then
+		-- positive pulses
 		ENA_DIV2 <= ena_cnt(0);
 		ENA_DIV4 <= ena_cnt(1) and ena_cnt(0);
 		ENA_DIV8 <= ena_cnt(2) and ena_cnt(1) and ena_cnt(0);
 		ENA_DIV16 <= ena_cnt(3) and ena_cnt(2) and ena_cnt(1) and ena_cnt(0);
 		ENA_DIV32 <= ena_cnt(4) and ena_cnt(3) and ena_cnt(2) and ena_cnt(1) and ena_cnt(0);
 		ENA_DIV64 <= ena_cnt(5) and ena_cnt(4) and ena_cnt(3) and ena_cnt(2) and ena_cnt(1) and ena_cnt(0);
+
+		-- negative pulses
+		ENA_DIV2N <= not ena_cnt(0);
+		ENA_DIV4N <= not ena_cnt(1) and not ena_cnt(0);
+		ENA_DIV8N <= not ena_cnt(2) and not ena_cnt(1) and not ena_cnt(0);
+		ENA_DIV16N <= not ena_cnt(3) and not ena_cnt(2) and not ena_cnt(1) and not ena_cnt(0);
+		ENA_DIV32N <= not ena_cnt(4) and not ena_cnt(3) and not ena_cnt(2) and not ena_cnt(1) and not ena_cnt(0);
+		ENA_DIV64N <= not ena_cnt(5) and not ena_cnt(4) and not ena_cnt(3) and not ena_cnt(2) and not ena_cnt(1) and ena_cnt(0);
+		
 		if (ds80 = '1') then
 			ENA_RGB <= ena_cnt(0) and ena_cnt(1) and ena_cnt(2); -- 12
 		else

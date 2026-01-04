@@ -348,6 +348,11 @@ signal gs_l 				: std_logic_vector(14 downto 0);
 signal gs_r 				: std_logic_vector(14 downto 0);
 signal gs_oe 				: std_logic := '0';
 signal gs_do_bus	 		: std_logic_vector(7 downto 0);
+signal gs_ram_rd			: std_logic;
+signal gs_ram_wr			: std_logic;
+signal gs_ram_a			: std_logic_vector(20 downto 0);
+signal gs_ram_di			: std_logic_vector(7 downto 0);
+signal gs_ram_do			: std_logic_vector(7 downto 0);
 
 -- adc
 signal adc_l 				: std_logic_vector(23 downto 0);
@@ -370,6 +375,12 @@ signal ena_div8			: std_logic := '0';
 signal ena_div16			: std_logic := '0';
 signal ena_div32  		: std_logic := '0';
 signal ena_div64 			: std_logic := '0';
+signal ena_div2n			: std_logic := '0';
+signal ena_div4n			: std_logic := '0';
+signal ena_div8n			: std_logic := '0';
+signal ena_div16n			: std_logic := '0';
+signal ena_div32n 		: std_logic := '0';
+signal ena_div64n			: std_logic := '0';
 signal ena_cpu 			: std_logic := '0';
 signal ena_rgb				: std_logic := '0';
 signal ena_saa				: std_logic := '0';
@@ -473,6 +484,7 @@ signal fdd_do_bus 		: std_logic_vector(7 downto 0);
 signal fdd_oe_n 			: std_logic := '1';
 signal fdd_mode 			: std_logic_vector(1 downto 0);
 
+-- helpers
 signal loa 					: std_logic_vector(7 downto 0);
 signal hia					: std_logic_vector(15 downto 8);
 
@@ -493,12 +505,20 @@ port map(
 	CLK_RGB  		=> clk_rgb,
 	CLK_VGA			=> clk_vga,
 
-	ENA_DIV2 		=> ena_div2, -- 56 / 48
-	ENA_DIV4 		=> ena_div4, -- 28 / 24
-	ENA_DIV8 		=> ena_div8, -- 14 / 12
-	ENA_DIV16 		=> ena_div16, -- 7 / 6
-	ENA_DIV32 		=> ena_div32, -- 3.5 / 3
-	ENA_DIV64		=> ena_div64, -- 1.75 / 1.5
+	ENA_DIV2 		=> ena_div2, -- 56 / 48 pos
+	ENA_DIV4 		=> ena_div4, -- 28 / 24 pos
+	ENA_DIV8 		=> ena_div8, -- 14 / 12 pos
+	ENA_DIV16 		=> ena_div16, -- 7 / 6 pos 
+	ENA_DIV32 		=> ena_div32, -- 3.5 / 3 pos 
+	ENA_DIV64		=> ena_div64, -- 1.75 / 1.5 pos
+
+	ENA_DIV2N 		=> ena_div2n, -- 56 / 48 neg
+	ENA_DIV4N 		=> ena_div4n, -- 28 / 24 neg
+	ENA_DIV8N 		=> ena_div8n, -- 14 / 12 neg
+	ENA_DIV16N 		=> ena_div16n, -- 7 / 6 neg
+	ENA_DIV32N 		=> ena_div32n, -- 3.5 / 3 neg
+	ENA_DIV64N		=> ena_div64n, -- 1.75 / 1.5 neg
+	
 	ENA_CPU 			=> ena_cpu,
 	ENA_RGB 			=> ena_rgb,
 	ENA_SAA			=> ena_saa,
@@ -540,6 +560,7 @@ U3: entity work.memory
 port map ( 
 	CLK_BUS 			=> clk_bus,
 	ENA_CPU 			=> ena_cpu,
+	ENA_DIV2			=> ena_div2,
 
 	-- cpu signals
 	A 					=> cpu_a_bus,
@@ -550,11 +571,18 @@ port map (
 	N_RD 				=> cpu_rd_n,
 	N_M1 				=> cpu_m1_n,
 	
+	-- GS signals
+	GS_A				=> gs_ram_a,
+	GS_D				=> gs_ram_di,
+	GS_DO				=> gs_ram_do,
+	GS_RD				=> gs_ram_rd,
+	GS_WR				=> gs_ram_wr,
+	
 	-- loader signals
 	loader_act 		=> loader_act,
-	loader_ram_a 	=> loader_ram_a(20 downto 0),
+	loader_ram_a 	=> loader_ram_a,
 	loader_ram_do 	=> loader_ram_do,
-	loader_ram_wr 	=> loader_ram_wr and not(loader_ram_a(31)),
+	loader_ram_wr 	=> loader_ram_wr,
 
 	-- ram 
 	MA 				=> MA,
@@ -1106,9 +1134,8 @@ port map(
 -- General Sound
 U20: entity work.gs_top
 port map(
-	clk_sys 			=> clk_bus,
 	clk_bus 			=> clk_bus, -- 112/96
-	ce 				=> ena_div2 and ena_div4 and ena_div8, -- 14
+	ce 				=> ena_div2n and ena_div4n and ena_div8n, -- 14 (neg)
 	ds80				=> ds80,
 
 	reset 			=> areset or kb_gs_reset or loader_act or mcu_busy,
@@ -1125,24 +1152,25 @@ port map(
 	oe 				=> gs_oe,
 	do_bus 			=> gs_do_bus,
 	
-	sdram_clk 		=> SDR_CLK,
-	sdram_dq 		=> SDR_DQ,
-	sdram_a 			=> SDR_A,
-	sdram_dqm 		=> SDR_DQM,
-	sdram_ba 		=> SDR_BA,
-	sdram_we_n 		=> SDR_WE_N,
-	sdram_ras_n 	=> SDR_RAS_N,
-	sdram_cas_n 	=> SDR_CAS_N,
-	
-	loader_act 		=> loader_act,
-	loader_a 		=> loader_ram_a,
-	loader_d 		=> loader_ram_do,
-	loader_wr 		=> loader_ram_wr,
+	sram_a			=> gs_ram_a,
+	sram_di			=> gs_ram_di, -- out from gs
+	sram_do			=> gs_ram_do, -- in to gs
+	sram_wr			=> gs_ram_wr,
+	sram_rd			=> gs_ram_rd,
 	
 	out_l 			=> gs_l,
 	out_r 			=> gs_r
 	
 );
+
+SDR_CLK <= '1';
+SDR_DQ <= (others => 'Z');
+SDR_A <= (others => '0');
+SDR_DQM <= (others => '1');
+SDR_BA <= (others => '1');
+SDR_WE_N <= '1';
+SDR_RAS_N <= '1';
+SDR_CAS_N <= '1';
 
 -------------------------------------------------------------------------------
 -- Global signals
@@ -1540,6 +1568,10 @@ selector <=
 	-- память и пзу
 	x"00" when (ram_oe_n = '0') else -- ram / rom
 
+	-- high prio
+	x"15" when (gs_oe = '1') else 																-- gs
+	x"14" when (ide_oe_n = '0' and cpu_iorq_n = '0' and cpu_rd_n = '0') else 		-- ide	
+
 	-- порты с полной дешифрацией
 	x"08" when (cs_dffd = '1' and cpu_rd_n = '0') else										-- port #DFFD
 	x"09" when (cs_7ffd = '1' and cpu_rd_n = '0') else										-- port #7FFD
@@ -1552,8 +1584,6 @@ selector <=
 	x"11" when zifi_oe_n = '0' and cpu_iorq_n = '0' and cpu_rd_n = '0' else  		-- zifi
 
 	-- порты с укороченной дешифрацией
-	x"15" when (gs_oe = '1') else -- gs
-	x"14" when (ide_oe_n = '0' and cpu_iorq_n = '0' and cpu_rd_n = '0') else		-- ide
 	x"06" when (ts_enable = '1' and cpu_rd_n = '0') else 									-- TurboSound
 	x"01" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and cs_rtc_ds = '1') else -- rtc
  	x"03" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and (loa = x"57" or (loa = x"EB" and cpm = '0' and divmmc_en = '1')) ) else 	-- Z-Controller + DivMMC

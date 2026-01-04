@@ -6,7 +6,6 @@
 */
 module gs_top (
     // clocks
-    input wire            clk_sys,
     input wire            clk_bus,
     input wire            ce,
     input wire            reset,
@@ -24,23 +23,13 @@ module gs_top (
 
     // data out to cpu
     output wire           oe,
-    output wire [7:0]      do_bus,
+    output wire [7:0]     do_bus,
 
-	// interface to the MT48LC16M16 chip
-	output wire 			 sdram_clk,
-	inout  wire [15:0]    sdram_dq,
-	output wire [12:0]    sdram_a,
-	output wire [1:0]     sdram_dqm,
-	output wire [1:0]     sdram_ba,
-	output wire           sdram_we_n,
-	output wire           sdram_ras_n,
-	output wire           sdram_cas_n,
-
-    // rom loader interface
-   input wire            loader_act,
-	input wire [31:0]      loader_a,
-	input wire [7:0]       loader_d,
-	input wire            loader_wr,
+	output wire [20:0] 	 sram_a,
+	output wire 			 sram_rd,
+	output wire 			 sram_wr,
+	output wire [7:0]		 sram_di,
+	input wire [7:0] 		 sram_do,
 
     // sound output
 	output wire signed [14:0] out_l,
@@ -78,70 +67,16 @@ gs gs
     .MA(gs_mem_addr),
     .MDI(gs_mem_din),
     .MDO(gs_mem_dout),
-    .MRFSH_n(sdr_rfsh_n),
+    .MRFSH_n(),
     .MWE_n(gs_mem_wr_n),
     .MRD_n(gs_mem_rd_n)
 );
 
-// sdram, loder
-
-wire [24:0] sdr_a;
-wire [7:0] sdr_di;
-wire [7:0] sdr_do;
-wire sdr_wr, sdr_rd, sdr_rfsh_n, sdr_busy;
-wire [7:0] gs_rom_dout;
-
-assign sdr_wr = (loader_act ?  loader_wr & loader_a[31] : ~gs_mem_wr_n);
-assign sdr_rd = (loader_act ? 1'b0 : ~gs_mem_rd_n);
-assign sdr_a = (loader_act & loader_a[31]) ? {10'b0000000000, loader_a[14:0]} : {4'b0000, gs_mem_addr};
-assign sdr_di = (loader_act & loader_a[31]) ? loader_d : gs_mem_dout;
-assign gs_mem_din = sdr_do;
-
-// sdram.vhd by MVV
-/*sdram sdram
-(
-    .CLK(clk_sys),
-
-    .A(sdr_a),
-    .DI(sdr_di),
-    .DO(sdr_do),
-    .WR(sdr_wr),
-    .RD(sdr_rd),
-    .RFSH(~loader_act & ~sdr_rfsh_n),
-    .RFSHREQ(),
-    .IDLE(),    
-    .CK(sdram_clk),
-    .RAS_n(sdram_ras_n),
-    .CAS_n(sdram_cas_n),
-    .WE_n(sdram_we_n),
-    .DQML(sdram_dqm[0]),
-    .DQMH(sdram_dqm[1]),
-    .BA(sdram_ba),
-    .MA(sdram_a),
-    .DQ(sdram_dq)
-);*/
-
-// sdram.v from MIST (CL=3 @ 112 MHz)
-sdram sdram(
-	.sd_data	(sdram_dq),
-	.sd_addr	(sdram_a),
-	.sd_dqm	(sdram_dqm),
-	.sd_ba	(sdram_ba),
-	.sd_cs	(),
-	.sd_we	(sdram_we_n),
-	.sd_ras	(sdram_ras_n),
-	.sd_cas	(sdram_cas_n),
-	.sd_clk	(sdram_clk),
-	
-	.init		(areset),
-	.clk		(clk_sys),
-	
-	.din		(sdr_di),
-	.dout		(sdr_do),
-	.addr		(sdr_a),
-	.oe		(sdr_rd),
-	.we		(sdr_wr),
-	.busy		(sdr_busy)
-);
+// sram
+assign sram_wr = ~gs_mem_wr_n;
+assign sram_rd = ~gs_mem_rd_n;
+assign sram_a = gs_mem_addr;
+assign sram_di = gs_mem_dout;
+assign gs_mem_din = sram_do; 
 
 endmodule
