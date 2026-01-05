@@ -55,6 +55,7 @@ wire  [7:0] gs_mem_dout;
 wire  [7:0] gs_mem_din;
 wire        gs_mem_rd_n;
 wire        gs_mem_wr_n;
+wire 			gs_mem_rfsh_n;
 
 gs gs 
 (
@@ -78,7 +79,7 @@ gs gs
     .MA(gs_mem_addr),
     .MDI(gs_mem_din),
     .MDO(gs_mem_dout),
-    .MRFSH_n(sdr_rfsh_n),
+    .MRFSH_n(gs_mem_rfsh_n),
     .MWE_n(gs_mem_wr_n),
     .MRD_n(gs_mem_rd_n)
 );
@@ -88,17 +89,18 @@ gs gs
 wire [24:0] sdr_a;
 wire [7:0] sdr_di;
 wire [7:0] sdr_do;
-wire sdr_wr, sdr_rd, sdr_rfsh_n, sdr_busy;
+wire sdr_wr, sdr_rd, sdr_rfsh, sdr_busy;
 wire [7:0] gs_rom_dout;
 
-assign sdr_wr = (loader_act ?  loader_wr & loader_a[31] : ~gs_mem_wr_n);
-assign sdr_rd = (loader_act ? 1'b0 : ~gs_mem_rd_n);
-assign sdr_a = (loader_act & loader_a[31]) ? {10'b0000000000, loader_a[14:0]} : {4'b0000, gs_mem_addr};
-assign sdr_di = (loader_act & loader_a[31]) ? loader_d : gs_mem_dout;
+assign sdr_wr = 	(loader_act ?  loader_wr & loader_a[31] : ~gs_mem_wr_n);
+assign sdr_rd = 	(loader_act ? 1'b0 : ~gs_mem_rd_n);
+assign sdr_rfsh = (loader_act ? 1'b0 : ~gs_mem_rfsh_n);
+assign sdr_a = 	(loader_act ? {10'b0000000000, loader_a[14:0]} : {4'b0000, gs_mem_addr});
+assign sdr_di = 	(loader_act ? loader_d : gs_mem_dout);
 assign gs_mem_din = sdr_do;
 
 // sdram.vhd by MVV
-/*sdram sdram
+sdram sdram
 (
     .CLK(clk_sys),
 
@@ -107,7 +109,7 @@ assign gs_mem_din = sdr_do;
     .DO(sdr_do),
     .WR(sdr_wr),
     .RD(sdr_rd),
-    .RFSH(~loader_act & ~sdr_rfsh_n),
+    .RFSH(sdr_rfsh),
     .RFSHREQ(),
     .IDLE(),    
     .CK(sdram_clk),
@@ -119,29 +121,6 @@ assign gs_mem_din = sdr_do;
     .BA(sdram_ba),
     .MA(sdram_a),
     .DQ(sdram_dq)
-);*/
-
-// sdram.v from MIST (CL=3 @ 112 MHz)
-sdram sdram(
-	.sd_data	(sdram_dq),
-	.sd_addr	(sdram_a),
-	.sd_dqm	(sdram_dqm),
-	.sd_ba	(sdram_ba),
-	.sd_cs	(),
-	.sd_we	(sdram_we_n),
-	.sd_ras	(sdram_ras_n),
-	.sd_cas	(sdram_cas_n),
-	.sd_clk	(sdram_clk),
-	
-	.init		(areset),
-	.clk		(clk_sys),
-	
-	.din		(sdr_di),
-	.dout		(sdr_do),
-	.addr		(sdr_a),
-	.oe		(sdr_rd),
-	.we		(sdr_wr),
-	.busy		(sdr_busy)
 );
 
 endmodule

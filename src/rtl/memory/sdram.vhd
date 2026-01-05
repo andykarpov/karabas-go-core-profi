@@ -86,21 +86,12 @@ architecture rtl of sdram is
 
 begin
 
-	-- latch input signals in CLK domain
-	process (CLK)
-	begin
-		if rising_edge(CLK) then
-			rd_r <= rd_r(0) & rd;
-			wr_r <= wr_r(0) & wr;
-			rfsh_r <= rfsh_r(0) & rfsh;
-			a_r <= A;
-			di_r <= DI;
-		end if;
-	end process;
-
 	process (CLK)
 	begin
 		if CLK'event and CLK = '1' then
+			rd_r <= rd_r(0) & RD;
+			wr_r <= wr_r(0) & WR;
+			rfsh_r <= rfsh_r(0) & RFSH;
 			case state is
 				-- Init
 				when "00000" =>						-- s00
@@ -125,6 +116,7 @@ begin
 					sdr_dq <= (others => 'Z');
 					idle1 <= '1';
 					if RD = '1' and rd_r(0) /= RD then				-- RD rising edge
+					--if RD = '1' then
 						idle1 <= '0';
 						address <= A;
 						sdr_cmd <= SdrCmd_ac;		-- ACTIVE
@@ -133,6 +125,7 @@ begin
 						state <= "10101";				-- s15 Read
 
 					elsif WR = '1' and wr_r(0) /= RD then			-- WR rising edge
+					--elsif WR = '1' then
 						idle1 <= '0';
 						address <= A;
 						data <= DI;
@@ -142,6 +135,7 @@ begin
 						state <= "10111";				-- s17 Write
 
 					elsif RFSH = '1' and rfsh_r(0) /= RFSH then		-- RFSH rising edge
+					--elsif RFSH = '1' then
 						idle1 <= '0';
 						rfsh_req <= '0';
 						sdr_cmd <= SdrCmd_re;		-- REFRESH

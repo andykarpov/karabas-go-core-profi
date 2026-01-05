@@ -22,6 +22,7 @@ port (
 	CLK_12      : buffer std_logic; -- 12
 	CLK_RGB 		: buffer std_logic; -- 7 / 12
 	CLK_VGA		: buffer std_logic; -- 28 / 24
+	CLK_ADC		: buffer std_logic;
 	
 	ENA_DIV2		: buffer std_logic;
 	ENA_DIV4		: buffer std_logic;
@@ -102,6 +103,7 @@ U8 : BUFG port map (O => clk_12, I => clkout4);
 U9 : BUFGMUX port map (I0 => clk_112, I1 => clk_96, O => clk_bus, S => ds80);
 U10: BUFGCE port map(I => clk_bus, O => clk_rgb, CE => ena_rgb);
 U11: BUFGCE port map(I => clk_bus, O => clk_vga, CE => ena_div2 and ena_div4);
+U12: BUFG port map(I => ena_cnt(1), O => clk_adc); -- 28, 50/50 duty cycle
 
 ARESET 		<= not locked;
 
