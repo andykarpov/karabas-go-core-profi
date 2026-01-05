@@ -561,6 +561,7 @@ port map (
 	CLK_BUS 			=> clk_bus,
 	ENA_CPU 			=> ena_cpu,
 	ENA_DIV2			=> ena_div2,
+	ENA_DIV2N		=> ena_div2n,
 
 	-- cpu signals
 	A 					=> cpu_a_bus,

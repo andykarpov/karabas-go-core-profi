@@ -13,6 +13,7 @@ port (
 
 	ENA_CPU 		: in std_logic;
 	ENA_DIV2		: in std_logic;
+	ENA_DIV2N	: in std_logic;
 
 	A           : in std_logic_vector(15 downto 0); -- address bus
 	D 				: in std_logic_vector(7 downto 0);
@@ -145,8 +146,8 @@ begin
 	-- memory arbiter by ena_div2: 1 (profi) / 0 (gs)
 	port1_rd <= '1' when (ENA_DIV2='1' and loader_act='0' and N_MREQ='0' and N_RD='0') else '0';
 	port1_wr <= '1' when (ENA_DIV2='1' and loader_act='0' and (is_ram='1' or is_ramDIVMMC='1') and N_WR='0') else '0';
-	port2_rd <= '1' when (ENA_DIV2='0' and loader_act='0' and GS_RD = '1') else '0';
-	port2_wr <= '1' when (ENA_DIV2='0' and loader_act='0' and GS_WR = '1') else '0';
+	port2_rd <= '1' when (ENA_DIV2N='1' and loader_act='0' and GS_RD = '1') else '0';
+	port2_wr <= '1' when (ENA_DIV2N='1' and loader_act='0' and GS_WR = '1') else '0';
 	port1_a <= "1010000" & A(13 downto 0) when is_romDIVMMC = '1' else
 						 "11" & REG_E3(5 downto 0) & A(12 downto 0) when is_ramDIVMMC = '1' else 
 						 "100" & EXT_ROM_BANK(1 downto 0) & rom_page(1 downto 0) & A(13 downto 0) when is_rom = '1' else
@@ -186,7 +187,7 @@ begin
 				MA <= loader_ram_a(20 downto 0);
 			elsif ENA_DIV2 = '1' then 
 				MA <= port1_a;
-			else
+			elsif ENA_DIV2N = '1' then
 				MA <= port2_a;
 			end if;
 
@@ -268,7 +269,8 @@ begin
 
 	rom_page <= (not(TRDOS)) & ROM_BANK when DIVMMC_EN = '0' else "11";
 			
-	N_OE <= '0' when (is_ram = '1' or is_rom = '1') and N_RD = '0' and ENA_DIV2='1' else '1';
+	--N_OE <= '0' when (is_ram = '1' or is_rom = '1') and N_RD = '0' and ENA_DIV2='1' else '1';
+	N_OE <= '0' when (is_ram = '1' or is_rom = '1') and N_RD = '0' else '1';
 		
 	mux <= A(15 downto 14);
 		
