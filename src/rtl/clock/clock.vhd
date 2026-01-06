@@ -24,13 +24,21 @@ port (
 	CLK_VGA		: buffer std_logic; -- 28 / 24
 	CLK_ADC		: buffer std_logic;
 	
-	ENA_DIV2		: buffer std_logic;
-	ENA_DIV4		: buffer std_logic;
-	ENA_DIV8		: buffer std_logic;
-	ENA_DIV16   : buffer std_logic;
-	ENA_DIV32   : buffer std_logic;
-	ENA_DIV64 	: buffer std_logic;
-	ENA_CPU 		: buffer std_logic;
+	ENA_DIV2		: buffer std_logic; -- 56 p
+	ENA_DIV4		: buffer std_logic; -- 28 p
+	ENA_DIV8		: buffer std_logic; -- 14 p 
+	ENA_DIV16   : buffer std_logic; -- 7 p
+	ENA_DIV32   : buffer std_logic; -- 3.5 p
+	ENA_DIV64 	: buffer std_logic; -- 1.75 p
+
+	ENA_DIV2N	: buffer std_logic; -- 56 n
+	ENA_DIV4N	: buffer std_logic; -- 28 n
+	ENA_DIV8N	: buffer std_logic; -- 14 n
+	ENA_DIV16N  : buffer std_logic; -- 7 n
+	ENA_DIV32N  : buffer std_logic; -- 3.5 n
+	ENA_DIV64N 	: buffer std_logic; -- 1.75 n
+	
+	ENA_CPU 		: buffer std_logic; -- 3.5/7/14/28/56 / 3/6/12/24/48
 	ENA_RGB 		: buffer std_logic; -- 7/12
 	ENA_SAA		: buffer std_logic; -- 8
 	
@@ -136,6 +144,14 @@ begin
 		ENA_DIV16 <= ena_cnt(3) and ena_cnt(2) and ena_cnt(1) and ena_cnt(0);
 		ENA_DIV32 <= ena_cnt(4) and ena_cnt(3) and ena_cnt(2) and ena_cnt(1) and ena_cnt(0);
 		ENA_DIV64 <= ena_cnt(5) and ena_cnt(4) and ena_cnt(3) and ena_cnt(2) and ena_cnt(1) and ena_cnt(0);
+
+		ENA_DIV2N <= not ena_cnt(0);
+		ENA_DIV4N <= not ena_cnt(1) and not ena_cnt(0);
+		ENA_DIV8N <= not ena_cnt(2) and not ena_cnt(1) and not ena_cnt(0);
+		ENA_DIV16N <= not ena_cnt(3) and not ena_cnt(2) and not ena_cnt(1) and not ena_cnt(0);
+		ENA_DIV32N <= not ena_cnt(4) and not ena_cnt(3) and not ena_cnt(2) and not ena_cnt(1) and not ena_cnt(0);
+		ENA_DIV64N <= not ena_cnt(5) and not ena_cnt(4) and not ena_cnt(3) and not ena_cnt(2) and not ena_cnt(1) and not ena_cnt(0);
+		
 		if (ds80 = '1') then
 			ENA_RGB <= ena_cnt(0) and ena_cnt(1) and ena_cnt(2); -- 12
 		else

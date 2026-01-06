@@ -10,8 +10,11 @@ use IEEE.numeric_std.all;
 entity memory is
 port (
 	CLK_BUS		: in std_logic;
+	CLK_SDR		: in std_logic;
+	ARESET		: in std_logic;
 
 	ENA_CPU 		: in std_logic;
+	ENA_GS		: in std_logic;
 
 	A           : in std_logic_vector(15 downto 0); -- address bus
 	D 				: in std_logic_vector(7 downto 0);
@@ -22,17 +25,33 @@ port (
 	N_M1 			: in std_logic;
 	
 	loader_act 	: in std_logic := '0';
-	loader_ram_a: in std_logic_vector(20 downto 0);
+	loader_ram_a: in std_logic_vector(31 downto 0);
 	loader_ram_do: in std_logic_vector(7 downto 0);
 	loader_ram_wr: in std_logic := '0';
 	
 	DO 			: out std_logic_vector(7 downto 0);
 	N_OE 			: out std_logic;
 	
-	MA 			: out std_logic_vector(20 downto 0);
-	MD 			: inout std_logic_vector(15 downto 0) := "ZZZZZZZZZZZZZZZZ";
+	GS_A			: in std_logic_vector(20 downto 0);
+	GS_D			: in std_logic_vector(7 downto 0);
+	GS_DO			: out std_logic_vector(7 downto 0);
+	GS_N_RD		: in std_logic;
+	GS_N_WR		: in std_logic;
+	GS_N_RFSH	: in std_logic;
+	
+	MA 			: out 	std_logic_vector(20 downto 0);
+	MD 			: inout 	std_logic_vector(15 downto 0) := "ZZZZZZZZZZZZZZZZ";
 	N_MRD 		: buffer std_logic_vector(1 downto 0);
 	N_MWR 		: buffer std_logic_vector(1 downto 0);
+	
+	SDR_BA 		: out  	std_logic_vector (1 downto 0);
+	SDR_A 		: out  	std_logic_vector (12 downto 0);
+	SDR_CLK 		: out  	std_logic;
+	SDR_DQM 		: out  	std_logic_vector (1 downto 0);
+	SDR_WE_N 	: out  	std_logic;
+	SDR_CAS_N 	: out  	std_logic;
+	SDR_RAS_N 	: out  	std_logic;
+	SDR_DQ 		: inout  std_logic_vector (15 downto 0);
 	
 	RAM_BANK		: in std_logic_vector(2 downto 0);
 	RAM_EXT 		: in std_logic_vector(2 downto 0);
@@ -50,7 +69,7 @@ port (
 	SCR 			: in std_logic := '0';
 	WOROM 		: in std_logic := '0';
 	
-	ROM_BANK : in std_logic := '0';
+	ROM_BANK 	: in std_logic := '0';
 	EXT_ROM_BANK : in std_logic_vector(1 downto 0) := "00";
 	
 	COUNT_BLOCK : in std_logic := '0'; -- paper = '0' and (not (chr_col_cnt(2) and hor_cnt(0)));
@@ -84,6 +103,10 @@ architecture RTL of memory is
 	signal vid_wr_a_bus, vid_rd_a_bus: std_logic_vector(15 downto 0);
 	signal vid_wr_attr : std_logic;
 	signal vid_wr_page : std_logic;
+	
+	signal port1_a, port2_a : std_logic_vector(20 downto 0);
+	signal port1_di, port2_di : std_logic_vector(7 downto 0);
+	signal port1_rd, port1_wr, port1_rfsh, port2_rd, port2_wr, port2_rfsh : std_logic;
 	
 begin
 
@@ -131,29 +154,106 @@ begin
 		"00" & VID_PAGE & VA(12 downto 0) when DS80 = '0' else -- spectrum video address
 		VID_RD & VID_PAGE & VA(13 downto 0); -- profi video address
 
-	N_MRD <= "11" when loader_act = '1' else
-				"10" when (is_rom = '1' and N_RD = '0') or -- read rom
-						(N_RD = '0' and N_MREQ = '0') else  -- read ram
-				"11";
-				
-	N_MWR <= '1' & not(loader_ram_wr) when loader_act = '1' else 
-				"10" when (is_ram = '1' or is_ramDIVMMC = '1') and N_WR = '0' else -- write ram
-				"11";
-
-	MA(20 downto 0) <=
-		loader_ram_a(20 downto 0) when loader_act = '1' else -- loader ram
-		"1010000" & A(13 downto 0) when is_romDIVMMC = '1' else -- DIVMMC rom
-		"11" & REG_E3(5 downto 0) & A(12 downto 0) when is_ramDIVMMC = '1' else -- DIVMMC ram 512 kB from #X180000 SRAM
-		"100" & EXT_ROM_BANK(1 downto 0) & rom_page(1 downto 0) & A(13 downto 0) when is_rom = '1' else -- rom from sram high bank 
-		ram_page(6 downto 0) & A(13 downto 0);  -- ram
+	-- sdram controller for GS
+	U_SDRAM: entity work.sdram
+	port map(
+		CLK	=> CLK_SDR,
+		A		=> "0000" & port2_a,
+		DI		=> port2_di,
+		DO		=> GS_DO,
+		WR		=> port2_wr,
+		RD		=> port2_rd,
+		RFSH	=> port2_rfsh,
 		
-	MD(7 downto 0) <= 
-		loader_ram_do when loader_act = '1' else -- loader DO
-		D(7 downto 0) when (is_ram = '1' or is_ramDIVMMC = '1' or (N_IORQ = '0' and N_M1 = '1')) and N_WR = '0' else  -- OCH: why (N_IORQ = '0' and N_M1 = '1') this used in memory controller? and in write mode
-		(others => 'Z');
+		CK		=> SDR_CLK,
+		RAS_n	=> SDR_RAS_N,
+		CAS_n	=> SDR_CAS_N,
+		WE_n	=> SDR_WE_N,
+		DQML	=> SDR_DQM(0),
+		DQMH	=> SDR_DQM(1),
+		BA		=> SDR_BA,
+		MA		=> SDR_A,
+		DQ		=> SDR_DQ
+	);
+		
+--	SDR_CLK <= '1';
+--	SDR_DQ <= (others => 'Z');
+--	SDR_A <= (others => '0');
+--	SDR_DQM <= (others => '1');
+--	SDR_BA <= (others => '1');
+--	SDR_WE_N <= '1';
+--	SDR_CAS_N <= '1';
+--	SDR_RAS_N <= '1';		
+		
+	-- pseudo-dualport sram controller
+--	U_SRAM: entity work.sram
+--	port map(
+--		clk	=> CLK_BUS,
+--		reset	=> ARESET,
+--		
+--		port1_a => port1_a,
+--		port1_di => port1_di,
+--		port1_do => DO,
+--		port1_ena => '1', --ENA_CPU or loader_act,
+--		port1_wr => port1_wr,
+--		port1_rd => port1_rd,
+--		port1_do_rdy => open,
+--		
+--		port2_a => port2_a,
+--		port2_di => port2_di,
+--		port2_do => GS_DO,
+--		port2_ena => '1', --ENA_GS or loader_act,
+--		port2_wr => port2_wr,
+--		port2_rd => port2_rd,
+--		port2_do_rdy => open,
+--		
+--		sram_a => MA,
+--		sram_d => MD,
+--		sram_wr_n => N_MWR,
+--		sram_rd_n => N_MRD,
+--		
+--		busy => open
+--	);
 
+	-- connect sram (chip1) interface with main cpu
+	MA <= port1_a;
+	MD(7 downto 0) <= port1_di when loader_act='1' else
+			port1_di when (is_ram = '1' or is_ramDIVMMC = '1' or (N_IORQ = '0' and N_M1 = '1')) and N_WR = '0' else 
+			(others => 'Z');
 	DO <= MD(7 downto 0);
-		
+	N_MWR <= "10" when port1_wr = '1' else "11";
+	N_MRD <= "10" when port1_rd = '1' else "11";
+
+	-- shared port for profi cpu
+	port1_a <= loader_ram_a(20 downto 0) when loader_act = '1' else -- loader ram
+				  "1010000" & A(13 downto 0) when is_romDIVMMC = '1' else -- DIVMMC rom
+				  "11" & REG_E3(5 downto 0) & A(12 downto 0) when is_ramDIVMMC = '1' else -- DIVMMC ram 512 kB from #X180000 SRAM
+				  "100" & EXT_ROM_BANK(1 downto 0) & rom_page(1 downto 0) & A(13 downto 0) when is_rom = '1' else -- rom from sram high bank 
+				  ram_page(6 downto 0) & A(13 downto 0);  -- ram
+	port1_rd <= '0' when loader_act = '1' else
+					'1' when N_MREQ = '0' and N_RD = '0' else 
+					'0'; 
+	port1_wr <= loader_ram_wr when loader_act = '1' and loader_ram_a(31) = '0' else
+					'0' when loader_act = '1' and loader_ram_a(31) = '1' else
+					'1' when (is_ram = '1' or is_ramDIVMMC = '1') and N_MREQ = '0' and N_WR = '0' else 
+					'0';
+	port1_di <= loader_ram_do when loader_act = '1' else -- loader DO
+					D(7 downto 0); -- data from CPU
+
+	-- shared port for GS cpu
+	port2_a <= loader_ram_a(20 downto 0) when loader_act = '1' else 
+				  GS_A;
+	port2_rd <= '0' when loader_act = '1' else 
+					'1' when GS_N_RD = '0' else 
+					'0';
+	port2_wr <= loader_ram_wr when loader_act = '1' and loader_ram_a(31) = '1' else 
+					'0' when loader_act = '1' and loader_ram_a(31) = '0' else
+					'1' when GS_N_WR = '0' else
+					'0';
+	port2_rfsh <= '0' when loader_act = '1' else not GS_N_RFSH;
+	port2_di <= loader_ram_do when loader_act = '1' else 
+					GS_D(7 downto 0);
+
 	is_romDIVMMC <= '1' when DIVMMC_EN = '1' and N_MREQ = '0' and (AUTOMAP ='1' or REG_E3(7) = '1') and A(15 downto 13) = "000" else '0';
 	is_ramDIVMMC <= '1' when DIVMMC_EN = '1' and N_MREQ = '0' and (AUTOMAP ='1' or REG_E3(7) = '1') and A(15 downto 13) = "001" else '0';
 	

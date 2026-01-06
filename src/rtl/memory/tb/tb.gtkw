@@ -1,0 +1,45 @@
+[*]
+[*] GTKWave Analyzer v3.3.116 (w)1999-2023 BSI
+[*] Tue Jan  6 16:41:36 2026
+[*]
+[dumpfile] "/home/andy/Documents/Projects/Retrocomp/ZX-Spectrum/karabas-go/karabas-go-core-profi/src/rtl/memory/tb/out.vcd"
+[dumpfile_mtime] "Tue Jan  6 16:21:58 2026"
+[dumpfile_size] 8351
+[savefile] "/home/andy/Documents/Projects/Retrocomp/ZX-Spectrum/karabas-go/karabas-go-core-profi/src/rtl/memory/tb/tb.gtkw"
+[timestart] 0
+[size] 1920 1007
+[pos] -1 -1
+*-16.406963 570000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] sram_tb.
+[sst_width] 266
+[signals_width] 237
+[sst_expanded] 1
+[sst_vpaned_height] 303
+@29
+sram_tb.clk
+@28
+sram_tb.reset
+@22
+sram_tb.uut.port1_a[20:0]
+sram_tb.uut.port1_di[7:0]
+sram_tb.uut.port1_do[7:0]
+@28
+sram_tb.uut.port1_wr
+sram_tb.uut.port1_rd
+@22
+sram_tb.uut.port2_a[20:0]
+sram_tb.uut.port2_di[7:0]
+sram_tb.uut.port2_do[7:0]
+@28
+sram_tb.uut.port2_wr
+sram_tb.uut.port2_rd
+@22
+sram_tb.sram_a[20:0]
+sram_tb.sram_d[15:0]
+@28
+sram_tb.sram_rd_n[1:0]
+sram_tb.sram_wr_n[1:0]
+@22
+sram_tb.uut.state[3:0]
+[pattern_trace] 1
+[pattern_trace] 0
