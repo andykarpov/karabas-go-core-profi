@@ -46,11 +46,10 @@ port (
 	
 	SDR_BA 		: out  	std_logic_vector (1 downto 0);
 	SDR_A 		: out  	std_logic_vector (12 downto 0);
-	SDR_CLK 		: out  	std_logic;
 	SDR_DQM 		: out  	std_logic_vector (1 downto 0);
-	SDR_WE_N 	: out  	std_logic;
-	SDR_CAS_N 	: out  	std_logic;
-	SDR_RAS_N 	: out  	std_logic;
+	SDR_WE_N 	: out  	std_logic := '1';
+	SDR_CAS_N 	: out  	std_logic := '1';
+	SDR_RAS_N 	: out  	std_logic := '1';
 	SDR_DQ 		: inout  std_logic_vector (15 downto 0);
 	
 	RAM_BANK		: in std_logic_vector(2 downto 0);
@@ -165,55 +164,14 @@ begin
 		RD		=> port2_rd,
 		RFSH	=> port2_rfsh,
 		
-		CK		=> SDR_CLK,
 		RAS_n	=> SDR_RAS_N,
 		CAS_n	=> SDR_CAS_N,
 		WE_n	=> SDR_WE_N,
-		DQML	=> SDR_DQM(0),
-		DQMH	=> SDR_DQM(1),
+		DQM	=> SDR_DQM,
 		BA		=> SDR_BA,
 		MA		=> SDR_A,
 		DQ		=> SDR_DQ
 	);
-		
---	SDR_CLK <= '1';
---	SDR_DQ <= (others => 'Z');
---	SDR_A <= (others => '0');
---	SDR_DQM <= (others => '1');
---	SDR_BA <= (others => '1');
---	SDR_WE_N <= '1';
---	SDR_CAS_N <= '1';
---	SDR_RAS_N <= '1';		
-		
-	-- pseudo-dualport sram controller
---	U_SRAM: entity work.sram
---	port map(
---		clk	=> CLK_BUS,
---		reset	=> ARESET,
---		
---		port1_a => port1_a,
---		port1_di => port1_di,
---		port1_do => DO,
---		port1_ena => '1', --ENA_CPU or loader_act,
---		port1_wr => port1_wr,
---		port1_rd => port1_rd,
---		port1_do_rdy => open,
---		
---		port2_a => port2_a,
---		port2_di => port2_di,
---		port2_do => GS_DO,
---		port2_ena => '1', --ENA_GS or loader_act,
---		port2_wr => port2_wr,
---		port2_rd => port2_rd,
---		port2_do_rdy => open,
---		
---		sram_a => MA,
---		sram_d => MD,
---		sram_wr_n => N_MWR,
---		sram_rd_n => N_MRD,
---		
---		busy => open
---	);
 
 	-- connect sram (chip1) interface with main cpu
 	MA <= port1_a;

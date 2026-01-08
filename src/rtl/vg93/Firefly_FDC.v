@@ -2,13 +2,13 @@
 // Firefly FDC Top Level
 //------------------------------------------------------------
 // Grabbed from original project Firefly by IanPo (c) 2020-2023
-// Refactored by Andy Karpov (c) 2024
+// Refactored by Andy Karpov (c) 2024, 2026
 `default_nettype none
 
 module firefly_fdc (
 	// clocks
-	input wire          clk,
-	input wire         clk_16,
+	input wire         clk,
+	input wire         ena,
 	input wire         reset,
 
 	// cpu signals
@@ -141,7 +141,8 @@ always @( posedge clk )	//    #FF (TR-DOS)
 		r_bdi_ff <= d[4:0];
 	
 Main_CTRL U14 (
-	.iCLK ( clk_16 ),
+	.iCLK ( clk ),
+	.iENA	(ena),
 	.iRESETn ( vg_reset_n ),
 	.iWR_EN ( bdi_wr_en ),
 	.iADR ( a[6:5] ),
@@ -177,7 +178,8 @@ Main_CTRL U14 (
 );
 
 DPLL U15 (
-	.iCLK	( clk_16 ),
+	.iCLK		( clk ),
+	.iENA		( ena ),
 	.iRDDT	( FDC_RDATA ),
 	.oRCLK	( rclk ),
 	.oRAWR	( rawr ),
@@ -185,7 +187,8 @@ DPLL U15 (
 );
 
 AMD U16 (
-	.iCLK		( clk_16 ),
+	.iCLK			( clk ),
+	.iENA			( ena ),
 	.iRCLK		( rclk ),
 	.iRAWR		( rawr ),
 	.iVFOE		( vfoe ),
@@ -196,7 +199,8 @@ AMD U16 (
 );
 
 MFMDEC U17 (
-	.iCLK			( clk_16 ),
+	.iCLK				( clk ),
+	.iENA				( ena ),
 	.iRCLK			( rclk ),
 	.iVFOE			( vfoe ),
 	.iSTART			( start ),
@@ -207,7 +211,8 @@ MFMDEC U17 (
 );
 
 CRC16_D8 U19 (
-	.iCLK			( clk_16 ),
+	.iCLK				( clk ),
+	.iENA				( ena ),
 	.iRESET_CRC		( reset_crc ),
 	.iBYTE_2_MAIN	( byte_2_main ),
 	.iMAIN_2_BYTE	( main_2_byte ),
@@ -218,7 +223,8 @@ CRC16_D8 U19 (
 );
 
 MFMCDR U20 (
-	.iCLK			( clk_16 ),
+	.iCLK			( clk ),
+	.iENA			( ena ),
 	.iRESETn		( vg_reset_n ),
 	.iWG			( wg ),
 	.iMAIN_2_BYTE	( main_2_byte ),

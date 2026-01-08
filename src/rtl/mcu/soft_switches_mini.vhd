@@ -14,10 +14,14 @@ entity soft_switches is
 	SOFTSW_COMMAND : in std_logic_vector(15 downto 0);
 	
 	ROM_BANK : out std_logic_vector(1 downto 0);
+	TURBO_FDC : out std_logic := '0';
 	COVOX : out std_logic;
 	PSG_MIX : out std_logic_vector(1 downto 0);
 	PSG_TYPE : out std_logic;
+	VIDEO : out std_logic := '0';
+	VSYNC	: out std_logic := '0';
 	TURBO : out std_logic_vector(2 downto 0);
+	SWAP_FDD : out std_logic := '0';
 	JOY_TYPE_L : out std_logic_vector(2 downto 0);
 	JOY_TYPE_R : out std_logic_vector(2 downto 0);
 	MODE : out std_logic_vector(1 downto 0);

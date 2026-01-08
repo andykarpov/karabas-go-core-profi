@@ -41,6 +41,7 @@ port (
 	ENA_CPU 		: buffer std_logic; -- 3.5/7/14/28/56 / 3/6/12/24/48
 	ENA_RGB 		: buffer std_logic; -- 7/12
 	ENA_SAA		: buffer std_logic; -- 8
+	ENA_FDC		: buffer std_logic; -- 16
 	
 	CE_14			: buffer std_logic;
 	
@@ -54,6 +55,7 @@ architecture rtl of clock is
 
 signal ena_cnt : std_logic_vector(5 downto 0) := "000000";
 signal ena_cnt_saa : std_logic_vector(3 downto 0) := "0000";
+signal ena_cnt_fdc : std_logic_vector(3 downto 0) := "0000";
 signal locked : std_logic := '0';
 signal clk_112, clk_96 : std_logic;
 signal clkin1, clkfbout, clkfbout_buf, clkout0, clkout1, clkout2, clkout3, clkout4 : std_logic;
@@ -79,7 +81,7 @@ generic map (
    CLKOUT2_DIVIDE			=> 42,
    CLKOUT2_PHASE			=> 0.000,
 	CLKOUT2_DUTY_CYCLE 	=> 0.500,
-   CLKOUT3_DIVIDE			=> 8,
+   CLKOUT3_DIVIDE			=> 8, 
    CLKOUT3_PHASE			=> 0.000,
    CLKOUT3_DUTY_CYCLE 	=> 0.500,
    CLKOUT4_DIVIDE			=> 56,
@@ -132,6 +134,14 @@ begin
 		else
 			ena_cnt_saa <= ena_cnt_saa + 1;
 		end if;
+		
+		-- 112 / 7 = 16, 96 / 6 = 8
+		if (ds80 = '0' and ena_cnt_fdc >= 6) or (ds80 = '1' and ena_cnt_fdc >= 5) then
+			ena_cnt_fdc <= (others => '0');
+		else
+			ena_cnt_fdc <= ena_cnt_fdc + 1;
+		end if;
+		
 	end if;
 end process;
 
@@ -162,6 +172,12 @@ begin
 			ENA_SAA <= '1';
 		else
 			ENA_SAA <= '0';
+		end if;
+		
+		if (ena_cnt_fdc = "0000") then -- 16 mhz pulse in clk_bus domain
+			ENA_FDC <= '1';
+		else
+			ENA_FDC <= '0';
 		end if;
 		
 		CE_14 <= ena_cnt(2);

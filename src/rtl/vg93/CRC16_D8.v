@@ -11,6 +11,7 @@
 //
 module CRC16_D8 (
 input			iCLK,
+input 		iENA,
 input			iRESET_CRC,
 input	[7:0]	iBYTE_2_MAIN,
 input	[7:0]	iMAIN_2_BYTE,
@@ -32,36 +33,38 @@ begin
 end
 //
 always @( posedge iCLK )
-if ( iRESET_CRC == 1'b1 )
-	begin
-		rNEW_CRC <= 16'hFFFF;
-		rBYTE_CNT <= 11'd0;
-		rLAST_2RW <= 1'b0;
-	end
-else
-	if ( ( ( iBYTE_2_READ == 1'b1 ) || ( iBYTE_2_WRITE == 1'b1 ) ) && ( rLAST_2RW == 1'b0 ) )
+if (iENA) begin
+	if ( iRESET_CRC == 1'b1 )
 		begin
-			rNEW_CRC[0] <= wNEW_BYTE[4] ^ wNEW_BYTE[0] ^ rNEW_CRC[8] ^ rNEW_CRC[12];
-			rNEW_CRC[1] <= wNEW_BYTE[5] ^ wNEW_BYTE[1] ^ rNEW_CRC[9] ^ rNEW_CRC[13];
-			rNEW_CRC[2] <= wNEW_BYTE[6] ^ wNEW_BYTE[2] ^ rNEW_CRC[10] ^ rNEW_CRC[14];
-			rNEW_CRC[3] <= wNEW_BYTE[7] ^ wNEW_BYTE[3] ^ rNEW_CRC[11] ^ rNEW_CRC[15];
-			rNEW_CRC[4] <= wNEW_BYTE[4] ^ rNEW_CRC[12];
-			rNEW_CRC[5] <= wNEW_BYTE[5] ^ wNEW_BYTE[4] ^ wNEW_BYTE[0] ^ rNEW_CRC[8] ^ rNEW_CRC[12] ^ rNEW_CRC[13];
-			rNEW_CRC[6] <= wNEW_BYTE[6] ^ wNEW_BYTE[5] ^ wNEW_BYTE[1] ^ rNEW_CRC[9] ^ rNEW_CRC[13] ^ rNEW_CRC[14];
-			rNEW_CRC[7] <= wNEW_BYTE[7] ^ wNEW_BYTE[6] ^ wNEW_BYTE[2] ^ rNEW_CRC[10] ^ rNEW_CRC[14] ^ rNEW_CRC[15];
-			rNEW_CRC[8] <= wNEW_BYTE[7] ^ wNEW_BYTE[3] ^ rNEW_CRC[0] ^ rNEW_CRC[11] ^ rNEW_CRC[15];
-			rNEW_CRC[9] <= wNEW_BYTE[4] ^ rNEW_CRC[1] ^ rNEW_CRC[12];
-			rNEW_CRC[10] <= wNEW_BYTE[5] ^ rNEW_CRC[2] ^ rNEW_CRC[13];
-			rNEW_CRC[11] <= wNEW_BYTE[6] ^ rNEW_CRC[3] ^ rNEW_CRC[14];
-			rNEW_CRC[12] <= wNEW_BYTE[7] ^ wNEW_BYTE[4] ^ wNEW_BYTE[0] ^ rNEW_CRC[4] ^ rNEW_CRC[8] ^ rNEW_CRC[12] ^ rNEW_CRC[15];
-			rNEW_CRC[13] <= wNEW_BYTE[5] ^ wNEW_BYTE[1] ^ rNEW_CRC[5] ^ rNEW_CRC[9] ^ rNEW_CRC[13];
-			rNEW_CRC[14] <= wNEW_BYTE[6] ^ wNEW_BYTE[2] ^ rNEW_CRC[6] ^ rNEW_CRC[10] ^ rNEW_CRC[14];
-			rNEW_CRC[15] <= wNEW_BYTE[7] ^ wNEW_BYTE[3] ^ rNEW_CRC[7] ^ rNEW_CRC[11] ^ rNEW_CRC[15];
-			rBYTE_CNT <= rBYTE_CNT + 1'b1;
-			rLAST_2RW <= 1'b1;
+			rNEW_CRC <= 16'hFFFF;
+			rBYTE_CNT <= 11'd0;
+			rLAST_2RW <= 1'b0;
 		end
 	else
-		rLAST_2RW <= 1'b0;
+		if ( ( ( iBYTE_2_READ == 1'b1 ) || ( iBYTE_2_WRITE == 1'b1 ) ) && ( rLAST_2RW == 1'b0 ) )
+			begin
+				rNEW_CRC[0] <= wNEW_BYTE[4] ^ wNEW_BYTE[0] ^ rNEW_CRC[8] ^ rNEW_CRC[12];
+				rNEW_CRC[1] <= wNEW_BYTE[5] ^ wNEW_BYTE[1] ^ rNEW_CRC[9] ^ rNEW_CRC[13];
+				rNEW_CRC[2] <= wNEW_BYTE[6] ^ wNEW_BYTE[2] ^ rNEW_CRC[10] ^ rNEW_CRC[14];
+				rNEW_CRC[3] <= wNEW_BYTE[7] ^ wNEW_BYTE[3] ^ rNEW_CRC[11] ^ rNEW_CRC[15];
+				rNEW_CRC[4] <= wNEW_BYTE[4] ^ rNEW_CRC[12];
+				rNEW_CRC[5] <= wNEW_BYTE[5] ^ wNEW_BYTE[4] ^ wNEW_BYTE[0] ^ rNEW_CRC[8] ^ rNEW_CRC[12] ^ rNEW_CRC[13];
+				rNEW_CRC[6] <= wNEW_BYTE[6] ^ wNEW_BYTE[5] ^ wNEW_BYTE[1] ^ rNEW_CRC[9] ^ rNEW_CRC[13] ^ rNEW_CRC[14];
+				rNEW_CRC[7] <= wNEW_BYTE[7] ^ wNEW_BYTE[6] ^ wNEW_BYTE[2] ^ rNEW_CRC[10] ^ rNEW_CRC[14] ^ rNEW_CRC[15];
+				rNEW_CRC[8] <= wNEW_BYTE[7] ^ wNEW_BYTE[3] ^ rNEW_CRC[0] ^ rNEW_CRC[11] ^ rNEW_CRC[15];
+				rNEW_CRC[9] <= wNEW_BYTE[4] ^ rNEW_CRC[1] ^ rNEW_CRC[12];
+				rNEW_CRC[10] <= wNEW_BYTE[5] ^ rNEW_CRC[2] ^ rNEW_CRC[13];
+				rNEW_CRC[11] <= wNEW_BYTE[6] ^ rNEW_CRC[3] ^ rNEW_CRC[14];
+				rNEW_CRC[12] <= wNEW_BYTE[7] ^ wNEW_BYTE[4] ^ wNEW_BYTE[0] ^ rNEW_CRC[4] ^ rNEW_CRC[8] ^ rNEW_CRC[12] ^ rNEW_CRC[15];
+				rNEW_CRC[13] <= wNEW_BYTE[5] ^ wNEW_BYTE[1] ^ rNEW_CRC[5] ^ rNEW_CRC[9] ^ rNEW_CRC[13];
+				rNEW_CRC[14] <= wNEW_BYTE[6] ^ wNEW_BYTE[2] ^ rNEW_CRC[6] ^ rNEW_CRC[10] ^ rNEW_CRC[14];
+				rNEW_CRC[15] <= wNEW_BYTE[7] ^ wNEW_BYTE[3] ^ rNEW_CRC[7] ^ rNEW_CRC[11] ^ rNEW_CRC[15];
+				rBYTE_CNT <= rBYTE_CNT + 1'b1;
+				rLAST_2RW <= 1'b1;
+			end
+		else
+			rLAST_2RW <= 1'b0;
+end
 //
 assign oCRC16_D8 = rNEW_CRC;
 assign oBYTE_CNT = rBYTE_CNT;

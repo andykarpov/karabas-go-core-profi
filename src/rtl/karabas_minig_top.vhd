@@ -16,7 +16,7 @@
 --                                                                                 #             # #             # 
 -- https://github.com/andykarpov/karabas-go                                        ############### ############### 
 --
--- FPGA Profi (Karabas Pro) core for Karabas-Go Mini
+-- FPGA Profi (Karabas Pro) core for Karabas-Go Mini rev.G
 --
 -- @author Andy Karpov <https://github.com/andykarpov>
 -- @author Oleh Starychenko <https://github.com/solegstar>
@@ -24,105 +24,106 @@
 -- @author Alexander Sharihin <https://github.com/nihirash>
 -- @author Doctor Max <https://github.com/drmax-gc>
 -- EU, 2024, 2025, 2026
-
+--
 ------------------------------------------------------------------------------------------------------------------
 
-library IEEE; 
-use IEEE.std_logic_1164.all; 
-use IEEE.std_logic_unsigned.all;
-use IEEE.numeric_std.all; 
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+use ieee.std_logic_unsigned.all;
 
-library unisim;
-use unisim.vcomponents.all;
+library UNISIM;
+use UNISIM.VComponents.all;
 
-entity karabas_mini is
-port (
-	CLK_50MHZ 		: in  STD_LOGIC;
+entity karabas_minig is
+   port ( 
+		CLK_50MHZ 			: in   	STD_LOGIC;
 
-	UART_RX 			: inout  STD_LOGIC;
-	UART_TX 			: inout  STD_LOGIC;
-	UART_CTS 		: inout  STD_LOGIC;
-	ESP_RESET_N 	: inout  STD_LOGIC;
-	ESP_BOOT_N 		: inout  STD_LOGIC;
+		TAPE_IN 				: in   	STD_LOGIC;
+		TAPE_OUT 			: out  	STD_LOGIC;
+		
+		DAC_BCK				: out 	STD_LOGIC;
+		DAC_WS				: out 	STD_LOGIC;
+		DAC_DAT				: out 	STD_LOGIC;
+		
+	   ADC_CLK  			: out  	STD_LOGIC;
+	   ADC_BCK   			: out  	STD_LOGIC;
+	   ADC_LRCK 			: out  	STD_LOGIC;
+	   ADC_DOUT 			: in  	STD_LOGIC;		
 
-	MA 				: out  STD_LOGIC_VECTOR (20 downto 0);
-	MD 				: inout  STD_LOGIC_VECTOR (15 downto 0);
-	MWR_N 			: out  STD_LOGIC_VECTOR (1 downto 0);
-	MRD_N 			: out  STD_LOGIC_VECTOR (1 downto 0);
+		UART_RX 				: inout	STD_LOGIC;
+		UART_TX 				: inout  STD_LOGIC;
+		UART_CTS 			: inout  STD_LOGIC;
+		
+		ESP32_SPI_CS_N		: out 	STD_LOGIC;
+		ESP32_PCM_BCK		: in		STD_LOGIC;
+		ESP32_PCM_RLCK		: in 		STD_LOGIC;
+		ESP32_PCM_DAT		: in 		STD_LOGIC;
 
-	SDR_BA 			: out  STD_LOGIC_VECTOR (1 downto 0);
-	SDR_A 			: out  STD_LOGIC_VECTOR (12 downto 0);
-	SDR_CLK 			: out  STD_LOGIC;
-	SDR_DQM 			: out  STD_LOGIC_VECTOR (1 downto 0);
-	SDR_WE_N 		: out  STD_LOGIC;
-	SDR_CAS_N 		: out  STD_LOGIC;
-	SDR_RAS_N 		: out  STD_LOGIC;
-	SDR_DQ 			: inout  STD_LOGIC_VECTOR (15 downto 0);
+		WA 					: out  	STD_LOGIC_VECTOR (2 downto 0);
+		WCS_N 				: out  	STD_LOGIC_VECTOR(1 downto 0);
+		WRD_N 				: out  	STD_LOGIC;
+		WWR_N 				: out  	STD_LOGIC;
+		WRESET_N 			: out  	STD_LOGIC;
+		WD 					: inout  STD_LOGIC_VECTOR (15 downto 0);
 
-	SD_CS_N 			: out  STD_LOGIC := '1';
-	SD_DI 			: out  STD_LOGIC := '1';
-	SD_DO 			: in  STD_LOGIC;
-	SD_CLK 			: out  STD_LOGIC := '1';
-	SD_DET_N 		: in  STD_LOGIC;
+		MA 					: out  	STD_LOGIC_VECTOR (20 downto 0);
+		MD 					: inout  STD_LOGIC_VECTOR (15 downto 0);
+		MWR_N 				: out  	STD_LOGIC_VECTOR (1 downto 0);
+		MRD_N 				: out  	STD_LOGIC_VECTOR (1 downto 0);
 
-	VGA_R 			: in  STD_LOGIC_VECTOR (7 downto 0);
-	VGA_G 			: in  STD_LOGIC_VECTOR (7 downto 0);
-	VGA_B 			: in  STD_LOGIC_VECTOR (7 downto 0);
-	VGA_HS 			: in  STD_LOGIC;
-	VGA_VS 			: in  STD_LOGIC;
+		SDR_BA 				: out  	STD_LOGIC_VECTOR (1 downto 0);
+		SDR_A 				: out  	STD_LOGIC_VECTOR (12 downto 0);
+		SDR_CLK 				: out  	STD_LOGIC;
+		SDR_DQM 				: out  	STD_LOGIC_VECTOR (1 downto 0);
+		SDR_WE_N 			: out  	STD_LOGIC;
+		SDR_CAS_N 			: out 	STD_LOGIC;
+		SDR_RAS_N 			: out  	STD_LOGIC;
+		SDR_DQ 				: inout  STD_LOGIC_VECTOR (15 downto 0);
 
-	TMDS_P 			: out STD_LOGIC_VECTOR(3 downto 0);
-	TMDS_N 			: out STD_LOGIC_VECTOR(3 downto 0);
+		SD_CS_N 				: out  	STD_LOGIC;
+		SD_DI 				: inout  STD_LOGIC;
+		SD_DO 				: inout  STD_LOGIC;
+		SD_CLK 				: out  	STD_LOGIC;
+		SD_DET_N 			: in  	STD_LOGIC;
 
-	FT_SPI_CS_N 	: out  STD_LOGIC;
-	FT_SPI_SCK 		: out  STD_LOGIC;
-	FT_SPI_MISO 	: inout  STD_LOGIC;
-	FT_SPI_MOSI 	: inout  STD_LOGIC;
-	FT_INT_N 		: inout  STD_LOGIC;
-	FT_CLK 			: inout  STD_LOGIC;
-	FT_AUDIO 		: in STD_LOGIC;
-	FT_DE 			: in STD_LOGIC;
-	FT_DISP 			: in STD_LOGIC;
-	FT_RESET 		: out STD_LOGIC;
-	FT_CLK_OUT 		: out STD_LOGIC;
+		FT_SPI_CS_N 		: out  	STD_LOGIC;
+		FT_SPI_SCK 			: out  	STD_LOGIC;
+		FT_SPI_MISO 		: inout  STD_LOGIC;
+		FT_SPI_MOSI 		: inout 	STD_LOGIC;
+		FT_INT_N 			: inout  STD_LOGIC;
+		FT_CLK 				: inout  STD_LOGIC;
+		FT_CLK_OUT        : inout  STD_LOGIC;
+	   FT_DE 				: in 		std_logic;
 
-	WA 				: out  STD_LOGIC_VECTOR (2 downto 0);
-	WCS_N 			: out  STD_LOGIC_VECTOR(1 downto 0);
-	WRD_N 			: out  STD_LOGIC;
-	WWR_N 			: out  STD_LOGIC;
-	WRESET_N 		: out  STD_LOGIC;
-	WD 				: inout  STD_LOGIC_VECTOR (15 downto 0);
+		VGA_R 				: in  	STD_LOGIC_VECTOR (7 downto 0);
+		VGA_G 				: in  	STD_LOGIC_VECTOR (7 downto 0);
+		VGA_B 				: in  	STD_LOGIC_VECTOR (7 downto 0);
+		VGA_HS 				: in  	STD_LOGIC;
+		VGA_VS 				: in  	STD_LOGIC;
+		
+	   TMDS_P 				: out 	std_logic_vector(3 downto 0);
+	   TMDS_N 				: out 	std_logic_vector(3 downto 0);		
 
-	TAPE_IN 			: in  STD_LOGIC;
-	TAPE_OUT 		: out  STD_LOGIC;
-	AUDIO_L 			: out STD_LOGIC;
-	AUDIO_R 			: out STD_LOGIC;
+		MCU_CS_N 			: in  	STD_LOGIC;
+		MCU_SCK 				: in  	STD_LOGIC;
+		MCU_MOSI 			: in  	STD_LOGIC;
+		MCU_MISO 			: out  	STD_LOGIC;
+		MCU_IO 				: in 		std_logic_vector(5 downto 0);
+			  
+		MIDI_TX 				: out 	std_logic;
+		
+		FLASH_CS_N 			: out 	std_logic;
+		FLASH_DO 			: in     std_logic;
+		FLASH_DI      		: out 	std_logic;
+		FLASH_SCK			: out 	std_logic;
+		FLASH_WP_N			: out		std_logic;
+		FLASH_HOLD_N		: out 	std_logic
+		
+		);
+end entity;
 
-	ADC_CLK 			: out STD_LOGIC;
-	ADC_BCK 			: out STD_LOGIC;
-	ADC_LRCK 		: out STD_LOGIC;
-	ADC_DOUT 		: in STD_LOGIC;
-
-	MCU_CS_N 		: in  STD_LOGIC;
-	MCU_SCK 			: in  STD_LOGIC;
-	MCU_MOSI 		: in  STD_LOGIC;
-	MCU_MISO 		: out  STD_LOGIC;
-	MCU_IO 			: in  std_logic_vector(3 downto 0);
-
-	MIDI_TX 			: out std_logic;
-	MIDI_CLK 		: out std_logic;
-	MIDI_RESET_N 	: out std_logic;
-
-	FLASH_CS_N 		: out std_logic;
-	FLASH_DO 		: in std_logic;
-	FLASH_DI 		: out std_logic;
-	FLASH_SCK 		: out std_logic;
-	FLASH_WP_N 		: out std_logic;
-	FLASH_HOLD_N 	: out std_logic
-);
-end karabas_mini;
-
-architecture Behavioral of karabas_mini is
+architecture rtl of karabas_minig is
 
 -- signals
 signal clk_bus, clk_rgb, clk_vga, clk_adc, clk_sdr, clk_12, ena_saa : std_logic;
@@ -220,11 +221,11 @@ port map(
 	MCU_SCK 			=> MCU_SCK,
 	MCU_MOSI 		=> MCU_MOSI,
 	MCU_MISO 		=> MCU_MISO,
-	MCU_IO 			=> MCU_IO,
+	MCU_IO 			=> MCU_IO(3 downto 0),
 
 	-- midi
 	MIDI_TX 			=> MIDI_TX,
-	MIDI_RESET_N 	=> MIDI_RESET_N,
+	MIDI_RESET_N 	=> open,
 
 	-- floppy
 	FDC_INDEX 		=> '1',
@@ -279,85 +280,59 @@ port map(
 	tmds_n 			=> TMDS_N
 );
 
--- Audio PWM
-U_DAC_L: entity work.dac
-port map(
-	I_CLK 			=> clk_bus,
-	I_RESET 			=> areset,
-	I_DATA 			=> not(audio_mix_l(15)) & audio_mix_l(14 downto 0),
-	O_DAC 			=> AUDIO_L
-);
-
-U_DAC_R: entity work.dac
-port map(
-	I_CLK 			=> clk_bus,
-	I_RESET 			=> areset,
-	I_DATA 			=> not(audio_mix_r(15)) & audio_mix_r(14 downto 0),
-	O_DAC 			=> AUDIO_R
-);
-
 -- ADC
-U_ADC: entity work.i2s_transceiver
+adc : entity work.i2s_transceiver
 generic map(
 	mclk_sclk_ratio => 16 -- 112 / 16 = 7
 )
 port map(
-	reset_n 			=> not areset,
-	mclk 				=> clk_bus,
-	sclk 				=> ADC_BCK,
-	ws					=> ADC_LRCK,
-	sd_rx 			=> ADC_DOUT,
-	l_data_tx 		=> (others => '0'),
-	r_data_tx 		=> (others => '0'),
-	l_data_rx 		=> adc_l,
-	r_data_rx 		=> adc_r
+	reset_n => not(areset),
+	mclk => CLK_BUS,
+	sclk => ADC_BCK,
+	ws => ADC_LRCK,
+	sd_tx => open,
+	sd_rx => ADC_DOUT,
+	l_data_tx => (others => '0'),
+	r_data_tx => (others => '0'),
+	l_data_rx => adc_l,
+	r_data_rx => adc_r
 );
 
--- ADC_CLK output buf
-U_ADC_CLK: ODDR2 
+-- DAC
+u_dac : entity work.PCM5102
+generic map(
+	DAC_CLK_DIV_BITS => 4
+)
 port map(
-	Q 					=> ADC_CLK, 
-	C0 				=> clk_adc, -- 28
-	C1 				=> not clk_adc, 
-	CE 				=> '1',
-	D0 				=> '1',
-	D1 				=> '0',
-	R 					=> '0',
-	S 					=> '0'
+	clk => CLK_BUS,
+	reset => areset,
+	left => audio_mix_l,
+	right => audio_mix_r,
+	bck => DAC_BCK,
+	lrck => DAC_WS,
+	din => DAC_DAT
 );
 
 -- unused signals
-ESP_RESET_N 		<= 'Z';
-ESP_BOOT_N 			<= 'Z';
+FT_SPI_CS_N <= '1';
+FT_SPI_SCK <= '1';
+FT_SPI_MOSI <= '1';
+ESP32_SPI_CS_N <= '1';
+FLASH_CS_N <= '1';
+FLASH_DI <= '1';
+FLASH_SCK <= '1';
+FLASH_WP_N <= '1';
+FLASH_HOLD_N <= '1';
 
-FT_SPI_CS_N 		<= '1';
-FT_SPI_SCK 			<= '0';
-FT_RESET 			<= not reset;
+-- output clocks
+
+u_adc_clk: ODDR2 port map(Q => ADC_CLK, C0 => clk_adc, C1 => not(clk_adc), CE => '1', D0 => '1', D1 => '0', R => '0', S => '0');
+
 u_ft_clk: ODDR2 port map(Q => FT_CLK_OUT, C0 => ena_saa, C1 => not ena_saa, CE => '1', D0 => '1', D1 => '0', R => '0', S => '0');
-u_midi_clk: ODDR2 port map(Q => MIDI_CLK, C0 => clk_12, C1 => not clk_12, CE => '1', D0 => '1', D1 => '0', R => '0', S => '0');
-
-FLASH_CS_N 			<= '1';
-FLASH_DI 			<= '1';
-FLASH_SCK 			<= '1';
-FLASH_WP_N 			<= '1';
-FLASH_HOLD_N 		<= '1';
 
 u_sdr_clk: ODDR2 -- negative DDR clock
-generic map(
-	DDR_ALIGNMENT 	=> "NONE",
-	INIT				=> '0',
-	SRTYPE			=> "SYNC"
-)
-port map(
-	Q 					=> SDR_CLK, 
-	C0 				=> clk_sdr, 
-	C1 				=> not(clk_sdr), 
-	CE 				=> '1', 
-	D0 				=> '0', 
-	D1 				=> '1', 
-	R 					=> '0', 
-	S 					=> '0'
-);
+generic map(DDR_ALIGNMENT 	=> "NONE", INIT => '0', SRTYPE => "SYNC")
+port map(Q => SDR_CLK, C0 => clk_sdr, C1 => not(clk_sdr), CE => '1', D0 => '0', D1 => '1', R => '0', S => '0');
 
-end Behavioral;
+end architecture;
 
