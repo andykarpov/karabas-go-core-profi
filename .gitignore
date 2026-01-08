@@ -1,6 +1,6 @@
 k# intermediate build files
 *.bgn
-*.bit
+karabas_*.bit
 *.bld
 *.cmd_log
 *.drc
