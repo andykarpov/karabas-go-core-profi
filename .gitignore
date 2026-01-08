@@ -1,4 +1,4 @@
-k# intermediate build files
+# intermediate build files
 *.bgn
 karabas_*.bit
 *.bld
