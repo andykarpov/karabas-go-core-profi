@@ -137,6 +137,7 @@ signal adc_l, adc_r : std_logic_vector(23 downto 0);
 
 signal hdmi_rgb : std_logic_vector(23 downto 0);
 signal hdmi_hsync, hdmi_vsync, hdmi_blank : std_logic;
+signal dvi_only : std_logic;
 
 begin
 
@@ -194,6 +195,7 @@ port map(
 	RGB_PIXEL 		=> vid_pixel,
 	SCANDOUBLER 	=> vid_scandoubler_en,
 	VMODE				=> vmode,
+	DVI_ONLY			=> dvi_only,
 
 	-- cf card
 	WA 				=> WA,
@@ -272,7 +274,7 @@ port map(
 	vga_hs 			=> hdmi_hsync,
 	vga_vs 			=> hdmi_vsync,
 	vga_de 			=> not hdmi_blank,
-	audio_en 		=> '1',
+	audio_en 		=> not dvi_only,
 	audio_l 			=> audio_mix_l,
 	audio_r 			=> audio_mix_r,
 	tmds_p 			=> TMDS_P,

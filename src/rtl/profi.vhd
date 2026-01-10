@@ -92,6 +92,7 @@ port (
 	RGB_PIXEL : out std_logic;
 	SCANDOUBLER : out std_logic;
 	VMODE : buffer std_logic_vector(3 downto 0);
+	DVI_ONLY : out std_logic;
 
 	-- cf card
 	WA : out  STD_LOGIC_VECTOR (2 downto 0);
@@ -783,6 +784,9 @@ port map(
 	SD2_MOSI 		=> open,
 	SD2_MISO 		=> '1',
 	SD2_SCK 			=> open,
+	
+	HWID				=> open,
+	DVI_ONLY			=> DVI_ONLY,
 	
 	BUSY 				=> mcu_busy
 	

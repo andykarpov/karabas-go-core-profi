@@ -90,6 +90,10 @@ entity mcu is
 	 SD2_MISO	  : in  std_logic := '1';
 	 SD2_CS_N   : out std_logic := '1';	 
 	 
+	 -- hw setup
+	 HWID : out std_logic_vector(7 downto 0) := (others => '0');
+	 DVI_ONLY : out std_logic := '0';
+	 
 	 -- busy
 	 BUSY: buffer std_logic := '1'
 	 
@@ -111,6 +115,7 @@ architecture rtl of mcu is
 	-- 11, 12 - usb gamepad, joy : todo
 
 	constant CMD_OSD 			: std_logic_vector(7 downto 0) := x"20";
+	constant CMD_HW_SETUP	: std_logic_vector(7 downto 0) := x"F9";
 	constant CMD_RTC 			: std_logic_vector(7 downto 0) := x"FA";
 	constant CMD_FLASHBOOT  : std_logic_vector(7 downto 0) := x"FB";
 	constant CMD_UART			: std_logic_vector(7 downto 0) := x"FC";
@@ -318,6 +323,14 @@ begin
 					when CMD_UART =>
 						UART_RX_DATA <= spi_do(7 downto 0);
 						UART_RX_IDX <= spi_do(15 downto 8);
+						
+					-- hw setup
+					when CMD_HW_SETUP => 
+						case spi_do(15 downto 8) is
+							when x"00" => HWID <= spi_do(7 downto 0);
+							when x"01" => DVI_ONLY <= spi_do(0);
+							when others => null;
+						end case;
 
 					-- init start
 					when CMD_INIT_START => BUSY <= '1';
