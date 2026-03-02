@@ -51,9 +51,9 @@ entity karabas_minig is
 	   ADC_LRCK 			: out  	STD_LOGIC;
 	   ADC_DOUT 			: in  	STD_LOGIC;		
 
-		UART_RX 				: inout	STD_LOGIC;
-		UART_TX 				: inout  STD_LOGIC;
-		UART_CTS 			: inout  STD_LOGIC;
+		UART_RX 				: in	 STD_LOGIC;
+		UART_TX 				: out  STD_LOGIC;
+		UART_CTS 			: out  STD_LOGIC;
 		
 		ESP32_SPI_CS_N		: out 	STD_LOGIC;
 		ESP32_PCM_BCK		: in		STD_LOGIC;
@@ -82,18 +82,18 @@ entity karabas_minig is
 		SDR_DQ 				: inout  STD_LOGIC_VECTOR (15 downto 0);
 
 		SD_CS_N 				: out  	STD_LOGIC;
-		SD_DI 				: inout  STD_LOGIC;
-		SD_DO 				: inout  STD_LOGIC;
+		SD_DI 				: out    STD_LOGIC;
+		SD_DO 				: in     STD_LOGIC;
 		SD_CLK 				: out  	STD_LOGIC;
 		SD_DET_N 			: in  	STD_LOGIC;
 
 		FT_SPI_CS_N 		: out  	STD_LOGIC;
 		FT_SPI_SCK 			: out  	STD_LOGIC;
-		FT_SPI_MISO 		: inout  STD_LOGIC;
-		FT_SPI_MOSI 		: inout 	STD_LOGIC;
-		FT_INT_N 			: inout  STD_LOGIC;
-		FT_CLK 				: inout  STD_LOGIC;
-		FT_CLK_OUT        : inout  STD_LOGIC;
+		FT_SPI_MISO 		: in     STD_LOGIC;
+		FT_SPI_MOSI 		: out    STD_LOGIC;
+		FT_INT_N 			: in     STD_LOGIC;
+		FT_CLK 				: in     STD_LOGIC;
+		FT_CLK_OUT        : out    STD_LOGIC;
 	   FT_DE 				: in 		std_logic;
 
 		VGA_R 				: in  	STD_LOGIC_VECTOR (7 downto 0);
@@ -145,7 +145,7 @@ begin
 U1: entity work.profi
 generic map(
 	ENABLE_FDD		=> false,
-	ENABLE_GS 		=> true
+	ENABLE_GS 		=> false
 )
 port map(
 		-- clock
@@ -263,7 +263,7 @@ port map(
 );
 
 -- HDMI encoder
-U_HDMI: entity work.hdmi_top
+U_HDMI: entity work.zhdmi_top
 generic map(
 	SAMPLERATE 		=> 44100
 )
@@ -285,7 +285,7 @@ port map(
 -- ADC
 adc : entity work.i2s_transceiver
 generic map(
-	mclk_sclk_ratio => 16 -- 112 / 16 = 7
+	mclk_sclk_ratio => 4 -- 56 / 8 = 7
 )
 port map(
 	reset_n => not(areset),

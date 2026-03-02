@@ -16,36 +16,36 @@ port (
 	CLK			: in std_logic;
 	DS80			: in std_logic;
 	
-	CLK_BUS		: buffer std_logic; -- 112 / 96
+	CLK_BUS		: buffer std_logic; -- 56 / 48
 	CLK_16 		: buffer std_logic; -- 16
 	CLK_SDR		: buffer std_logic; -- 84 (sdram)
 	CLK_12      : buffer std_logic; -- 12
 	CLK_RGB 		: buffer std_logic; -- 7 / 12
 	CLK_VGA		: buffer std_logic; -- 28 / 24
 	CLK_ADC		: buffer std_logic;
+	CLK_CPU     : buffer std_logic;
 	
-	ENA_DIV2		: buffer std_logic; -- 56 p
-	ENA_DIV4		: buffer std_logic; -- 28 p
-	ENA_DIV8		: buffer std_logic; -- 14 p 
-	ENA_DIV16   : buffer std_logic; -- 7 p
-	ENA_DIV32   : buffer std_logic; -- 3.5 p
-	ENA_DIV64 	: buffer std_logic; -- 1.75 p
+	ENA_DIV2		: buffer std_logic; -- 28 p
+	ENA_DIV4		: buffer std_logic; -- 14 p
+	ENA_DIV8		: buffer std_logic; -- 7 p 
+	ENA_DIV16   : buffer std_logic; -- 3.5 p
+	ENA_DIV32   : buffer std_logic; -- 1.75 p
 
-	ENA_DIV2N	: buffer std_logic; -- 56 n
-	ENA_DIV4N	: buffer std_logic; -- 28 n
-	ENA_DIV8N	: buffer std_logic; -- 14 n
-	ENA_DIV16N  : buffer std_logic; -- 7 n
-	ENA_DIV32N  : buffer std_logic; -- 3.5 n
-	ENA_DIV64N 	: buffer std_logic; -- 1.75 n
+	ENA_DIV2N	: buffer std_logic; -- 28 n
+	ENA_DIV4N	: buffer std_logic; -- 14 n
+	ENA_DIV8N	: buffer std_logic; -- 7 n
+	ENA_DIV16N  : buffer std_logic; -- 3.5 n
+	ENA_DIV32N  : buffer std_logic; -- 1.75 n
 	
-	ENA_CPU 		: buffer std_logic; -- 3.5/7/14/28/56 / 3/6/12/24/48
+	ENA_CPU 		: buffer std_logic; -- 3.5/7/14/28 / 3/6/12/24
+	ENA_CPU_N	: buffer std_logic;
 	ENA_RGB 		: buffer std_logic; -- 7/12
 	ENA_SAA		: buffer std_logic; -- 8
 	ENA_FDC		: buffer std_logic; -- 16
 	
 	CE_14			: buffer std_logic;
 	
-	TURBO			: in std_logic_vector(2 downto 0);
+	TURBO			: in std_logic_vector(1 downto 0);
 	WAIT_CPU		: in std_logic;
 	ARESET 		: out std_logic
 );
@@ -57,7 +57,7 @@ signal ena_cnt : std_logic_vector(5 downto 0) := "000000";
 signal ena_cnt_saa : std_logic_vector(3 downto 0) := "0000";
 signal ena_cnt_fdc : std_logic_vector(3 downto 0) := "0000";
 signal locked : std_logic := '0';
-signal clk_112, clk_96 : std_logic;
+signal clk_56, clk_48 : std_logic;
 signal clkin1, clkfbout, clkfbout_buf, clkout0, clkout1, clkout2, clkout3, clkout4 : std_logic;
 
 begin 
@@ -72,10 +72,10 @@ generic map (
 	DIVCLK_DIVIDE			=> 2,
 	CLKFBOUT_MULT 			=> 27,
 	CLKFBOUT_PHASE			=> 0.000,
-	CLKOUT0_DIVIDE			=> 6,
+	CLKOUT0_DIVIDE			=> 12,
 	CLKOUT0_PHASE			=> 0.000,
    CLKOUT0_DUTY_CYCLE 	=> 0.500,
-   CLKOUT1_DIVIDE			=> 7,
+   CLKOUT1_DIVIDE			=> 14,
    CLKOUT1_PHASE			=> 0.000,
    CLKOUT1_DUTY_CYCLE 	=> 0.500,
    CLKOUT2_DIVIDE			=> 42,
@@ -92,8 +92,8 @@ generic map (
 )
 port map (
    CLKFBOUT					=> clkfbout,
-   CLKOUT0					=> clkout0, -- 112
-   CLKOUT1          	 	=> clkout1, -- 96
+   CLKOUT0					=> clkout0, -- 56
+   CLKOUT1          	 	=> clkout1, -- 48
    CLKOUT2           	=> clkout2, -- 16
    CLKOUT3           	=> clkout3, -- 84
    CLKOUT4           	=> clkout4, -- 12
@@ -105,15 +105,16 @@ port map (
 );
 	
 U3 : BUFG port map (O => clkfbout_buf, I => clkfbout);
-U4 : BUFG port map (O => clk_112, I => clkout0);
-U5 : BUFG port map (O => clk_96, I => clkout1);
+U4 : BUFG port map (O => clk_56, I => clkout0);
+U5 : BUFG port map (O => clk_48, I => clkout1);
 U6 : BUFG port map (O => clk_16, I => clkout2);
 U7 : BUFG port map (O => clk_sdr, I => clkout3);
 U8 : BUFG port map (O => clk_12, I => clkout4);
-U9 : BUFGMUX port map (I0 => clk_112, I1 => clk_96, O => clk_bus, S => ds80);
+U9 : BUFGMUX port map (I0 => clk_56, I1 => clk_48, O => clk_bus, S => ds80);
 U10: BUFGCE port map(I => clk_bus, O => clk_rgb, CE => ena_rgb);
-U11: BUFGCE port map(I => clk_bus, O => clk_vga, CE => ena_div2 and ena_div4);
-U12: BUFG port map(I => ena_cnt(1), O => clk_adc); -- 28, 50/50 duty cycle
+U11: BUFGCE port map(I => clk_bus, O => clk_vga, CE => ena_div2);
+U12: BUFG port map(I => ena_cnt(0), O => clk_adc); -- 28, 50/50 duty cycle
+U13: BUFG port map(I => ena_cpu, O => clk_cpu);
 
 ARESET 		<= not locked;
 
@@ -128,15 +129,15 @@ end process;
 process (clk_bus)
 begin
 	if falling_edge(clk_bus) then
-		-- 112 / 14 = 8, 96 / 12 = 8
-		if (ds80 = '0' and ena_cnt_saa >= 13) or (ds80 = '1' and ena_cnt_saa >= 11) then
+		-- 56 / 7 = 8, 96 / 6 = 8
+		if (ds80 = '0' and ena_cnt_saa >= 6) or (ds80 = '1' and ena_cnt_saa >= 5) then
 			ena_cnt_saa <= (others => '0');
 		else
 			ena_cnt_saa <= ena_cnt_saa + 1;
 		end if;
 		
-		-- 112 / 7 = 16, 96 / 6 = 8
-		if (ds80 = '0' and ena_cnt_fdc >= 6) or (ds80 = '1' and ena_cnt_fdc >= 5) then
+		-- 56 / 3.5 = 16, 48 / 3 = 16
+		if (ds80 = '0' and ena_cnt_fdc >= 2) or (ds80 = '1' and ena_cnt_fdc >= 2) then
 			ena_cnt_fdc <= (others => '0');
 		else
 			ena_cnt_fdc <= ena_cnt_fdc + 1;
@@ -153,19 +154,17 @@ begin
 		ENA_DIV8 <= ena_cnt(2) and ena_cnt(1) and ena_cnt(0);
 		ENA_DIV16 <= ena_cnt(3) and ena_cnt(2) and ena_cnt(1) and ena_cnt(0);
 		ENA_DIV32 <= ena_cnt(4) and ena_cnt(3) and ena_cnt(2) and ena_cnt(1) and ena_cnt(0);
-		ENA_DIV64 <= ena_cnt(5) and ena_cnt(4) and ena_cnt(3) and ena_cnt(2) and ena_cnt(1) and ena_cnt(0);
 
 		ENA_DIV2N <= not ena_cnt(0);
 		ENA_DIV4N <= not ena_cnt(1) and not ena_cnt(0);
 		ENA_DIV8N <= not ena_cnt(2) and not ena_cnt(1) and not ena_cnt(0);
 		ENA_DIV16N <= not ena_cnt(3) and not ena_cnt(2) and not ena_cnt(1) and not ena_cnt(0);
 		ENA_DIV32N <= not ena_cnt(4) and not ena_cnt(3) and not ena_cnt(2) and not ena_cnt(1) and not ena_cnt(0);
-		ENA_DIV64N <= not ena_cnt(5) and not ena_cnt(4) and not ena_cnt(3) and not ena_cnt(2) and not ena_cnt(1) and not ena_cnt(0);
 		
 		if (ds80 = '1') then
-			ENA_RGB <= ena_cnt(0) and ena_cnt(1) and ena_cnt(2); -- 12
+			ENA_RGB <= ena_cnt(0) and ena_cnt(1); -- 12
 		else
-			ENA_RGB <= ena_cnt(0) and ena_cnt(1) and ena_cnt(2) and ena_cnt(3); -- 7
+			ENA_RGB <= ena_cnt(0) and ena_cnt(1) and ena_cnt(2); -- 7
 		end if;
 
 		if (ena_cnt_saa = "0000") then -- 8 mhz pulse in clk_bus domain
@@ -180,20 +179,23 @@ begin
 			ENA_FDC <= '0';
 		end if;
 		
-		CE_14 <= ena_cnt(2);
+		CE_14 <= ena_cnt(1);
 
 		if (WAIT_CPU = '1') then 
 			ENA_CPU <= '0';
-		elsif turbo = "100" then -- 56
+			ENA_CPU_N <= '0';
+		elsif turbo = "11" then -- 28
 			ENA_CPU <= ena_cnt(0);
-		elsif turbo = "011" then -- 28
+			ENA_CPU_N <= not(ena_cnt(0));
+		elsif turbo = "10" then -- 14
 			ENA_CPU <= ena_cnt(1) and ena_cnt(0);
-		elsif turbo = "010" then -- 14
+			ENA_CPU_N <= not(ena_cnt(1)) and not(ena_cnt(0));
+		elsif turbo = "01" then -- 7
 			ENA_CPU <= ena_cnt(2) and ena_cnt(1) and ena_cnt(0);
-		elsif turbo = "001" then -- 7
-			ENA_CPU <= ena_cnt(3) and ena_cnt(2) and ena_cnt(1) and ena_cnt(0);
+			ENA_CPU_N <= not(ena_cnt(2)) and not(ena_cnt(1)) and not(ena_cnt(0));
 		else
-			ENA_CPU <= ena_cnt(4) and ena_cnt(3) and ena_cnt(2) and ena_cnt(1) and ena_cnt(0); -- 3.5
+			ENA_CPU <= ena_cnt(3) and ena_cnt(2) and ena_cnt(1) and ena_cnt(0); -- 3.5
+			ENA_CPU_N <= not(ena_cnt(3)) and not(ena_cnt(2)) and not(ena_cnt(1)) and not(ena_cnt(0));
 		end if;
 	end if;
 end process;

@@ -42,7 +42,7 @@ wire cpu_m1_n, cpu_mreq_n, cpu_iorq_n, cpu_rd_n, cpu_wr_n, cpu_rfsh_n;
 wire [15:0] cpu_a_bus;
 wire [7:0] cpu_di_bus, cpu_do_bus;
 reg int_n;
-t80s #(.Mode(0), .T2Write(1), .IOWait(1)) z80_unit (
+t80s #(.Mode(0)) z80_unit (
 	.RESET_n					(~RESET),
 	.CLK						(CLK),
 	.CEN						(CE),
@@ -58,6 +58,7 @@ t80s #(.Mode(0), .T2Write(1), .IOWait(1)) z80_unit (
 	.RFSH_n					(cpu_rfsh_n),
 	.HALT_n					(),
 	.BUSAK_n					(),
+	.OUT0						(1'b1),
 	.A							(cpu_a_bus),
 	.DI						(cpu_di_bus),
 	.DO						(cpu_do_bus)

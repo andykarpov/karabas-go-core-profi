@@ -17,12 +17,13 @@ use ieee.numeric_std.all;
  
 entity UART_RX is
   generic (
-    g_CLKS_PER_BIT : integer := 486;     
-    g_CLKS_PER_BIT_DS80 : integer := 416 
+    g_CLKS_PER_BIT : integer := 486; -- 56000000 / 115200 = 486
+    g_CLKS_PER_BIT_DS80 : integer := 416  -- 48000000 / 115200 = 416
     );
   port (
     i_Clk       : in  std_logic;
 	 i_DS80		 : in  std_logic;
+	 i_Enabled   : in  std_logic;
     i_RX_Serial : in  std_logic;
     o_RX_DV     : out std_logic;
     o_RX_Byte   : out std_logic_vector(7 downto 0)
@@ -67,7 +68,7 @@ begin
           r_Clk_Count <= 0;
           r_Bit_Index <= 0;
  
-          if r_RX_Data = '0' then       -- Start bit detected
+          if i_Enabled = '1' and r_RX_Data = '0' then       -- Start bit detected
             r_SM_Main <= s_RX_Start_Bit;
           else
             r_SM_Main <= s_Idle;

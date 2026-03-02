@@ -308,7 +308,8 @@ begin
 	);
 			
 	-- output data to CPU
-	OE_N <= '0' when (vv51_cs = '0' AND RD_N = '0') or hw_int_oe_n = '0' else '1';
+	-- warning: output enabled only while ds80 = '1' to avoid conflict with GS
+	OE_N <= '0' when ds80 = '1' and ((vv51_cs = '0' AND RD_N = '0') or hw_int_oe_n = '0') else '1';
 	DO <= 
 			hw_int_do when hw_int_oe_n = '0' else
 			do_reg when vv51_cs_data = '0' and RD_N = '0' else 

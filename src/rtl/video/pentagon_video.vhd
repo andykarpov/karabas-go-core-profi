@@ -16,7 +16,7 @@ entity pentagon_video is
 		VMODE		: in std_logic_vector(3 downto 0);
 		
 		BORDER	: in std_logic_vector(2 downto 0);	-- bordr color (port #xxFE)
-		TURBO 	: in std_logic_vector(2 downto 0) := "000"; -- 01 = turbo 2x mode, 10 - turbo 4x mode, 11 - turbo 8x mode, 00 = normal mode
+		TURBO 	: in std_logic_vector(1 downto 0) := "00"; -- 01 = turbo 2x mode, 10 - turbo 4x mode, 11 - turbo 8x mode, 00 = normal mode
 		INTA		: in std_logic := '0'; -- int request for turbo mode
 		INT		: out std_logic; -- int output
 		pFF_CS	: out std_logic; -- port FF select
@@ -131,7 +131,7 @@ begin
 			end if;
 		
 			case TURBO is
-				when "000" => -- TURBO OFF
+				when "00" => -- TURBO OFF
 					-- PENTAGON int
 				if (SCREEN_MODE = "00") then 
 					if chr_col_cnt = 6 and hor_cnt(2 downto 0) = "111" then
@@ -152,7 +152,7 @@ begin
 					end if;
 				end if;
 
-				when "001" => -- TURBO 2x
+				when "01" => -- TURBO 2x
 					if chr_col_cnt = 6 and hor_cnt(1 downto 0) = "11" then
 						if ver_cnt = 29 and chr_row_cnt = 7 and hor_cnt(5 downto 2) = "1001" then
 							int_sig <= '0';
@@ -161,7 +161,7 @@ begin
 						end if;
 					end if;
 					
-				when "010" => -- TURBO 4x
+				when "10" => -- TURBO 4x
 					if chr_col_cnt = 6 and hor_cnt(0) = '1' then
 						if ver_cnt = 29 and chr_row_cnt = 7 and hor_cnt(5 downto 1) = "10011" then
 							int_sig <= '0';
@@ -170,7 +170,7 @@ begin
 						end if;
 					end if;
 					
-				when "011" => -- TURBO 8x
+				when "11" => -- TURBO 8x
 					if chr_col_cnt = 6 then
 						if ver_cnt = 29 and chr_row_cnt = 7 and hor_cnt(5 downto 0) = "100111" then
 							int_sig <= '0';

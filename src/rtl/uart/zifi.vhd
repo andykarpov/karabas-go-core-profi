@@ -3,7 +3,7 @@
 -- https://github.com/HackerVBI/ZiFi/blob/master/_esp/upd1/README!!__eRS232.txt
 --
 -- @author Andy Karpov <andy.karpov@gmail.com>
--- Ukraine, 2023, 2024
+-- Ukraine, 2023, 2024, 2026
 --------------------------------------------------------------------------------
 library IEEE; 
 use IEEE.std_logic_1164.all; 
@@ -47,21 +47,6 @@ end zifi;
 
 architecture rtl of zifi is
 
-component uart 
-port ( 
-    clk_bus     : in std_logic;
-	 ds80        : in std_logic;
-    txdata      : in std_logic_vector(7 downto 0);
-    txbegin     : in std_logic;
-    txbusy      : out std_logic;
-    rxdata      : out std_logic_vector(7 downto 0);
-    rxrecv      : out std_logic;
-    data_read   : in std_logic;
-    rx          : in std_logic;
-    tx          : out std_logic;
-    rts         : out std_logic);
-end component;
-
 -- ts zifi/rs232 ports
 constant command_port  : std_logic_vector(15 downto 0) := x"C7EF"; -- 51183
 constant error_port    : std_logic_vector(15 downto 0) := x"C7EF"; -- 51183
@@ -100,7 +85,7 @@ signal command_reg          : std_logic_vector(7 downto 0);
 signal err_reg              : std_logic_vector(7 downto 0);
 signal di_reg               : std_logic_vector(7 downto 0);
 signal do_reg               : std_logic_vector(7 downto 0);
-signal api_enabled          : std_logic := '1';
+signal api_enabled          : std_logic := '0';
 
 signal zifi_fifo_tx_di           : std_logic_vector(7 downto 0);
 signal zifi_fifo_tx_do           : std_logic_vector(7 downto 0);
@@ -250,6 +235,7 @@ UART_receiver: entity work.uart_rx
 port map(
 	i_Clk => CLK,
 	i_DS80 => DS80,
+	i_Enabled => api_enabled,
 	i_RX_Serial => UART_RX,
 	o_RX_DV => zifi_fifo_rx_wr_req,
 	o_RX_Byte => zifi_fifo_rx_di
@@ -391,7 +377,7 @@ begin
         rs232_rd_allow <= '1';
         rs232_fifo_tx_wr_req <= '0';
 
-        api_enabled <= '1';
+        api_enabled <= '0';
         is_rs232 <= '0';
 		  is_evo_rs232 <= '0';
 		  
@@ -609,14 +595,14 @@ begin
 end process;
 
 DO <= -- ts zifi / rs232 ports 
-      "10111111"  when IORQ_N = '0' and RD_N = '0' and A = zifi_in_fifo_port and zifi_fifo_rx_used > 191  else 
-      "10111111"  when IORQ_N = '0' and RD_N = '0' and A = rs232_in_fifo_port and rs232_fifo_rx_used > 191  else 
-	  zifi_fifo_rx_used(7 downto 0)  when IORQ_N = '0' and RD_N = '0' and A = zifi_in_fifo_port  else 
+      "11111111"  when IORQ_N = '0' and RD_N = '0' and A = zifi_in_fifo_port and zifi_fifo_rx_used >= 255  else 
+      "11111111"  when IORQ_N = '0' and RD_N = '0' and A = rs232_in_fifo_port and rs232_fifo_rx_used >= 255  else 
+	   zifi_fifo_rx_used(7 downto 0)  when IORQ_N = '0' and RD_N = '0' and A = zifi_in_fifo_port  else 
       rs232_fifo_rx_used(7 downto 0)  when IORQ_N = '0' and RD_N = '0' and A = rs232_in_fifo_port  else 
       zifi_fifo_tx_free when IORQ_N = '0' and RD_N = '0' and A = zifi_out_fifo_port else 
       rs232_fifo_tx_free when IORQ_N = '0' and RD_N = '0' and A = rs232_out_fifo_port else 
       err_reg       when IORQ_N = '0' and RD_N = '0' and A = error_port    else 
-      do_reg        when IORQ_N = '0' and RD_N = '0' and A(7 downto 0) = data_port(7 downto 0) and A(15 downto 8) <= data_port(15 downto 8) else 
+      do_reg        when IORQ_N = '0' and RD_N = '0' and A(7 downto 0) = data_port(7 downto 0) and A(15 downto 8) <= data_port(15 downto 8) else -- ldir support
       -- evo rs232 ports
       do_reg when IORQ_N = '0' and RD_N = '0' and A = evo_data_port and evo_lcr_reg(7) = '0' else -- data
       evo_dl_reg(7 downto 0) when IORQ_N = '0' and RD_N = '0' and A = evo_data_port and evo_lcr_reg(7) = '1' else -- dll

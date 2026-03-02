@@ -1,12 +1,19 @@
 module audio_samplerate(
 	input wire clk,
 	input wire reset,
+	input wire [7:0] clkrate, // MHz
 	output wire audio_stb
 );
 
 parameter SAMPLERATE = 44100;
-parameter CLKRATE = 28000000;
-localparam prescaler = (CLKRATE / SAMPLERATE);
+//parameter CLKRATE = 28000000;
+//localparam prescaler = (CLKRATE / SAMPLERATE);
+
+reg [11:0] prescaler = 0;
+always @(*)
+begin
+	prescaler <= (clkrate * 1000000) / SAMPLERATE;
+end
 
 // audio samplerate
 reg clk_audio;

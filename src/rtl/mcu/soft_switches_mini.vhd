@@ -20,7 +20,7 @@ entity soft_switches is
 	PSG_TYPE : out std_logic;
 	VIDEO : out std_logic := '0';
 	VSYNC	: out std_logic := '0';
-	TURBO : out std_logic_vector(2 downto 0);
+	TURBO : out std_logic_vector(1 downto 0);
 	SWAP_FDD : out std_logic := '0';
 	JOY_TYPE_L : out std_logic_vector(2 downto 0);
 	JOY_TYPE_R : out std_logic_vector(2 downto 0);
@@ -49,7 +49,7 @@ begin
 				when x"01" => COVOX <= SOFTSW_COMMAND(0);
 				when x"02" => PSG_MIX <= SOFTSW_COMMAND(1 downto 0);
 				when x"03" => PSG_TYPE <= SOFTSW_COMMAND(0);
-				when x"04" => TURBO <= SOFTSW_COMMAND(2 downto 0);
+				when x"04" => TURBO <= SOFTSW_COMMAND(1 downto 0);
 				when x"05" => JOY_TYPE_L <= SOFTSW_COMMAND(2 downto 0);
 				when x"06" => JOY_TYPE_R <= SOFTSW_COMMAND(2 downto 0);
 				when x"07" => MODE <= SOFTSW_COMMAND(1 downto 0);

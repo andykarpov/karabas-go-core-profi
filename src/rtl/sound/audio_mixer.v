@@ -46,8 +46,9 @@ reg signed [11:0] psg_l, psg_r, opn_s;
 reg signed [11:0] tsfm_l, tsfm_r;
 reg signed [11:0] covox_l, covox_r;
 
-always @(posedge clk) begin
+//always @(posedge clk) begin
 
+always @(*) begin
 	psg_l <= (mode == 2'b00 || mode== 2'b10) ? 
 		$signed({3'b000, ssg0_a, 1'd0}) + $signed({3'b000, ssg1_a, 1'd0}) + $signed({4'b0000, ssg0_b}) + $signed({4'b0000, ssg1_b}) : 
 		$signed({3'b000, ssg0_a, 1'd0}) + $signed({3'b000, ssg1_a, 1'd0}) + $signed({4'b0000, ssg0_c}) + $signed({4'b0000, ssg1_c});
@@ -79,7 +80,7 @@ wire signed [15:0] mix_r = 	$signed({tsfm_r[11:0], 4'b0000}) +
 										$signed({covox_r[11:0], 4'b0000}) + 
 										$signed({2'b00, speaker, 7'b0000000, 6'b000000});
 
-assign audio_l = mix_l;
-assign audio_r = mix_r;
+assign audio_l = (mute) ? 16'b0 : mix_l;
+assign audio_r = (mute) ? 16'b0 : mix_r;
 
 endmodule

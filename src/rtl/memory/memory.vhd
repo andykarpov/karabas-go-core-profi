@@ -78,7 +78,7 @@ port (
 	AUTOMAP		: in std_logic;
 	REG_E3		: in std_logic_vector(7 downto 0);
 	
-	TURBO_MODE	: in std_logic_vector(2 downto 0)
+	TURBO_MODE	: in std_logic_vector(1 downto 0)
 );
 end memory;
 
@@ -88,7 +88,7 @@ architecture RTL of memory is
 	signal is_ram : std_logic := '0';
 	
 	signal rom_page : std_logic_vector(1 downto 0) := "00";
-	signal ram_page : std_logic_vector(8 downto 0) := "000000000";
+	signal ram_page : std_logic_vector(5 downto 0) := "000000";
 
 	signal mux : std_logic_vector(1 downto 0);
 	
@@ -98,10 +98,13 @@ architecture RTL of memory is
 	signal is_romDIVMMC : std_logic;
 	signal is_ramDIVMMC : std_logic;
 	
-	signal vid_wr : std_logic := '0';
-	signal vid_wr_a_bus, vid_rd_a_bus: std_logic_vector(15 downto 0);
+	signal vid_spec_wr : std_logic := '0';
+	signal vid_profi_wr : std_logic := '0';
+	signal vid_spec_wr_a_bus, vid_spec_rd_a_bus: std_logic_vector(13 downto 0);
+	signal vid_profi_wr_a_bus, vid_profi_rd_a_bus: std_logic_vector(15 downto 0);
 	signal vid_wr_attr : std_logic;
 	signal vid_wr_page : std_logic;
+	signal vid_spec_do, vid_profi_do : std_logic_vector(7 downto 0);
 	
 	signal port1_a, port2_a : std_logic_vector(20 downto 0);
 	signal port1_di, port2_di : std_logic_vector(7 downto 0);
@@ -109,8 +112,28 @@ architecture RTL of memory is
 	
 begin
 
+	-- video ram 16k
+	U_SPEC_VRAM: entity work.dpram
+	generic map(
+		DATAWIDTH 	=> 8,
+		ADDRWIDTH	=> 14
+	)
+	port map(
+		clock 		=> CLK_BUS,
+		
+		address_a 	=> vid_spec_wr_a_bus,
+		data_a 		=> D,
+		wren_a 		=> vid_spec_wr,
+		q_a 			=> open,
+		
+		address_b 	=> vid_spec_rd_a_bus,
+		data_b 		=> "00000000",
+		wren_b 		=> '0',
+		q_b 			=> vid_spec_do
+	);
+
 	-- video ram 64k
-	U_VRAM: entity work.dpram
+	U_PROFI_VRAM: entity work.dpram
 	generic map(
 		DATAWIDTH 	=> 8,
 		ADDRWIDTH	=> 16
@@ -118,40 +141,43 @@ begin
 	port map(
 		clock 		=> CLK_BUS,
 		
-		address_a 	=> vid_wr_a_bus,
+		address_a 	=> vid_profi_wr_a_bus,
 		data_a 		=> D,
-		wren_a 		=> vid_wr,
+		wren_a 		=> vid_profi_wr,
 		q_a 			=> open,
 		
-		address_b 	=> vid_rd_a_bus,
+		address_b 	=> vid_profi_rd_a_bus,
 		data_b 		=> "00000000",
 		wren_b 		=> '0',
-		q_b 			=> VID_DO
+		q_b 			=> vid_profi_do
 	);
+	
+	VID_DO <= vid_profi_do when DS80 = '1' else vid_spec_do;
+
+	-- spec page:      0001x1 (x=vid page)
+	-- profi pix page: 0001x0 (x=vid_page)
+	-- profi att page: 1110x0 (x=vid_page)
 
 	-- video mem write: 
-	vid_wr <= '1' when ENA_CPU = '1' and DS80 = '0' and N_MREQ = '0' and N_WR = '0' and A(13) = '0' and (ram_page = "000000101" or ram_page = "000000111") else -- spectrum pix / att
-				 '1' when ENA_CPU = '1' and DS80 = '1' and N_MREQ = '0' and N_WR = '0' and (ram_page = "000000100" or ram_page = "000000110") else -- profi pix
-				 '1' when ENA_CPU = '1' and DS80 = '1' and N_MREQ = '0' and N_WR = '0' and (ram_page = "000111000" or ram_page = "000111010") else -- profi att
-				 '0';
+	vid_spec_wr <= '1' when ENA_CPU = '1' and DS80 = '0' and N_MREQ = '0' and N_WR = '0' and A(13) = '0' and ram_page = "0001" & vid_page & '1' else -- spectrum pix / att
+						'0';
+	vid_profi_wr <= '1' when ENA_CPU = '1' and DS80 = '1' and N_MREQ = '0' and N_WR = '0' and ram_page = "0001" & vid_page & '0' else -- profi pix
+						 '1' when ENA_CPU = '1' and DS80 = '1' and N_MREQ = '0' and N_WR = '0' and ram_page = "1110" & vid_page & '0' else -- profi att
+						 '0';
 
 	-- detect profi attr write
-	vid_wr_attr <= '1' when (ram_page = "000111000" or ram_page = "000111010") else '0';
+	vid_wr_attr <= '1' when ram_page = "1110" & vid_page & '0' else '0';
 	
 	-- detect video page for write
-	vid_wr_page <= '1' when DS80 = '0' and ram_page = "000000111" else -- spectrum video page
-						'1' when DS80 = '1' and (ram_page = "000000110" or ram_page = "000111010") else -- profi video page
-						'0';
+	vid_wr_page <= vid_page;
 
 	-- write address to vram
-	vid_wr_a_bus <= 
-		"00" & vid_wr_page & A(12 downto 0) when DS80 = '0' else -- spectrum video address
-		vid_wr_attr & VID_wr_page & A(13 downto 0); -- profi video address 
+	vid_spec_wr_a_bus <= vid_wr_page & A(12 downto 0); 
+	vid_profi_wr_a_bus <= vid_wr_attr & vid_wr_page & A(13 downto 0);
 		
 	-- read address from vram
-	vid_rd_a_bus <= 
-		"00" & VID_PAGE & VA(12 downto 0) when DS80 = '0' else -- spectrum video address
-		VID_RD & VID_PAGE & VA(13 downto 0); -- profi video address
+	vid_spec_rd_a_bus <= VID_PAGE & VA(12 downto 0);
+	vid_profi_rd_a_bus <= VID_RD & VID_PAGE & VA(13 downto 0);
 
 	-- sdram controller for GS
 	U_SDRAM: entity work.sdram
@@ -175,9 +201,7 @@ begin
 
 	-- connect sram (chip1) interface with main cpu
 	MA <= port1_a;
-	MD(7 downto 0) <= port1_di when loader_act='1' else
-			port1_di when (is_ram = '1' or is_ramDIVMMC = '1' or (N_IORQ = '0' and N_M1 = '1')) and N_WR = '0' else 
-			(others => 'Z');
+	MD(7 downto 0) <= port1_di when port1_wr = '1' else (others => 'Z');
 	DO <= MD(7 downto 0);
 	N_MWR <= "10" when port1_wr = '1' else "11";
 	N_MRD <= "10" when port1_rd = '1' else "11";
@@ -187,7 +211,7 @@ begin
 				  "1010000" & A(13 downto 0) when is_romDIVMMC = '1' else -- DIVMMC rom
 				  "11" & REG_E3(5 downto 0) & A(12 downto 0) when is_ramDIVMMC = '1' else -- DIVMMC ram 512 kB from #X180000 SRAM
 				  "100" & EXT_ROM_BANK(1 downto 0) & rom_page(1 downto 0) & A(13 downto 0) when is_rom = '1' else -- rom from sram high bank 
-				  ram_page(6 downto 0) & A(13 downto 0);  -- ram
+				  '0' & ram_page(5 downto 0) & A(13 downto 0);  -- ram
 	port1_rd <= '0' when loader_act = '1' else
 					'1' when N_MREQ = '0' and N_RD = '0' else 
 					'0'; 
@@ -232,21 +256,21 @@ begin
 	process (mux, RAM_EXT, RAM_BANK, SCR, SCO)
 	begin
 		case mux is
-			when "00" => ram_page <= "000000000";                 -- Seg0 ROM 0000-3FFF or Seg0 RAM 0000-3FFF				
+			when "00" => ram_page <= "000000";                 -- Seg0 ROM 0000-3FFF or Seg0 RAM 0000-3FFF				
 			when "01" => if SCO='0' then 
-								ram_page <= "000000101";
+								ram_page <= "000101";
 							 else 
-								ram_page <= "000" & RAM_EXT(2 downto 0) & RAM_BANK(2 downto 0); 
+								ram_page <= RAM_EXT(2 downto 0) & RAM_BANK(2 downto 0); 
 							 end if;	                               -- Seg1 RAM 4000-7FFF	
 			when "10" => if SCR='0' then 
-								ram_page <= "000000010"; 	
+								ram_page <= "000010"; 	
 							 else 
-								ram_page <= "000000110"; 
+								ram_page <= "000110"; 
 							 end if;                                -- Seg2 RAM 8000-BFFF
 			when "11" => if SCO='0' then 
-								ram_page <= "000" & RAM_EXT(2 downto 0) & RAM_BANK(2 downto 0);	
+								ram_page <= RAM_EXT(2 downto 0) & RAM_BANK(2 downto 0);	
 							 else 
-								ram_page <= "000000111";               -- Seg3 RAM C000-FFFF	
+								ram_page <= "000111";               -- Seg3 RAM C000-FFFF	
 							 end if;
 			when others => null;
 		end case;
@@ -269,7 +293,7 @@ begin
 	begin 
 		if rising_edge(CLK_BUS) then 
 		-- OCH: contend only when 3,5 MHz CLK 
-			if (page_cont = '1' and block_reg = '1' and count_block = '1' and DS80 = '0' and TURBO_MODE = "000") then 
+			if (page_cont = '1' and block_reg = '1' and count_block = '1' and DS80 = '0' and TURBO_MODE = "00") then 
 				contended <= '1';
 			else 
 				contended <= '0';

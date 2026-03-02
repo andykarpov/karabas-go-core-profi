@@ -21,7 +21,7 @@
 //
 //////////////////////////////////////////////////////////////////////////////////
 module saa1099 (
-    input wire clk,  // 112/96 MHz
+    input wire clk,  // 56/48 MHz
 	 input wire ena, // ena 8 mhz
     input wire rst_n,
     input wire cs_n,

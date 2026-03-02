@@ -46,9 +46,11 @@ architecture RTL of hw_int is
 		
 begin
 
+	-- warning: прерывание выплевывается только при ds80='1', чтобы избежать конфликта с GS
+
 	p4i <= '0' when ((A(7 downto 0) = x"B3" or A(7 downto 0) = x"93") and IORQ_N='0') and DS80='1' and ((cpm='1' and rom14='1') or (dos='1' and rom14='0')) else '1';	
 	int_rq <= rxrdt or txrdt;
-	int <= '0' when int_rq='1' and CPM='1' and port93_b0='1' else '1';
+	int <= '0' when int_rq='1' and CPM='1' and port93_b0='1' and ds80 = '1' else '1';
 	fi <= '0' when M1_N='0' and IORQ_N = '0' and int = '0' else '1';
 	
 	-- port #93 / #B3
@@ -65,7 +67,7 @@ begin
 	end process;
 			
 	-- output data to CPU
-	OE_N <= '0' when (fi='0' and int_rq = '1') else '1';
+	OE_N <= '0' when (fi='0' and int_rq = '1' and ds80 = '1') else '1';
 	DO <= 
 			"11100111" when fi='0' and rxrdt = '1' else -- RST20h
 			"11101111" when fi='0' and txrdt = '1' else -- RST28h	

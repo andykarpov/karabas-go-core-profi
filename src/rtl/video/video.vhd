@@ -18,7 +18,7 @@ entity video is
 		VMODE 	: in std_logic_vector(3 downto 0) := "0000";
 
 		BORDER	: in std_logic_vector(7 downto 0);	-- bordr color (port #xxFE)
-		TURBO 	: in std_logic_vector(2 downto 0) := "000"; -- 01 = turbo 2x mode, 10 - turbo 4x mode, 11 - turbo 8x mode, 00 = normal mode
+		TURBO 	: in std_logic_vector(1 downto 0) := "00"; -- 01 = turbo 2x mode, 10 - turbo 4x mode, 11 - turbo 8x mode, 00 = normal mode
 		INTA		: in std_logic := '0'; -- int request for turbo mode
 		INT		: out std_logic; -- int output
 		ATTR_O	: out std_logic_vector(7 downto 0); -- attribute register output
