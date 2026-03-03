@@ -126,7 +126,7 @@ end entity;
 architecture rtl of karabas_minig is
 
 -- signals
-signal clk_bus, clk_rgb, clk_vga, clk_adc, clk_sdr, clk_12, ena_saa : std_logic;
+signal clk_bus, clk_rgb, clk_vga, clk_adc, clk_sdr, clk_12, clk_8 : std_logic;
 signal areset, reset, kb_reset : std_logic;
 
 signal vid_rgb : std_logic_vector(8 downto 0);
@@ -144,8 +144,7 @@ begin
 
 U1: entity work.profi
 generic map(
-	ENABLE_FDD		=> false,
-	ENABLE_GS 		=> false
+	ENABLE_FDD		=> false
 )
 port map(
 		-- clock
@@ -153,7 +152,7 @@ port map(
 	CLK_BUS			=> clk_bus,
 	CLK_SDR			=> clk_sdr,
 	CLK_12			=> clk_12,
-	ENA_SAA			=> ena_saa,
+	CLK_8				=> clk_8,
 	RESET 			=> reset,
 	ARESET 			=> areset,
 	KB_RESET			=> kb_reset,
@@ -285,7 +284,7 @@ port map(
 -- ADC
 adc : entity work.i2s_transceiver
 generic map(
-	mclk_sclk_ratio => 4 -- 56 / 8 = 7
+	mclk_sclk_ratio => 4 -- 28 / 4 = 7
 )
 port map(
 	reset_n => not(areset),
@@ -330,7 +329,7 @@ FLASH_HOLD_N <= '1';
 
 u_adc_clk: ODDR2 port map(Q => ADC_CLK, C0 => clk_adc, C1 => not(clk_adc), CE => '1', D0 => '1', D1 => '0', R => '0', S => '0');
 
-u_ft_clk: ODDR2 port map(Q => FT_CLK_OUT, C0 => ena_saa, C1 => not ena_saa, CE => '1', D0 => '1', D1 => '0', R => '0', S => '0');
+u_ft_clk: ODDR2 port map(Q => FT_CLK_OUT, C0 => clk_8, C1 => not(clk_8), CE => '1', D0 => '1', D1 => '0', R => '0', S => '0');
 
 u_sdr_clk: ODDR2 -- negative DDR clock
 generic map(DDR_ALIGNMENT 	=> "NONE", INIT => '0', SRTYPE => "SYNC")

@@ -6,7 +6,6 @@
 //
 module DPLL (
 input				iCLK,
-input 			iENA,
 input				iRDDT,
 output reg			oRCLK,
 output				oRAWR,
@@ -24,20 +23,16 @@ end
 //
 always @( posedge iCLK )
 begin
-	if (iENA) begin
-		rRDDT1 <= iRDDT;
-		rRDDT2 <= ~rRDDT1;
-	end
+	rRDDT1 <= iRDDT;
+	rRDDT2 <= ~rRDDT1;
 end
 //
 always @( posedge iCLK )
-if (iENA) begin
-	if ( iVFOE == 1'b1 )
-		oRCLK <= 1'b0;
-	else
-		if ( w288 == 5'd16 )
-			oRCLK <= ~oRCLK;
-end
+if ( iVFOE == 1'b1 )
+	oRCLK <= 1'b0;
+else
+	if ( w288 == 5'd16 )
+		oRCLK <= ~oRCLK;
 //
 assign oRAWR = rRDDT1 & rRDDT2 & ~iVFOE;
 //
@@ -47,9 +42,7 @@ initial begin
   $readmemh ("DPLL.hex", mem, 0);
 end
 always @(posedge iCLK) begin
-	if (iENA) begin
-		w288 <= mem[{ ~oRAWR, w288 }];
-	end
+ w288 <= mem[{ ~oRAWR, w288 }];
 end
 
 //

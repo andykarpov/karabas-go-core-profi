@@ -40,7 +40,7 @@ module zxunouart (
     parameter UARTDATA = 8'hC6;
     parameter UARTSTAT = 8'hC7;
 	 
-    parameter CLK = 112000000;
+    parameter CLK = 28000000;
     wire txbusy;
     wire data_received;
     wire [7:0] rxdata;

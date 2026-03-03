@@ -159,17 +159,17 @@ begin
 	-- profi att page: 1110x0 (x=vid_page)
 
 	-- video mem write: 
-	vid_spec_wr <= '1' when ENA_CPU = '1' and DS80 = '0' and N_MREQ = '0' and N_WR = '0' and A(13) = '0' and ram_page = "0001" & vid_page & '1' else -- spectrum pix / att
+	vid_spec_wr <= '1' when DS80 = '0' and ENA_CPU = '1' and N_MREQ = '0' and N_WR = '0' and A(13) = '0' and (ram_page = "000101" or ram_page = "000111") else -- spectrum pix / att
 						'0';
-	vid_profi_wr <= '1' when ENA_CPU = '1' and DS80 = '1' and N_MREQ = '0' and N_WR = '0' and ram_page = "0001" & vid_page & '0' else -- profi pix
-						 '1' when ENA_CPU = '1' and DS80 = '1' and N_MREQ = '0' and N_WR = '0' and ram_page = "1110" & vid_page & '0' else -- profi att
+	vid_profi_wr <= '1' when DS80 = '1' and ENA_CPU = '1' and N_MREQ = '0' and N_WR = '0' and (ram_page = "000100" or ram_page = "000110") else -- profi pix
+						 '1' when DS80 = '1' and ENA_CPU = '1' and N_MREQ = '0' and N_WR = '0' and (ram_page = "111000" or ram_page = "111010") else -- profi att
 						 '0';
 
 	-- detect profi attr write
-	vid_wr_attr <= '1' when ram_page = "1110" & vid_page & '0' else '0';
+	vid_wr_attr <= '1' when (ram_page(5 downto 3) = "111") else '0';
 	
 	-- detect video page for write
-	vid_wr_page <= vid_page;
+	vid_wr_page <= ram_page(1);
 
 	-- write address to vram
 	vid_spec_wr_a_bus <= vid_wr_page & A(12 downto 0); 
@@ -201,7 +201,7 @@ begin
 
 	-- connect sram (chip1) interface with main cpu
 	MA <= port1_a;
-	MD(7 downto 0) <= port1_di when port1_wr = '1' else (others => 'Z');
+	MD(7 downto 0) <= port1_di when port1_wr = '1' or (N_IORQ='0' and N_M1='1' and N_WR='0') else (others => 'Z');
 	DO <= MD(7 downto 0);
 	N_MWR <= "10" when port1_wr = '1' else "11";
 	N_MRD <= "10" when port1_rd = '1' else "11";
@@ -217,7 +217,7 @@ begin
 					'0'; 
 	port1_wr <= loader_ram_wr when loader_act = '1' and loader_ram_a(31) = '0' else
 					'0' when loader_act = '1' and loader_ram_a(31) = '1' else
-					'1' when (is_ram = '1' or is_ramDIVMMC = '1') and N_MREQ = '0' and N_WR = '0' else 
+					'1' when (is_ram = '1' or is_ramDIVMMC = '1') and N_WR = '0' else 
 					'0';
 	port1_di <= loader_ram_do when loader_act = '1' else -- loader DO
 					D(7 downto 0); -- data from CPU
@@ -276,9 +276,9 @@ begin
 		end case;
 	end process;
 	
-	process( CLK_BUS, ENA_CPU )
+	process( CLK_BUS )
 	begin
-		if rising_edge(CLK_BUS) and ENA_CPU = '1' then
+		if rising_edge(CLK_BUS) then
 			if N_MREQ = '0' or (A(0) = '0' and N_IORQ = '0')then
 				block_reg <='0';
 			else

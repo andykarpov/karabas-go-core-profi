@@ -25,7 +25,7 @@
 
 module uart (
     // CPU interface
-    input wire clk_bus,  // 56 MHz
+    input wire clk_bus,  // 28 MHz
 	 input wire ds80,
     input wire [7:0] txdata,
     input wire txbegin,
@@ -39,7 +39,7 @@ module uart (
     output wire rts
     );
 
-    parameter CLK = 56000000;
+    parameter CLK = 28000000;
 
     uart_tx #(.CLK(CLK)) transmitter (
         .clk_bus(clk_bus),
@@ -63,7 +63,7 @@ endmodule
 
 module uart_tx (
     // CPU interface
-    input wire clk_bus,  // 56 MHz
+    input wire clk_bus,  // 28 MHz
 	 input wire ds80,
     input wire [7:0] txdata,
     input wire txbegin,
@@ -74,8 +74,8 @@ module uart_tx (
 
     initial tx = 1'b1;
 
-    parameter CLK = 56000000;
-	 parameter CLKDS80 = 48000000;
+    parameter CLK = 28000000;
+	 parameter CLKDS80 = 24000000;
     parameter BPS = 115200;
     parameter PERIOD = CLK / BPS;
 	 parameter PERIODDS80 = CLKDS80 / BPS;
@@ -147,7 +147,7 @@ endmodule
 
 module uart_rx (
     // CPU interface
-    input wire clk_bus,  // 56 MHz
+    input wire clk_bus,  // 28 MHz
 	 input wire ds80,
     output reg [7:0] rxdata,
     output reg rxrecv,
@@ -160,8 +160,8 @@ module uart_rx (
     initial rxrecv = 1'b0;
     initial rts = 1'b0;
 
-    parameter CLK = 56000000;
-	 parameter CLKDS80 = 48000000;
+    parameter CLK = 28000000;
+	 parameter CLKDS80 = 24000000;
     parameter BPS = 115200;
     parameter PERIOD = CLK / BPS;	 
     parameter HALFPERIOD = PERIOD / 2;

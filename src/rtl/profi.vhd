@@ -37,17 +37,18 @@ use unisim.vcomponents.all;
 
 entity profi is
 generic(
-	ENABLE_FDD: boolean := false;
-	ENABLE_GS : boolean := false
+	ENABLE_FDD: boolean := true;
+	ENABLE_GS : boolean := true;
+	ENABLE_SERIAL_MOUSE : boolean := true
 );
 port ( 
 	 
 	-- clock
 	CLK_50MHZ : in  STD_LOGIC;
 	CLK_BUS : buffer std_logic;
-	ENA_SAA	 : buffer std_logic;
 	CLK_SDR : buffer std_logic;
 	CLK_12: buffer std_logic;
+	CLK_8 : buffer std_logic;
 	
 	RESET : buffer std_logic;
 	ARESET : buffer std_logic;
@@ -380,7 +381,7 @@ signal gs_mem_rfsh_n		: std_logic;
 -- CLOCK
 --signal clk_bus				: std_logic; -- outer
 signal clk_16 				: std_logic;
-signal clk_8 				: std_logic;
+--signal clk_8 				: std_logic; -- outer
 signal clk_vid 			: std_logic;
 --signal clk_sdr 			: std_logic; -- outer
 --signal clk_12        	: std_logic; -- outer
@@ -393,17 +394,13 @@ signal ena_div2			: std_logic := '0';
 signal ena_div4			: std_logic := '0';
 signal ena_div8			: std_logic := '0';
 signal ena_div16			: std_logic := '0';
-signal ena_div32  		: std_logic := '0';
 signal ena_div2n			: std_logic := '0';
 signal ena_div4n			: std_logic := '0';
 signal ena_div8n			: std_logic := '0';
 signal ena_div16n			: std_logic := '0';
-signal ena_div32n 		: std_logic := '0';
 signal ena_cpu 			: std_logic := '0';
 signal ena_cpu_n			: std_logic := '0';
 signal ena_rgb				: std_logic := '0';
---signal ena_saa				: std_logic := '0'; -- outer
-signal ena_fdc				: std_logic := '0';
 signal ce_14				: std_logic := '0';
 
 -- System
@@ -458,7 +455,7 @@ signal usb_uart_dlm_wr 	: std_logic := '0';
 -- serial mouse 
 signal serial_ms_do_bus : std_logic_vector(7 downto 0);
 signal serial_ms_oe_n 	: std_logic := '1';
-signal serial_ms_int 	: std_logic := '1';
+signal serial_ms_int_n 	: std_logic := '1';
 
 -- profi special signals
 signal cpm 					: std_logic := '0';
@@ -517,6 +514,7 @@ signal fdd_mode 			: std_logic_vector(1 downto 0);
 
 signal loa 					: std_logic_vector(7 downto 0);
 signal hia					: std_logic_vector(15 downto 8);
+signal io_rd				: std_logic := '0';
 
 component zxunoregs
 port (
@@ -578,8 +576,9 @@ port map(
 	
 	DS80 				=> ds80,
 	
-	CLK_BUS 			=> clk_bus, -- 56 / 48
+	CLK_BUS 			=> clk_bus, -- 28 / 24
 	CLK_16 			=> clk_16,
+	CLK_8 			=> clk_8,
 	CLK_SDR  		=> clk_sdr, -- 84
 	CLK_12   		=> clk_12,
 	CLK_RGB  		=> clk_rgb,
@@ -587,23 +586,19 @@ port map(
 	CLK_ADC			=> clk_adc,
    CLK_CPU        => clk_cpu,
 
-	ENA_DIV2 		=> ena_div2, -- 28 / 24 p
-	ENA_DIV4 		=> ena_div4, -- 14 / 12 p
-	ENA_DIV8 		=> ena_div8, -- 7 / 6 p
-	ENA_DIV16 		=> ena_div16, -- 3.5 / 3 p
-	ENA_DIV32 		=> ena_div32, -- 1.75 / 1.5 p
+	ENA_DIV2 		=> ena_div2, -- 14 / 12 p
+	ENA_DIV4 		=> ena_div4, -- 7 / 6 p
+	ENA_DIV8 		=> ena_div8, -- 3.5 / 3 p
+	ENA_DIV16 		=> ena_div16, -- 1.75 / 1.5 p
 
-	ENA_DIV2N 		=> ena_div2n, -- 28 / 24 n
-	ENA_DIV4N 		=> ena_div4n, -- 14 / 12 n
-	ENA_DIV8N 		=> ena_div8n, -- 7 / 6 n 
-	ENA_DIV16N 		=> ena_div16n, -- 3.5 / 3 n
-	ENA_DIV32N 		=> ena_div32n, -- 1.75 / 1.5 n
+	ENA_DIV2N 		=> ena_div2n, -- 14 / 12 n
+	ENA_DIV4N 		=> ena_div4n, -- 7 / 6 n
+	ENA_DIV8N 		=> ena_div8n, -- 3.5 / 3 n 
+	ENA_DIV16N 		=> ena_div16n, -- 1.75 / 1.5 n
 	
 	ENA_CPU 			=> ena_cpu,
 	ENA_CPU_N		=> ena_cpu_n,
 	ENA_RGB 			=> ena_rgb,
-	ENA_SAA			=> ena_saa,
-	ENA_FDC			=> ena_fdc,
 	
 	CE_14 			=> ce_14,
 	
@@ -613,11 +608,12 @@ port map(
 );
 
 -- Zilog Z80A CPU
-U2: entity work.T80s
+U2: entity work.T80pa
 port map (
 	RESET_n			=> cpu_reset_n,
 	CLK				=> clk_bus,
-	CEN				=> ena_cpu,
+	CEN_p				=> ena_cpu,
+	CEN_n				=> ena_cpu_n,
 	WAIT_n			=> cpu_wait_n,
 	INT_n				=> cpu_int_n,
 	NMI_n				=> cpu_nmi_n,
@@ -643,7 +639,7 @@ port map (
 	CLK_SDR			=> clk_sdr,
 	ARESET			=> areset,
 	ENA_CPU 			=> ena_cpu,
-	ENA_GS			=> ena_div2 and ena_div4, -- 14
+	ENA_GS			=> ena_div2, -- 14
 
 	-- cpu signals
 	A 					=> cpu_a_bus,
@@ -727,7 +723,7 @@ port map (
 -- Video Spectrum/Pentagon
 U4: entity work.video
 port map (
-	CLK_BUS 			=> clk_bus, 	-- 56 / 48
+	CLK_BUS 			=> clk_bus, 	-- 28 / 24
 	CLK 				=> clk_rgb,		-- 7 / 12
 	RESET 			=> reset,
 	VMODE				=> vmode,
@@ -942,7 +938,7 @@ U12: entity work.turbosound
 port map (
 	RESET 			=> reset,
 	CLK 				=> clk_bus,
-	CE					=> ena_div16, -- 3.5
+	CE					=> ena_div8, -- 3.5
 	BDIR 				=> ts_bdir,
 	BC 				=> ts_bc1,
 	DI					=> cpu_do_bus,
@@ -989,8 +985,8 @@ port map (
 -- SAA1099 sound generator
 U14: entity work.saa1099
 port map(
-	clk				=> clk_bus,
-	ena				=> ena_saa,
+	clk				=> clk_8,
+	ena				=> '1',
 	rst_n				=> not reset,
 	cs_n				=> '0',
 	a0					=> hia(8),		-- 0=data, 1=address
@@ -1002,6 +998,7 @@ port map(
 
 	
 -- Serial mouse emulation
+G_SERIAL_MOUSE: if ENABLE_SERIAL_MOUSE generate
 U15: entity work.serial_mouse
 port map(
 	CLK 				=> clk_bus,
@@ -1025,9 +1022,15 @@ port map(
 	MS_EVENT 		=> hid_ms_upd,
 	
 	DO 				=> serial_ms_do_bus,
-	INT_N 			=> serial_ms_int,
+	INT_N 			=> serial_ms_int_n,
 	OE_N 				=> serial_ms_oe_n
 );
+end generate;
+
+G_NO_SERIAL_MOUSE: if not(ENABLE_SERIAL_MOUSE) generate
+	serial_ms_oe_n <= '1';
+	serial_ms_int_n <= '1';
+end generate;
 
 -- ZXUNO UART
 U16: zxunoregs 
@@ -1137,7 +1140,7 @@ G_FDD: if ENABLE_FDD generate
 U20: entity work.firefly_fdc
 port map(
 	clk 				=> clk_bus,
-	ena 				=> ena_fdc,
+	clk_16 			=> clk_16,
 	reset 			=> reset,
 
 	a 					=> cpu_a_bus,
@@ -1227,8 +1230,8 @@ port map(
 G_GS: if ENABLE_GS generate
 U22: entity work.gs_top
 port map(
-	clk_bus 			=> clk_bus, -- 56/48
-	ce 				=> ena_div2 and ena_div4, -- 14 n
+	clk_bus 			=> clk_bus, -- 28/24
+	ce 				=> ena_div2, -- 14 n
 	ds80				=> ds80,
 
 	reset 			=> areset or kb_gs_reset or loader_act or mcu_busy,
@@ -1272,6 +1275,7 @@ reset <= areset or kb_reset or loader_act or mcu_busy or rom_bank_reset; -- hot 
 
 hia <= cpu_a_bus(15 downto 8); -- high cpu address
 loa <= cpu_a_bus(7 downto 0);  -- low cpu address
+io_rd <= '1' when cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' else '0';
 
 -- CPU reset
 process (clk_bus)
@@ -1285,7 +1289,7 @@ end process;
 cpu_inta_n <= cpu_iorq_n or cpu_m1_n;	-- INTA
 
 -- int signal
-cpu_int_n <= vid_int_n and serial_ms_int;
+cpu_int_n <= vid_int_n and serial_ms_int_n;
 
 -- nmi signal
 cpu_nmi_n <= mapcond when kb_nmi = '1' and divmmc_en = '1' else 
@@ -1307,7 +1311,7 @@ cpu_wait <= '1' when zc_busy = '1' or
 -- SD Card
 
 SD_CS_N	<= zc_cs_n;
-sd_CLK 	<= zc_sclk when zc_cs_n = '0' else '1';
+SD_CLK 	<= zc_sclk when zc_cs_n = '0' else '1';
 SD_DI 	<= zc_mosi when zc_cs_n = '0' else '1';
 
 -------------------------------------------------------------------------------
@@ -1374,7 +1378,7 @@ sco 	<= port_dffd_reg(3); -- Выбор положения окна проеци
 									-- 0 - окно номер 1 (#C000-#FFFF)
 									-- 1 - окно номер 2 (#4000-#7FFF)
 
--- OCH: change decoding of #FE port when Nemo enabled  
+-- OCH: change decoding of #FE port when Nemo enabled
 cs_xxfe <= '1' when (cpu_iorq_n = '0' and loa(0) = '0' and nemoide_en = '0') or 
 						  (cpu_iorq_n = '0' and loa(6 downto 0) = "1111110" and nemoide_en = '1') else '0';
 cs_xx7e <= '1' when cs_xxfe = '1' and loa(7) = '0' else '0';
@@ -1461,17 +1465,16 @@ begin
 			
 			-- #7FFD
 			if cs_xxfd = '1' and cpu_wr_n = '0' and (port_7ffd_reg(5) = '0' or port_dffd_reg(4)='1') then -- short #FD
-			  port_7ffd_reg <= cpu_do_bus;
-			 --port_7ffd_reg(5 downto 0) <= cpu_do_bus(5 downto 0);
+			   port_7ffd_reg(5 downto 0) <= cpu_do_bus(5 downto 0);
 			end if;
 			
-			--if cs_7ffd = '1' and cpu_wr_n = '0' and (port_7ffd_reg(5) = '0' or port_dffd_reg(4)='1') then
-			-- port_7ffd_reg(7 downto 6) <= cpu_do_bus(7 downto 6);
-			--end if;
+			if cs_7ffd = '1' and cpu_wr_n = '0' and (port_7ffd_reg(5) = '0' or port_dffd_reg(4)='1') then -- full #7FFD
+			   port_7ffd_reg(7 downto 6) <= cpu_do_bus(7 downto 6);
+			end if;
 			
 			-- #1FFD
 			if cs_1ffd = '1' and cpu_wr_n = '0' then
-			  port_1ffd_reg <= cpu_do_bus;
+			   port_1ffd_reg <= cpu_do_bus;
 			end if;
 
 			-- #xxC7
@@ -1563,8 +1566,8 @@ end process;
 
 U_ZC_SPI: entity work.zc_spi
 port map(
-	clk_sys       => clk_bus, -- 56/48
-	ena           => ena_div2, -- 28
+	clk_sys       => clk_bus, -- 28/24
+	ena           => '1', -- 28
 	tx            => zc_wr_en,
 	rx            => zc_rd_en,
 	din           => cpu_do_bus,
@@ -1648,9 +1651,12 @@ begin
 		when x"0A" => cpu_di_bus <= ms_z(3 downto 0) & '1' & not(ms_b(2)) & not(ms_b(0)) & not(ms_b(1)); -- D0=right, D1 = left, D2 = middle, D3 = fourth, D4..D7 - wheel
 		when x"0B" => cpu_di_bus <= ms_x;
 		when x"0C" => cpu_di_bus <= ms_y;
+		when x"0D" => cpu_di_bus <= x"FF"; -- zxuno uart 2 stub
 		when x"0E" => cpu_di_bus <= serial_ms_do_bus;
 		when x"0F" => cpu_di_bus <= zxuno_addr_to_cpu;
-		when x"10" => cpu_di_bus <= zxuno_uart_do_bus;		
+		when x"10" => cpu_di_bus <= zxuno_uart_do_bus;
+		when x"11" => cpu_di_bus <= "0000" & port_xxC7_reg(3) & port_xxC7_reg(2) & '1' & '0';
+		when x"12" => cpu_di_bus <= x"FF"; -- flash do bus stub
 		when x"13" => cpu_di_bus <= port_008b_reg;
 		when x"14" => cpu_di_bus <= port_018b_reg;
 		when x"15" => cpu_di_bus <= port_028b_reg;
@@ -1659,12 +1665,11 @@ begin
 		when x"18" => cpu_di_bus <= fdd_do_bus;
 		when x"19" => cpu_di_bus <= ide_do_bus;
 		when x"1A" => cpu_di_bus <= gs_do_bus;
-		when x"1B" => cpu_di_bus <= x"FF";
 		when others => cpu_di_bus <= (others => '1');
 	end case;
 end process;
 
-selector <= 	
+selector <= 
 	x"00" when (ram_oe_n = '0') else -- ram / rom
 	x"01" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and cs_rtc_ds = '1') else -- rtc
 	x"02" when (cs_xxfe = '1' and cpu_rd_n = '0') else 	-- Keyboard, port #FE
@@ -1680,15 +1685,16 @@ selector <=
 	x"0E" when (serial_ms_oe_n = '0' and ds80 = '1') else -- Serial mouse - конфликт с GS
 	x"0F" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and zxuno_addr_oe_n = '0') else -- ZX UNO Register
 	x"10" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and zxuno_uart_oe_n = '0') else -- ZX UNO UART
+	x"11" when (cs_xxC7 = '1' and cpu_rd_n = '0') else
+	x"12" when (cs_xxE7 = '1' and cpu_rd_n = '0') else
 	x"13" when (cs_008b = '1' and cpu_rd_n = '0') else										-- port #008B
 	x"14" when (cs_018b = '1' and cpu_rd_n = '0') else										-- port #018B
 	x"15" when (cs_028b = '1' and cpu_rd_n = '0') else										-- port #028B
 	x"16" when zifi_oe_n = '0' and cpu_iorq_n = '0' and cpu_rd_n = '0' else  		-- zifi
+	x"17" when (vid_pff_cs = '1' and cpu_iorq_n = '0' and cpu_rd_n = '0' and loa = x"FF") and dos_act='0' and cpm = '0' and ds80 = '0' else -- Port FF select
 	x"18" when (fdd_oe_n = '0' and cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1') else 		-- fdd
 	x"19" when (ide_oe_n = '0' and cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1') else 		-- ide	
 	x"1A" when (gs_oe = '1' and cpu_iorq_n = '0' and cpu_rd_n = '0' and ds80 = '0') else 				-- gs
-	x"17" when (vid_pff_cs = '1' and cpu_iorq_n = '0' and cpu_rd_n = '0' and loa = x"FF") and dos_act='0' and cpm = '0' and ds80 = '0' else -- Port FF select
-	x"1B" when (cpu_iorq_n = '0' and cpu_m1_n = '0') else                         -- im2 vect
 	(others => '1');
 
 ext_rom_bank <= kb_rom_bank;

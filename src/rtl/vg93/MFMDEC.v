@@ -5,7 +5,6 @@
 //
 module MFMDEC (
 input				iCLK,
-input 			iENA,
 input				iRCLK,
 input				iVFOE,
 input				iSTART,
@@ -29,51 +28,43 @@ end
 //
 always @( posedge iCLK )
 begin
-	if (iENA) begin
-		rBIT_CNT1 <= rBIT_CNT;
-		rRCLK1 <= iRCLK;
-	end
+	rBIT_CNT1 <= rBIT_CNT;
+	rRCLK1 <= iRCLK;
 end
 //
 always @( posedge iCLK )
-if (iENA) begin
-	if ( ( iSTART == 1'b0 ) || ( iSYNC == 1'b1 ) )
-		rBIT_CNT <= 3'b0;
+if ( ( iSTART == 1'b0 ) || ( iSYNC == 1'b1 ) )
+	rBIT_CNT <= 3'b0;
+else
+	if ( rRCLK1 != iRCLK )
+		begin
+			if ( rMFMBIT == 1'b0 )
+				begin
+					if ( i3WORDS[46] == 1'b1 )
+						rCURR_BYTE <= { rCURR_BYTE[6:0], 1'b1 };
+					else
+						rCURR_BYTE <= { rCURR_BYTE[6:0], 1'b0 };
+					rBIT_CNT <= rBIT_CNT + 1'b1;
+				end
+		end
+//
+always @( posedge iCLK )
+if ( ( iSTART == 1'b0 ) || ( iSYNC == 1'b1 ) )
+	rMFMBIT <= 1'b0;
+else
+	if ( rRCLK1 != iRCLK )
+		rMFMBIT <= ~rMFMBIT;
+//
+always @( posedge iCLK )
+if ( iSTART == 1'b0 )
+	oBYTE_2_READ <= 1'b0;
+else
+	if ( ( rBIT_CNT == 3'd0 ) && ( rBIT_CNT1 == 3'd7 ) && ( iSYNC != 1'b1 ) )
+		begin
+			oBYTE_2_READ <= 1'b1;
+			oBYTE_2_MAIN <= rCURR_BYTE;
+		end
 	else
-		if ( rRCLK1 != iRCLK )
-			begin
-				if ( rMFMBIT == 1'b0 )
-					begin
-						if ( i3WORDS[46] == 1'b1 )
-							rCURR_BYTE <= { rCURR_BYTE[6:0], 1'b1 };
-						else
-							rCURR_BYTE <= { rCURR_BYTE[6:0], 1'b0 };
-						rBIT_CNT <= rBIT_CNT + 1'b1;
-					end
-			end
-end
-//
-always @( posedge iCLK )
-if (iENA) begin
-	if ( ( iSTART == 1'b0 ) || ( iSYNC == 1'b1 ) )
-		rMFMBIT <= 1'b0;
-	else
-		if ( rRCLK1 != iRCLK )
-			rMFMBIT <= ~rMFMBIT;
-end
-//
-always @( posedge iCLK )
-if (iENA) begin
-	if ( iSTART == 1'b0 )
 		oBYTE_2_READ <= 1'b0;
-	else
-		if ( ( rBIT_CNT == 3'd0 ) && ( rBIT_CNT1 == 3'd7 ) && ( iSYNC != 1'b1 ) )
-			begin
-				oBYTE_2_READ <= 1'b1;
-				oBYTE_2_MAIN <= rCURR_BYTE;
-			end
-		else
-			oBYTE_2_READ <= 1'b0;
-end
 //
 endmodule
