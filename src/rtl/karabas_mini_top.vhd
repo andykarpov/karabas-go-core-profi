@@ -125,7 +125,7 @@ end karabas_mini;
 architecture Behavioral of karabas_mini is
 
 -- signals
-signal clk_bus, clk_rgb, clk_vga, clk_adc, clk_sdr, clk_12, ena_saa : std_logic;
+signal clk_bus, clk_rgb, clk_vga, clk_adc, clk_sdr, clk_12, clk_8 : std_logic;
 signal areset, reset, kb_reset : std_logic;
 
 signal vid_rgb : std_logic_vector(8 downto 0);
@@ -143,8 +143,7 @@ begin
 
 U1: entity work.profi
 generic map(
-	ENABLE_FDD		=> false,
-	ENABLE_GS 		=> true
+	ENABLE_FDD		=> false
 )
 port map(
 		-- clock
@@ -152,7 +151,8 @@ port map(
 	CLK_BUS			=> clk_bus,
 	CLK_SDR			=> clk_sdr,
 	CLK_12			=> clk_12,
-	ENA_SAA			=> ena_saa,
+	CLK_8 			=> clk_8,
+	
 	RESET 			=> reset,
 	ARESET 			=> areset,
 	KB_RESET			=> kb_reset,
@@ -262,7 +262,7 @@ port map(
 );
 
 -- HDMI encoder
-U_HDMI: entity work.hdmi_top
+U_HDMI: entity work.zhdmi_top
 generic map(
 	SAMPLERATE 		=> 44100
 )
@@ -301,7 +301,7 @@ port map(
 -- ADC
 U_ADC: entity work.i2s_transceiver
 generic map(
-	mclk_sclk_ratio => 16 -- 112 / 16 = 7
+	mclk_sclk_ratio => 4 -- 28 / 4 = 7
 )
 port map(
 	reset_n 			=> not areset,
@@ -335,7 +335,7 @@ ESP_BOOT_N 			<= 'Z';
 FT_SPI_CS_N 		<= '1';
 FT_SPI_SCK 			<= '0';
 FT_RESET 			<= not reset;
-u_ft_clk: ODDR2 port map(Q => FT_CLK_OUT, C0 => ena_saa, C1 => not ena_saa, CE => '1', D0 => '1', D1 => '0', R => '0', S => '0');
+u_ft_clk: ODDR2 port map(Q => FT_CLK_OUT, C0 => clk_8, C1 => not clk_8, CE => '1', D0 => '1', D1 => '0', R => '0', S => '0');
 u_midi_clk: ODDR2 port map(Q => MIDI_CLK, C0 => clk_12, C1 => not clk_12, CE => '1', D0 => '1', D1 => '0', R => '0', S => '0');
 
 FLASH_CS_N 			<= '1';
