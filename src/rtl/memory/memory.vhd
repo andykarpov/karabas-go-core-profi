@@ -201,7 +201,7 @@ begin
 
 	-- connect sram (chip1) interface with main cpu
 	MA <= port1_a;
-	MD(7 downto 0) <= port1_di when port1_wr = '1' or (N_IORQ='0' and N_M1='1' and N_WR='0') else (others => 'Z');
+	MD(7 downto 0) <= port1_di when port1_wr = '1' else (others => 'Z');
 	DO <= MD(7 downto 0);
 	N_MWR <= "10" when port1_wr = '1' else "11";
 	N_MRD <= "10" when port1_rd = '1' else "11";
@@ -213,11 +213,11 @@ begin
 				  "100" & EXT_ROM_BANK(1 downto 0) & rom_page(1 downto 0) & A(13 downto 0) when is_rom = '1' else -- rom from sram high bank 
 				  '0' & ram_page(5 downto 0) & A(13 downto 0);  -- ram
 	port1_rd <= '0' when loader_act = '1' else
-					'1' when N_MREQ = '0' and N_RD = '0' else 
+					'1' when N_MREQ = '0' and N_RD = '0' and ENA_CPU = '1' else 
 					'0'; 
 	port1_wr <= loader_ram_wr when loader_act = '1' and loader_ram_a(31) = '0' else
 					'0' when loader_act = '1' and loader_ram_a(31) = '1' else
-					'1' when (is_ram = '1' or is_ramDIVMMC = '1') and N_WR = '0' else 
+					'1' when (is_ram = '1' or is_ramDIVMMC = '1') and N_WR = '0' and ENA_CPU = '1' else 
 					'0';
 	port1_di <= loader_ram_do when loader_act = '1' else -- loader DO
 					D(7 downto 0); -- data from CPU
@@ -226,13 +226,14 @@ begin
 	port2_a <= loader_ram_a(20 downto 0) when loader_act = '1' else 
 				  GS_A;
 	port2_rd <= '0' when loader_act = '1' else 
-					'1' when GS_N_RD = '0' else 
+					'1' when GS_N_RD = '0' and ENA_GS = '1' else 
 					'0';
 	port2_wr <= loader_ram_wr when loader_act = '1' and loader_ram_a(31) = '1' else 
 					'0' when loader_act = '1' and loader_ram_a(31) = '0' else
-					'1' when GS_N_WR = '0' else
+					'1' when GS_N_WR = '0' and ENA_GS = '1' else
 					'0';
-	port2_rfsh <= '0' when loader_act = '1' else not GS_N_RFSH;
+	port2_rfsh <= '0' when loader_act = '1' else 
+						not GS_N_RFSH when ENA_GS = '1' else '0';
 	port2_di <= loader_ram_do when loader_act = '1' else 
 					GS_D(7 downto 0);
 

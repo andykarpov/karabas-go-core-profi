@@ -446,11 +446,6 @@ signal usb_uart_rx_data : std_logic_vector(7 downto 0);
 signal usb_uart_rx_idx 	: std_logic_vector(7 downto 0);
 signal usb_uart_tx_data : std_logic_vector(7 downto 0);
 signal usb_uart_tx_wr 	: std_logic;
-signal usb_uart_tx_mode : std_logic := '0';
-signal usb_uart_dll 		: std_logic_vector(7 downto 0);
-signal usb_uart_dlm 		: std_logic_vector(7 downto 0);
-signal usb_uart_dll_wr 	: std_logic := '0';
-signal usb_uart_dlm_wr 	: std_logic := '0';
 
 -- serial mouse 
 signal serial_ms_do_bus : std_logic_vector(7 downto 0);
@@ -541,6 +536,7 @@ generic (
 port (
 	clk_bus         : in std_logic;
 	ds80            : in std_logic;
+	enabled         : in std_logic;
 	zxuno_addr      : in std_logic_vector(7 downto 0);
 	zxuno_regrd     : in std_logic;
 	zxuno_regwr     : in std_logic;
@@ -555,6 +551,8 @@ end component;
 component uart 
 port ( 
 	clk_bus         : in std_logic;
+	ds80            : in std_logic;
+	enabled         : in std_logic;
 	txdata          : in std_logic_vector(7 downto 0);
 	txbegin         : in std_logic;
 	txbusy          : out std_logic;
@@ -814,11 +812,6 @@ port map(
 	UART_RX_IDX		=> usb_uart_rx_idx,
 	UART_TX_DATA 	=> usb_uart_tx_data,
 	UART_TX_WR 		=> usb_uart_tx_wr,
-	UART_TX_MODE 	=> usb_uart_tx_mode,
-	UART_DLM 		=> usb_uart_dlm,
-	UART_DLL 		=> usb_uart_dll,
-	UART_DLM_WR 	=> usb_uart_dlm_wr,
-	UART_DLL_WR 	=> usb_uart_dll_wr,
 	
 	ROMLOADER_ACTIVE => loader_act,
 	ROMLOAD_ADDR 	=> loader_ram_a,
@@ -1054,6 +1047,7 @@ U17: zxunouart
 port map(
 	clk_bus        => clk_bus,
 	ds80           => ds80,
+	enabled        => not zifi_api_enabled,
 	zxuno_addr     => zxuno_addr,
 	zxuno_regrd    => zxuno_regrd,
 	zxuno_regwr    => zxuno_regwr,
@@ -1065,10 +1059,11 @@ port map(
 	uart_rts       => zxuno_uart_cts
 );
 
--- ZIFI for ESP8266, TS rs232 and EVO rs232 for USB UART
+-- ZIFI for ESP8266 and USB UART
 U18: entity work.zifi 
 port map (
 	CLK    			=> clk_bus,
+	ENA_CPU			=> ena_cpu,
 	RESET  			=> areset,
 	DS80   			=> DS80,
 
@@ -1089,12 +1084,7 @@ port map (
 	USB_UART_RX_DATA => usb_uart_rx_data,
 	USB_UART_RX_IDX  => usb_uart_rx_idx,
 	USB_UART_TX_DATA => usb_uart_tx_data,
-	USB_UART_TX_WR   => usb_uart_tx_wr,
-	USB_UART_TX_MODE => usb_uart_tx_mode,
-	USB_UART_DLL     => usb_uart_dll,
-	USB_UART_DLM     => usb_uart_dlm,
-	USB_UART_DLL_WR  => usb_uart_dll_wr,
-	USB_UART_DLM_WR  => usb_uart_dlm_wr
+	USB_UART_TX_WR   => usb_uart_tx_wr
 );
 
 UART_TX <= zifi_uart_tx when zifi_api_enabled = '1' else zxuno_uart_tx;
@@ -1367,6 +1357,7 @@ fdc_swap <= port_028b_reg(3) or kb_swap_fdd;					-- 3 	- Floppy Disk Drive Selec
 sound_off <= port_028b_reg(4);									-- 4 	- Sound_off
 turbo_mode <= port_028b_reg(6 downto 5);				      -- 6,5 - Turbo Mode Selector 
 lock_dffd <= port_028b_reg(7);								 	-- 7 	- Lock port DFFD
+
 ext_rom_bank_pq <= ext_rom_bank when rom0 = '0' else "01";	-- ROMBANK ALT
 
 rom14 <= port_7ffd_reg(4); -- rom bank
@@ -1422,7 +1413,7 @@ fdd_cs_n <= '0' when ((loa=x"1F" or loa=x"3F" or loa=x"5F" or loa=x"7F") and cpu
 							((loa=x"83" or loa=x"A3" or loa=x"C3" or loa=x"E3") and cpu_iorq_n='0' and ((cpm='1' and rom14='1') or (dos_act='1' and rom14='0'))) -- ext
 							else '1';
 -- Ports
-process (reset, areset, clk_bus, cpu_a_bus, dos_act, cs_xxfe, cs_eff7, cs_7ffd, cs_xxfd, port_7ffd_reg, port_1ffd_reg, cpu_mreq_n, cpu_m1_n, cpu_wr_n, cpu_do_bus, fd_port, cs_008b, kb_turbo, kb_turbo_old)
+process (reset, areset, clk_bus, ena_cpu, cpu_a_bus, dos_act, cs_xxfe, cs_eff7, cs_7ffd, cs_xxfd, port_7ffd_reg, port_1ffd_reg, cpu_mreq_n, cpu_m1_n, cpu_wr_n, cpu_do_bus, fd_port, cs_008b, kb_turbo, kb_turbo_old)
 begin
 	if reset = '1' then
 		port_eff7_reg <= (others => '0');
@@ -1641,7 +1632,7 @@ begin
 	case selector is
 		when x"00" => cpu_di_bus <= ram_do_bus;
 		when x"01" => cpu_di_bus <= mc146818_do_bus;
-		when x"02" => cpu_di_bus <= GX0 & TAPE_IN & kb_do_bus;
+		when x"02" => cpu_di_bus <= GX0 & not(TAPE_IN) & kb_do_bus;
 		when x"03" => cpu_di_bus <= zc_do_bus;
 		when x"04" => cpu_di_bus <= "11111100";	
 		when x"05" => cpu_di_bus <= joy_bus;
@@ -1676,12 +1667,12 @@ selector <=
  	x"03" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and (loa = x"57" or (loa = x"EB" and cpm = '0' and divmmc_en = '1')) ) else 	-- Z-Controller + DivMMC
 	x"04" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and loa = x"77") else 	-- Z-Controller
 	x"05" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1' and loa = x"1F" and dos_act = '0' and cpm = '0' and joy_mode = "000") else -- Joystick, port #1F
-	x"06" when (cs_fffd = '1' and cpu_rd_n = '0') else 									-- TurboSound
+	x"06" when (cs_fffd = '1' and cpu_rd_n = '0' and cpu_a_bus = x"FFFD") else 	-- TurboSound
 	x"08" when (cs_dffd = '1' and cpu_rd_n = '0' and cpu_a_bus = x"DFFD") else		-- port #DFFD
 	x"09" when (cs_7ffd = '1' and cpu_rd_n = '0' and cpu_a_bus = x"7FFD") else		-- port #7FFD
-	x"0A" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_a_bus = X"FADF" and cpm='0') else	-- Mouse z,b
-	x"0B" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_a_bus = X"FBDF" and cpm='0') else	-- Mouse x
-	x"0C" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_a_bus = X"FFDF" and cpm='0') else	-- Mouse y 
+	x"0A" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_a_bus = x"FADF" and cpm='0') else	-- Mouse z,b
+	x"0B" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_a_bus = x"FBDF" and cpm='0') else	-- Mouse x
+	x"0C" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_a_bus = x"FFDF" and cpm='0') else	-- Mouse y 
 	x"0E" when (serial_ms_oe_n = '0' and ds80 = '1') else -- Serial mouse - конфликт с GS
 	x"0F" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and zxuno_addr_oe_n = '0') else -- ZX UNO Register
 	x"10" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and zxuno_uart_oe_n = '0') else -- ZX UNO UART

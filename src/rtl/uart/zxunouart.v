@@ -26,6 +26,7 @@
 module zxunouart (
     input wire clk_bus,
 	 input wire ds80,
+	 input wire enabled,
     input wire [7:0] zxuno_addr,
     input wire zxuno_regrd,
     input wire zxuno_regwr,
@@ -53,6 +54,7 @@ module zxunouart (
     uart #(.CLK(CLK)) uartchip (
         .clk_bus(clk_bus),
 		  .ds80(ds80),
+		  .enabled(enabled),
         .txdata(din),
         .txbegin(comenzar_trans),
         .txbusy(txbusy),

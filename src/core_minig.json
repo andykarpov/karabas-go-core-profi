@@ -1,7 +1,7 @@
 {
     "id": "profi",
     "name": "Karabas Pro +",
-    "build": "26030319",
+    "build": "26030418",
     "bitstream": "karabas_minig.bin",
     "visible": true,
     "type": "osd",
@@ -11,7 +11,7 @@
         {"filename": "roms/ROMain_ramdisk_D.rom", "address": 1048576},
         {"filename": "roms/TEST430.ROM", "address": 1114112},
         {"filename": "roms/DiagROM.v50", "address": 1179648},
-        {"filename": "roms/ROMain_fatall_ramdisk_D.rom", "address": 1245184},
+        {"filename": "roms/profi_mainrom_2_3_fatall_ramdisk_D.rom", "address": 1245184},
         {"filename": "roms/esxdos089.bin", "address": 1310720},
         {"filename": "roms/gs105b.rom", "address": 2147483648}
     ],

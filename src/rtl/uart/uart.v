@@ -27,6 +27,7 @@ module uart (
     // CPU interface
     input wire clk_bus,  // 28 MHz
 	 input wire ds80,
+	 input wire enabled,
     input wire [7:0] txdata,
     input wire txbegin,
     output wire txbusy,
@@ -44,6 +45,7 @@ module uart (
     uart_tx #(.CLK(CLK)) transmitter (
         .clk_bus(clk_bus),
 		  .ds80(ds80),
+		  .enabled(enabled),
         .txdata(txdata),
         .txbegin(txbegin),
         .txbusy(txbusy),
@@ -53,6 +55,7 @@ module uart (
     uart_rx #(.CLK(CLK)) receiver (
         .clk_bus(clk_bus),
 		  .ds80(ds80),
+		  .enabled(enabled),
         .rxdata(rxdata),
         .rxrecv(rxrecv),
         .data_read(data_read),
@@ -65,6 +68,7 @@ module uart_tx (
     // CPU interface
     input wire clk_bus,  // 28 MHz
 	 input wire ds80,
+	 input wire enabled,
     input wire [7:0] txdata,
     input wire txbegin,
     output wire txbusy,
@@ -94,7 +98,7 @@ module uart_tx (
     assign txbusy = txbusy_ff;
 
     always @(posedge clk_bus) begin
-        if (txbegin == 1'b1 && txbusy_ff == 1'b0 && state == IDLE) begin
+        if (txbegin == 1'b1 && txbusy_ff == 1'b0 && state == IDLE && enabled) begin
             txdata_reg <= txdata;
             txbusy_ff <= 1'b1;
             state <= START;
@@ -149,6 +153,7 @@ module uart_rx (
     // CPU interface
     input wire clk_bus,  // 28 MHz
 	 input wire ds80,
+	 input wire enabled,
     output reg [7:0] rxdata,
     output reg rxrecv,
     input wire data_read,
@@ -197,7 +202,7 @@ module uart_rx (
                 begin
                     rts <= 1'b0;      // permitimos la recepción
                     rxrecv <= 1'b0;   // si estamos aqui, es porque no hay bytes pendientes de leer
-                    if (rx_negedge) begin
+                    if (rx_negedge && enabled) begin
                         bpscounter <= (ds80 ? PERIODDS80 : PERIOD) - 2;  // porque ya hemos perdido 2 ciclos detectando el flanco negativo                        
                         state <= START;
                     end
