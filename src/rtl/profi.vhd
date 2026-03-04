@@ -1064,7 +1064,7 @@ U18: entity work.zifi
 port map (
 	CLK    			=> clk_bus,
 	ENA_CPU			=> ena_cpu,
-	RESET  			=> areset,
+	RESET  			=> reset,
 	DS80   			=> DS80,
 
 	A      			=> cpu_a_bus,
