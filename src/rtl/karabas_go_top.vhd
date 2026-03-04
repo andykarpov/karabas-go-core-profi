@@ -130,7 +130,7 @@ end karabas_go;
 architecture Behavioral of karabas_go is
 
 -- signals
-signal clk_bus, clk_rgb, clk_vga, clk_adc, clk_sdr, clk_12, ena_saa : std_logic;
+signal clk_bus, clk_rgb, clk_vga, clk_adc, clk_sdr, clk_12, clk_8 : std_logic;
 signal areset, reset, kb_reset : std_logic;
 
 signal vid_rgb : std_logic_vector(8 downto 0);
@@ -147,16 +147,15 @@ begin
 
 U1: entity work.profi
 generic map(
-	ENABLE_FDD		=> true,
-	ENABLE_GS 		=> false
+	ENABLE_FDD		=> true
 )
 port map(
 	-- clock
 	CLK_50MHZ 		=> CLK_50MHZ,
 	CLK_BUS			=> clk_bus,
-	ENA_SAA			=> ena_saa,
 	CLK_SDR			=> clk_sdr,
 	CLK_12			=> clk_12,
+	CLK_8				=> clk_8,
 	
 	RESET 			=> reset,
 	ARESET 			=> areset,
