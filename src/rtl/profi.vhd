@@ -39,6 +39,7 @@ entity profi is
 generic(
 	ENABLE_FDD: boolean := true;
 	ENABLE_GS : boolean := true;
+	ENABLE_OPL3 : boolean := true;
 	ENABLE_SERIAL_MOUSE : boolean := true
 );
 port ( 
@@ -378,6 +379,13 @@ signal gs_mem_rfsh_n		: std_logic;
 --signal adc_l 				: std_logic_vector(23 downto 0); -- outer
 --signal adc_r 				: std_logic_vector(23 downto 0); -- outer
 
+-- opl3
+signal opl3_l				: std_logic_vector(15 downto 0);
+signal opl3_r				: std_logic_vector(15 downto 0);
+signal opl3_port_cs		: std_logic := '0';
+signal opl3_cs_n			: std_logic := '1';
+signal opl3_do_bus		: std_logic_vector(7 downto 0);
+
 -- CLOCK
 --signal clk_bus				: std_logic; -- outer
 signal clk_16 				: std_logic;
@@ -562,6 +570,21 @@ port (
 	rx              : in std_logic;
 	tx              : out std_logic;
 	rts             : out std_logic);
+end component;
+
+component opl2_top
+port(
+	 reset 			 : in std_logic;
+    clk 				 : in std_logic;
+	 ds80 			 : in std_logic;
+    wr_n 			 : in std_logic;
+	 cs_n 			 : in std_logic;
+    din 				 : in std_logic_vector(7 downto 0);
+    a 				 : in std_logic_vector(1 downto 0);
+	 dout 			 : out std_logic_vector(7 downto 0);
+    out_l 			 : out std_logic_vector(15 downto 0);
+    out_r 			 : out std_logic_vector(15 downto 0)
+);
 end component;
 
 begin
@@ -1212,6 +1235,9 @@ port map(
 	esp_l				=> esp_l,
 	esp_r				=> esp_r,
 	
+	opl3_l			=> opl3_l,
+	opl3_r			=> opl3_r,
+	
 	audio_l 			=> audio_mix_l,
 	audio_r 			=> audio_mix_r
 );
@@ -1257,6 +1283,38 @@ G_NOGS: if not(ENABLE_GS) generate
 	gs_mem_wr_n    <= '1';
 	gs_mem_rfsh_n  <= '1';
 end generate G_NOGS;
+
+-- OPL3
+
+G_OPL3: if ENABLE_OPL3 generate
+U23: entity work.opl2_top
+port map(
+	clk 				=> clk_bus, -- 28/24
+	ds80				=> ds80,
+	reset 			=> reset or loader_act or mcu_busy,
+	
+	a 					=> cpu_a_bus(1 downto 0),
+	din 				=> cpu_do_bus,
+	cs_n 				=> opl3_cs_n,
+	wr_n 				=> cpu_wr_n,
+	dout 				=> opl3_do_bus,
+
+	out_l 			=> opl3_l,
+	out_r 			=> opl3_r
+	
+);
+opl3_port_cs <= '1' when loa(7 downto 2) = "110001" and cpm = '0' and dos_act = '0' else '0'; -- #C4 + #C5 + #C6 + #C7
+opl3_cs_n <= '0' when cpu_m1_n = '1' and cpu_iorq_n = '0' and opl3_port_cs = '1' else '1';
+
+end generate G_OPL3;
+
+G_NOOPL3: if not(ENABLE_OPL3) generate
+	opl3_port_cs <= '0';
+	opl3_cs_n <= '1';
+	opl3_l <= x"0000";
+	opl3_r <= x"0000";
+	opl3_do_bus <= x"FF";
+end generate G_NOOPL3;
 
 -------------------------------------------------------------------------------
 -- Global signals
@@ -1370,7 +1428,8 @@ sco 	<= port_dffd_reg(3); -- Выбор положения окна проеци
 									-- 1 - окно номер 2 (#4000-#7FFF)
 
 -- OCH: change decoding of #FE port when Nemo enabled
-cs_xxfe <= '1' when (cpu_iorq_n = '0' and loa(0) = '0' and nemoide_en = '0') or 
+cs_xxfe <= '1' when (cpu_iorq_n = '0' and loa(0) = '0' and nemoide_en = '0' and 
+							loa(7 downto 0) /= x"C4" and loa(7 downto 0) /= x"C6" ) or -- remove conflicts with OPL ports 
 						  (cpu_iorq_n = '0' and loa(6 downto 0) = "1111110" and nemoide_en = '1') else '0';
 cs_xx7e <= '1' when cs_xxfe = '1' and loa(7) = '0' else '0';
 cs_eff7 <= '1' when cpu_iorq_n = '0' and cpu_m1_n = '1' and cpu_a_bus = X"EFF7" else '0';
@@ -1627,7 +1686,7 @@ end process;
 process (selector, cpu_a_bus, gx0, serial_ms_do_bus, ram_do_bus, mc146818_do_bus, kb_do_bus, zc_do_bus, ts_do_bus, port_7ffd_reg, port_dffd_reg,
 			vid_attr, port_eff7_reg, joy_bus, ms_z, ms_b, ms_x, ms_y, port_xxC7_reg, port_008b_reg,
 			port_018b_reg, port_028b_reg, gs_do_bus, ide_do_bus, fdd_do_bus, TAPE_IN, 
-			zifi_do_bus, zxuno_uart_do_bus, zxuno_addr_to_cpu)
+			zifi_do_bus, zxuno_uart_do_bus, zxuno_addr_to_cpu, opl3_port_cs, opl3_do_bus)
 begin
 	case selector is
 		when x"00" => cpu_di_bus <= ram_do_bus;
@@ -1656,6 +1715,7 @@ begin
 		when x"18" => cpu_di_bus <= fdd_do_bus;
 		when x"19" => cpu_di_bus <= ide_do_bus;
 		when x"1A" => cpu_di_bus <= gs_do_bus;
+		when x"1B" => cpu_di_bus <= opl3_do_bus;
 		when others => cpu_di_bus <= (others => '1');
 	end case;
 end process;
@@ -1684,8 +1744,9 @@ selector <=
 	x"16" when zifi_oe_n = '0' and cpu_iorq_n = '0' and cpu_rd_n = '0' else  		-- zifi
 	x"17" when (vid_pff_cs = '1' and cpu_iorq_n = '0' and cpu_rd_n = '0' and loa = x"FF") and dos_act='0' and cpm = '0' and ds80 = '0' else -- Port FF select
 	x"18" when (fdd_oe_n = '0' and cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1') else 		-- fdd
-	x"19" when (ide_oe_n = '0' and cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1') else 		-- ide	
+	x"19" when (ide_oe_n = '0' and cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1') else 		-- ide
 	x"1A" when (gs_oe = '1' and cpu_iorq_n = '0' and cpu_rd_n = '0' and ds80 = '0') else 				-- gs
+	x"1B" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpm='0' and loa = x"C4") else 					-- opl status
 	(others => '1');
 
 ext_rom_bank <= kb_rom_bank;

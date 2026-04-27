@@ -30,13 +30,20 @@ module audio_mixer (
 	input wire [15:0] fm_l,
 	input wire [15:0] fm_r,
 
+`ifdef HW_ID2
 	input wire [15:0] adc_l,
 	input wire [15:0] adc_r,
+`endif
 
+`ifdef HW_ID3
     input wire [15:0] esp_l,
 	 input wire [15:0] esp_r,
+`endif
 	
 	input wire fm_ena,
+	
+	input wire [15:0] opl3_l,
+	input wire [15:0] opl3_r,
 	
 	output wire signed [15:0] audio_l,
 	output wire signed [15:0] audio_r
@@ -47,7 +54,7 @@ reg signed [11:0] tsfm_l, tsfm_r;
 reg signed [11:0] covox_l, covox_r;
 
 always @(posedge clk) begin
-//always @(*) begin
+
 	psg_l <= (mode == 2'b00 || mode== 2'b10) ? 
 		$signed({3'b000, ssg0_a, 1'd0}) + $signed({3'b000, ssg1_a, 1'd0}) + $signed({4'b0000, ssg0_b}) + $signed({4'b0000, ssg1_b}) : 
 		$signed({3'b000, ssg0_a, 1'd0}) + $signed({3'b000, ssg1_a, 1'd0}) + $signed({4'b0000, ssg0_c}) + $signed({4'b0000, ssg1_c});
@@ -65,21 +72,31 @@ end
 
 wire signed [15:0] mix_l = 	$signed({tsfm_l[11:0], 4'b0000}) + 
 										$signed({gs_l[14],gs_l[14:0]}) + 
+`ifdef HW_ID2
 										$signed(adc_l[15:0]) +
+`endif
+`ifdef HW_ID3
 										$signed(esp_l[15:0]) +
+`endif
+										$signed(opl3_l[15:0]) + 
 										$signed({2'b00, saa_l, 6'b000000}) +
 										$signed({covox_l[11:0], 4'b0000}) + 
 										$signed({2'b00, speaker, 7'b0000000, 6'b0000});
 
 wire signed [15:0] mix_r = 	$signed({tsfm_r[11:0], 4'b0000}) + 
 										$signed({gs_r[14], gs_r[14:0]}) + 
+`ifdef HW_ID2
 										$signed(adc_r[15:0]) +
+`endif							
+`ifdef HW_ID3
 										$signed(esp_r[15:0]) +
+`endif							
+										$signed(opl3_r[15:0]) + 
 										$signed({2'b00, saa_r, 6'b000000}) +										
 										$signed({covox_r[11:0], 4'b0000}) + 
 										$signed({2'b00, speaker, 7'b0000000, 6'b000000});
 
-assign audio_l = (mute) ? 16'b0 : mix_l;
-assign audio_r = (mute) ? 16'b0 : mix_r;
+assign audio_l = mix_l;
+assign audio_r = mix_r;
 
 endmodule

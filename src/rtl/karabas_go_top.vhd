@@ -147,7 +147,8 @@ begin
 
 U1: entity work.profi
 generic map(
-	ENABLE_FDD		=> true
+	ENABLE_FDD		=> true,
+	ENABLE_GS      => false
 )
 port map(
 	-- clock

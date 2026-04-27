@@ -302,7 +302,7 @@ port map(
 -- DAC
 u_dac : entity work.PCM5102
 generic map(
-	DAC_CLK_DIV_BITS => 4
+	DAC_CLK_DIV_BITS => 2
 )
 port map(
 	clk => CLK_BUS,
