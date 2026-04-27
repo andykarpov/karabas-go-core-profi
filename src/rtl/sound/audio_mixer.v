@@ -35,10 +35,10 @@ module audio_mixer (
 	input wire [15:0] adc_r,
 `endif
 
-`ifdef HW_ID3
+//`ifdef HW_ID3
     input wire [15:0] esp_l,
 	 input wire [15:0] esp_r,
-`endif
+//`endif
 	
 	input wire fm_ena,
 	
