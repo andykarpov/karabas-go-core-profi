@@ -36,6 +36,14 @@ library unisim;
 use unisim.vcomponents.all;
 
 entity karabas_go is
+generic(
+	ENABLE_FDD : integer := 1;
+	ENABLE_GS : integer := 0;
+	ENABLE_OPL3 : integer := 1;
+	ENABLE_SAA : integer := 0;
+	ENABLE_SERIAL_MOUSE : integer :=1;
+	NUM_KEYS: integer := 4
+);
 port (
 	CLK_50MHZ 			: in  STD_LOGIC;
 
@@ -147,8 +155,12 @@ begin
 
 U1: entity work.profi
 generic map(
-	ENABLE_FDD		=> true,
-	ENABLE_GS      => false
+	ENABLE_FDD => ENABLE_FDD,
+	ENABLE_GS => ENABLE_GS,
+	ENABLE_OPL3 => ENABLE_OPL3,
+	ENABLE_SAA => ENABLE_SAA,
+	ENABLE_SERIAL_MOUSE => ENABLE_SERIAL_MOUSE,
+	NUM_KEYS => NUM_KEYS
 )
 port map(
 	-- clock
@@ -282,9 +294,9 @@ port map (
 DAC_MUTE 			<= '1';
 
 VCLK_buf: ODDR2 port map(Q => V_CLK, C0 => clk_vga, C1 => not clk_vga, D0 => '1', D1 => '0');
-VGA_R 				<= hdmi_rgb(23 downto 16);
-VGA_G 				<= hdmi_rgb(15 downto 8);
-VGA_B 				<= hdmi_rgb(7 downto 0);
+VGA_R 				<= hdmi_rgb(23 downto 16) when hdmi_blank = '0' else "00000000";
+VGA_G 				<= hdmi_rgb(15 downto 8) when hdmi_blank = '0' else "00000000";
+VGA_B 				<= hdmi_rgb(7 downto 0) when hdmi_blank = '0' else "00000000";
 VGA_HS 				<= hdmi_hsync;
 VGA_VS 				<= hdmi_vsync;
 

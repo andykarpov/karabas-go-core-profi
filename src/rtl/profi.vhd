@@ -37,10 +37,12 @@ use unisim.vcomponents.all;
 
 entity profi is
 generic(
-	ENABLE_FDD: boolean := true;
-	ENABLE_GS : boolean := true;
-	ENABLE_OPL3 : boolean := true;
-	ENABLE_SERIAL_MOUSE : boolean := true
+	ENABLE_FDD: integer := 1;
+	ENABLE_GS : integer := 1;
+	ENABLE_OPL3 : integer := 1;
+	ENABLE_SAA : integer := 1;
+	ENABLE_SERIAL_MOUSE : integer := 1;
+	NUM_KEYS : integer := 6
 );
 port ( 
 	 
@@ -867,6 +869,10 @@ port map(
 
 -- USB HID parser / transformer to 8x5 matrix + joy mapper on keyboard
 U8: entity work.hid_parser
+generic map(
+	NUM_KEYS 		=> NUM_KEYS,
+	ALLOW_KEYCODE  => false
+)
 port map (
 	CLK 				=> clk_bus,
 	RESET 			=> areset,	
@@ -999,6 +1005,7 @@ port map (
 );
 
 -- SAA1099 sound generator
+G_SAA1099: if ENABLE_SAA=1 generate
 U14: entity work.saa1099
 port map(
 	clk				=> clk_8,
@@ -1011,10 +1018,10 @@ port map(
 	out_l				=> saa_out_l,
 	out_r				=> saa_out_r
 );
-
+end generate;
 	
 -- Serial mouse emulation
-G_SERIAL_MOUSE: if ENABLE_SERIAL_MOUSE generate
+G_SERIAL_MOUSE: if ENABLE_SERIAL_MOUSE=1 generate
 U15: entity work.serial_mouse
 port map(
 	CLK 				=> clk_bus,
@@ -1043,7 +1050,7 @@ port map(
 );
 end generate;
 
-G_NO_SERIAL_MOUSE: if not(ENABLE_SERIAL_MOUSE) generate
+G_NO_SERIAL_MOUSE: if ENABLE_SERIAL_MOUSE=0 generate
 	serial_ms_oe_n <= '1';
 	serial_ms_int_n <= '1';
 end generate;
@@ -1149,7 +1156,7 @@ port map(
 );
 
 -- FDD controller
-G_FDD: if ENABLE_FDD generate
+G_FDD: if ENABLE_FDD=1 generate
 U20: entity work.firefly_fdc
 port map(
 	clk 				=> clk_bus,
@@ -1183,7 +1190,7 @@ port map(
 );
 end generate G_FDD;
 
-G_NOFDD: if not(ENABLE_FDD) generate
+G_NOFDD: if ENABLE_FDD=0 generate
 	FDC_DRIVE      <= "ZZ";
 	FDC_MOTOR      <= 'Z';
 	FDC_DIR        <= 'Z';
@@ -1243,7 +1250,7 @@ port map(
 );
 
 -- General Sound
-G_GS: if ENABLE_GS generate
+G_GS: if ENABLE_GS=1 generate
 U22: entity work.gs_top
 port map(
 	clk_bus 			=> clk_bus, -- 28/24
@@ -1277,7 +1284,7 @@ port map(
 );
 end generate G_GS;
 
-G_NOGS: if not(ENABLE_GS) generate
+G_NOGS: if ENABLE_GS=0 generate
 	gs_oe          <= '0';
 	gs_mem_rd_n    <= '1';
 	gs_mem_wr_n    <= '1';
@@ -1286,7 +1293,7 @@ end generate G_NOGS;
 
 -- OPL3
 
-G_OPL3: if ENABLE_OPL3 generate
+G_OPL3: if ENABLE_OPL3=1 generate
 U23: entity work.opl2_top
 port map(
 	clk 				=> clk_bus, -- 28/24
@@ -1308,7 +1315,7 @@ opl3_cs_n <= '0' when cpu_m1_n = '1' and cpu_iorq_n = '0' and opl3_port_cs = '1'
 
 end generate G_OPL3;
 
-G_NOOPL3: if not(ENABLE_OPL3) generate
+G_NOOPL3: if ENABLE_OPL3=0 generate
 	opl3_port_cs <= '0';
 	opl3_cs_n <= '1';
 	opl3_l <= x"0000";
