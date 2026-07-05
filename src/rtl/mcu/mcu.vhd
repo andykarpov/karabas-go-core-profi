@@ -41,6 +41,9 @@ entity mcu is
 	 -- joysticks
 	 JOY_L			: out std_logic_vector(12 downto 0) := "000000000000";
 	 JOY_R			: out std_logic_vector(12 downto 0) := "000000000000";
+	 
+	 -- hw buttons
+	 BTNS 			: out std_logic_vector(1 downto 0) := "00";
 
     -- rtc	 
 	 RTC_A 		: in std_logic_vector(7 downto 0);
@@ -83,6 +86,10 @@ entity mcu is
 	 SD2_MISO	  : in  std_logic := '1';
 	 SD2_CS_N   : out std_logic := '1';	 
 	 
+	 -- dot matrix
+	 MATRIX_CMD : in std_logic_vector(23 downto 0) := (others => '0');
+	 MATRIX_CMD_WR : in std_logic := '0';
+
 	 -- hw setup
 	 HWID : out std_logic_vector(7 downto 0) := (others => '0');
 	 DVI_ONLY : out std_logic := '0';
@@ -284,6 +291,14 @@ begin
 							when others => null;
 						end case;
 
+					-- hw buttons
+					when CMD_BTNS => 
+						case spi_do(15 downto 8) is
+							when x"00" => BTNS(0) <= spi_do(0);
+							when x"01" => BTNS(1) <= spi_do(0);
+							when others => null;
+						end case;
+
 					-- soft switches
 					when CMD_SWITCHES => SOFTSW_COMMAND <= spi_do(15 downto 0);
 							
@@ -432,11 +447,14 @@ begin
 			if UART_TX_WR = '1' then -- send UART byte
 				queue_wr_req <= '1';
 				queue_di <= CMD_UART & "00000000" & UART_TX_DATA;
-			elsif RTC_WR_N = '0' AND RTC_CS = '1' and BUSY = '0' then -- add rtc register write to queue
+			elsif RTC_WR_N = '0' AND RTC_CS = '1' and BUSY = '0' and (RTC_A /= x"0C" and RTC_A /= x"0D") then -- add rtc register write to queue
 			--elsif RTC_WR_N = '0' AND RTC_CS = '1' and BUSY = '0' and (RTC_A /= x"0C" and RTC_A < x"F0") then -- add rtc register write to queue
 				queue_wr_req <= '1';
 				queue_di <= CMD_RTC & RTC_A & RTC_DI;
-			elsif queue_rd_empty = '1' or queue_data_count < 5 then -- anti-empty queue
+         elsif MATRIX_CMD_WR = '1' then -- send matrix cmd
+				queue_wr_req <= '1';
+				queue_di <= MATRIX_CMD;
+			elsif queue_rd_empty = '1' then -- anti-empty queue
 				queue_wr_req <= '1';
 				queue_di <= CMD_NOPE & x"0000";
 			end if;

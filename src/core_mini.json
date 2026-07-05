@@ -7,7 +7,6 @@
     "type": "osd",
     "order": 2,
     "eeprom_bank": 1,
-    "spi_freq":16,
     "roms": [
         {"filename": "roms/ROMain_ramdisk_D.rom", "address": 1048576},
         {"filename": "roms/bios_pqdos.rom", "address": 1114112},

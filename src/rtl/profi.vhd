@@ -506,6 +506,7 @@ signal kb_divmmc_en 		: std_logic := '0';
 signal kb_nemoide_en 	: std_logic := '0';
 signal kb_type 			: std_logic := '0';
 signal mcu_busy 			: std_logic := '1';
+signal hw_btn           : std_logic_vector(1 downto 0) := "00"; -- hw buttons
 
 -- HDD signals
 signal ide_do_bus 		: std_logic_vector(7 downto 0);
@@ -520,6 +521,11 @@ signal fdd_mode 			: std_logic_vector(1 downto 0);
 signal loa 					: std_logic_vector(7 downto 0);
 signal hia					: std_logic_vector(15 downto 8);
 signal io_rd				: std_logic := '0';
+
+-- dot matrix
+signal iowr : std_logic;
+signal matrix_cmd: std_logic_vector(23 downto 0);
+signal matrix_cmd_wr : std_logic := '0';
 
 component zxunoregs
 port (
@@ -826,6 +832,7 @@ port map(
 	
 	JOY_L 			=> joy_l,
 	JOY_R 			=> joy_r,
+	BTNS           => hw_btn,
 	
 	RTC_A 			=> mc146818_a_bus,
 	RTC_DI 			=> cpu_do_bus,
@@ -859,6 +866,10 @@ port map(
 	SD2_MOSI 		=> open,
 	SD2_MISO 		=> '1',
 	SD2_SCK 			=> open,
+
+    -- dot matrix
+    MATRIX_CMD_WR       => matrix_cmd_wr,
+    MATRIX_CMD          => matrix_cmd,
 	
 	HWID				=> open,
 	DVI_ONLY			=> DVI_ONLY,
@@ -1326,7 +1337,7 @@ end generate G_NOOPL3;
 -------------------------------------------------------------------------------
 -- Global signals
 
-reset <= areset or kb_reset or loader_act or mcu_busy or rom_bank_reset; -- hot reset
+reset <= areset or kb_reset or hw_btn(0) or loader_act or mcu_busy or rom_bank_reset; -- hot reset
 
 hia <= cpu_a_bus(15 downto 8); -- high cpu address
 loa <= cpu_a_bus(7 downto 0);  -- low cpu address
@@ -1347,8 +1358,8 @@ cpu_inta_n <= cpu_iorq_n or cpu_m1_n;	-- INTA
 cpu_int_n <= vid_int_n and serial_ms_int_n;
 
 -- nmi signal
-cpu_nmi_n <= mapcond when kb_nmi = '1' and divmmc_en = '1' else 
-	'0' when divmmc_en = '0' and kb_nmi = '1' and ((cpu_m1_n = '0' and cpu_mreq_n = '0' and hia(15 downto 14) /= "00") or DS80 = '1') else 
+cpu_nmi_n <= mapcond when (kb_nmi = '1' or hw_btn(1) = '1') and divmmc_en = '1' else 
+	'0' when divmmc_en = '0' and (kb_nmi = '1' or hw_btn(1) = '1') and ((cpu_m1_n = '0' and cpu_mreq_n = '0' and hia(15 downto 14) /= "00") or DS80 = '1') else 
 	'1';
 
 -- wait always disabled
@@ -1794,6 +1805,22 @@ AUDIO_L      <= audio_mix_l;
 AUDIO_R      <= audio_mix_r;
 ADC_CLK      <= clk_adc;
 BEEPER       <= speaker;
+
+iowr <= '1' when cpu_iorq_n = '0' and cpu_wr_n = '0' and cpu_m1_n = '1' else '0';
+
+-- dot matrix
+u_matrix: entity work.dot_matrix
+port map(
+    clk => CLK_BUS,
+    reset => areset,
+    audio_l => audio_mix_l,
+    audio_r => audio_mix_r,
+    iowr    => iowr,
+    ioa     => cpu_a_bus,
+    iod     => cpu_do_bus,
+    cmd_wr  => matrix_cmd_wr,
+    cmd     => matrix_cmd
+);
 
 end Behavioral;
 
