@@ -269,7 +269,7 @@ generic map(
 port map(
 	clk				=> clk_vga,
 	ds80 				=> vmode(3),
-	reset 			=> areset or kb_reset,
+	reset 			=> areset,
 	vga_rgb 			=> hdmi_rgb,
 	vga_hs 			=> hdmi_hsync,
 	vga_vs 			=> hdmi_vsync,

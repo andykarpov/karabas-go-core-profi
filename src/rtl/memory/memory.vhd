@@ -240,7 +240,7 @@ begin
 	is_romDIVMMC <= '1' when DIVMMC_EN = '1' and N_MREQ = '0' and (AUTOMAP ='1' or REG_E3(7) = '1') and A(15 downto 13) = "000" else '0';
 	is_ramDIVMMC <= '1' when DIVMMC_EN = '1' and N_MREQ = '0' and (AUTOMAP ='1' or REG_E3(7) = '1') and A(15 downto 13) = "001" else '0';
 	
-	is_rom <= '1' when N_MREQ = '0' and A(15 downto 14)  = "00"  and WOROM = '0' else '0';
+	is_rom <= '1' when N_MREQ = '0' and A(15 downto 14)  = "00"  and (WOROM = '0' or DIVMMC_EN = '1') else '0';
 	is_ram <= '1' when N_MREQ = '0' and is_rom = '0' else '0';	
 	
 	-- 00 - bank 0, CPM

@@ -37,12 +37,12 @@ use unisim.vcomponents.all;
 
 entity profi is
 generic(
-	ENABLE_FDD: integer := 1;
+	ENABLE_FDD: integer := 0;
 	ENABLE_GS : integer := 1;
 	ENABLE_OPL3 : integer := 1;
 	ENABLE_SAA : integer := 1;
 	ENABLE_SERIAL_MOUSE : integer := 1;
-	NUM_KEYS : integer := 6
+	NUM_KEYS : integer := 5
 );
 port ( 
 	 
@@ -503,6 +503,7 @@ signal kb_psg_type 		: std_logic := '0';
 signal kb_video 			: std_logic := '0'; -- 31 kHz only in mini go
 signal kb_swap_fdd 		: std_logic := '0'; -- disabled in mini go
 signal kb_divmmc_en 		: std_logic := '0';
+signal prev_kb_divmmc_en 		: std_logic := '0';
 signal kb_nemoide_en 	: std_logic := '0';
 signal kb_type 			: std_logic := '0';
 signal mcu_busy 			: std_logic := '1';
@@ -1774,9 +1775,10 @@ process (CLK_BUS)
 begin
 	if rising_edge(CLK_BUS) then
 		rom_bank_reset <= '0';
-		if (prev_kb_rom_bank /= kb_rom_bank) then
+		if (prev_kb_rom_bank /= kb_rom_bank) or (prev_kb_divmmc_en /= kb_divmmc_en) then
 			rom_bank_reset <= '1';
 			prev_kb_rom_bank <= kb_rom_bank;
+			prev_kb_divmmc_en <= kb_divmmc_en;
 		end if;
 	end if;
 end process;
