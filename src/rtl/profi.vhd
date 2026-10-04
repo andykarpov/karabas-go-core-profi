@@ -42,7 +42,8 @@ generic(
 	ENABLE_OPL3 : integer := 1;
 	ENABLE_SAA : integer := 1;
 	ENABLE_SERIAL_MOUSE : integer := 1;
-	NUM_KEYS : integer := 5
+	NUM_KEYS : integer := 4;
+	USE_T80s : integer := 1
 );
 port ( 
 	 
@@ -367,6 +368,7 @@ signal saa_out_r			: std_logic_vector(7 downto 0);
 signal gs_l 				: std_logic_vector(14 downto 0);
 signal gs_r 				: std_logic_vector(14 downto 0);
 signal gs_oe 				: std_logic := '0';
+signal gs_wait_n			 : std_logic;
 signal gs_do_bus	 		: std_logic_vector(7 downto 0);
 
 -- gs memory
@@ -376,6 +378,7 @@ signal gs_mem_do			: std_logic_vector(7 downto 0);
 signal gs_mem_rd_n		: std_logic;
 signal gs_mem_wr_n		: std_logic;
 signal gs_mem_rfsh_n		: std_logic;
+signal gs_mem_mreq			:std_logic;
 
 -- adc
 --signal adc_l 				: std_logic_vector(23 downto 0); -- outer
@@ -450,12 +453,14 @@ signal zifi_oe_n   		: std_logic := '1';
 signal zifi_uart_tx 		: std_logic;
 signal zifi_uart_cts 	: std_logic;
 signal zifi_api_enabled : std_logic;
+signal cpu_wait_zifi_usb : std_logic;
 
 -- USB UART
 signal usb_uart_rx_data : std_logic_vector(7 downto 0);
 signal usb_uart_rx_idx 	: std_logic_vector(7 downto 0);
 signal usb_uart_tx_data : std_logic_vector(7 downto 0);
 signal usb_uart_tx_wr 	: std_logic;
+
 
 -- serial mouse 
 signal serial_ms_do_bus : std_logic_vector(7 downto 0);
@@ -568,6 +573,7 @@ end component;
 component uart 
 port ( 
 	clk_bus         : in std_logic;
+	reset           : in std_logic;
 	ds80            : in std_logic;
 	enabled         : in std_logic;
 	txdata          : in std_logic_vector(7 downto 0);
@@ -638,6 +644,7 @@ port map(
 );
 
 -- Zilog Z80A CPU
+G_T80pa: if USE_T80s=0 generate
 U2: entity work.T80pa
 port map (
 	RESET_n			=> cpu_reset_n,
@@ -661,6 +668,33 @@ port map (
 	DI					=> cpu_di_bus,
 	DO					=> cpu_do_bus
 );
+end generate;
+
+G_T80s: if USE_T80s=1 generate
+U2: entity work.T80s
+port map (
+	RESET_n			=> cpu_reset_n,
+	CLK				=> clk_bus,
+	CEN				=> ena_cpu,
+	WAIT_n			=> cpu_wait_n,
+	INT_n				=> cpu_int_n,
+	NMI_n				=> cpu_nmi_n,
+	BUSRQ_n			=> '1',
+	M1_n				=> cpu_m1_n,
+	MREQ_n			=> cpu_mreq_n,
+	IORQ_n			=> cpu_iorq_n,
+	RD_n				=> cpu_rd_n,
+	WR_n				=> cpu_wr_n,
+	RFSH_n			=> cpu_rfsh_n,
+	HALT_n			=> open,
+	BUSAK_n			=> open,
+	OUT0				=> '1',
+	A					=> cpu_a_bus,
+	DI					=> cpu_di_bus,
+	DO					=> cpu_do_bus
+);
+end generate;
+
 
 -- memory manager
 U3: entity work.memory 
@@ -687,6 +721,8 @@ port map (
 	GS_N_RD			=> gs_mem_rd_n,
 	GS_N_WR			=> gs_mem_wr_n,
 	GS_N_RFSH		=> gs_mem_rfsh_n,
+	GS_WAIT_N 		=> gs_wait_n,
+	GS_MREQ_N		=> gs_mem_mreq,
 	
 	-- loader signals
 	loader_act 		=> loader_act,
@@ -1116,8 +1152,10 @@ port map (
 	RD_N   			=> cpu_rd_n,
 	WR_N   			=> cpu_wr_n,
 	ZIFI_OE_N 		=> zifi_oe_n,
+
+	CPU_WAIT 		=> cpu_wait_zifi_usb,
 	
-	ENABLED 			=> zifi_api_enabled,
+	ENABLED 		=> zifi_api_enabled,
 
 	UART_RX   		=> UART_RX,
 	UART_TX   		=> zifi_uart_tx,
@@ -1266,7 +1304,7 @@ G_GS: if ENABLE_GS=1 generate
 U22: entity work.gs_top
 port map(
 	clk_bus 			=> clk_bus, -- 28/24
-	ce 				=> ena_div2, -- 14 n
+	ce 				=> 	'1',--ena_div2, -- 14 n
 	ds80				=> ds80,
 
 	reset 			=> areset or kb_gs_reset or loader_act or mcu_busy,
@@ -1289,6 +1327,8 @@ port map(
 	ram_rd_n			=> gs_mem_rd_n,
 	ram_wr_n			=> gs_mem_wr_n,
 	ram_rfsh_n  	=> gs_mem_rfsh_n,
+	ram_mreq		=> gs_mem_mreq,
+	gs_wait         => gs_wait_n,
 	
 	out_l 			=> gs_l,
 	out_r 			=> gs_r
@@ -1301,6 +1341,7 @@ G_NOGS: if ENABLE_GS=0 generate
 	gs_mem_rd_n    <= '1';
 	gs_mem_wr_n    <= '1';
 	gs_mem_rfsh_n  <= '1';
+	gs_mem_mreq	   <= '1';
 end generate G_NOGS;
 
 -- OPL3
@@ -1365,14 +1406,15 @@ cpu_nmi_n <= mapcond when (kb_nmi = '1' or hw_btn(1) = '1') and divmmc_en = '1' 
 
 -- wait always disabled
 -- actual wait signal is controlled by ena_cpu
-cpu_wait_n <= '1';
+cpu_wait <= '0';
 
 -- cpu wait condition
-cpu_wait <= '1' when zc_busy = '1' or 
+cpu_wait_n <= '0' when zc_busy = '1' or 
+							cpu_wait_zifi_usb = '1' or
 							ide_busy = '1' or 
 							kb_pause = '1' or  
 							(kb_screen_mode = "01" and memory_contention = '1' and automap = '0' and DS80 = '0') 
-							else '0';
+							else '1';
 
 -------------------------------------------------------------------------------
 -- SD Card

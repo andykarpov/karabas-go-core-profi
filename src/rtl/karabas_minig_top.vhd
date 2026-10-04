@@ -333,7 +333,7 @@ u_ft_clk: ODDR2 port map(Q => FT_CLK_OUT, C0 => clk_8, C1 => not(clk_8), CE => '
 
 u_sdr_clk: ODDR2 -- negative DDR clock
 generic map(DDR_ALIGNMENT 	=> "NONE", INIT => '0', SRTYPE => "SYNC")
-port map(Q => SDR_CLK, C0 => clk_sdr, C1 => not(clk_sdr), CE => '1', D0 => '0', D1 => '1', R => '0', S => '0');
+port map(Q => SDR_CLK, C0 => clk_sdr, C1 => not(clk_sdr), CE => '1', D0 => '1', D1 => '0', R => '0', S => '0');
 
 end architecture;
 
