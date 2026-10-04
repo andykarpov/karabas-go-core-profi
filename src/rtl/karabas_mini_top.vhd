@@ -143,7 +143,7 @@ begin
 
 U1: entity work.profi
 generic map(
-	ENABLE_FDD		=> false
+	ENABLE_FDD		=> 0
 )
 port map(
 		-- clock
@@ -264,7 +264,7 @@ port map(
 -- HDMI encoder
 U_HDMI: entity work.zhdmi_top
 generic map(
-	SAMPLERATE 		=> 44100
+	SAMPLERATE 		=> 192000
 )
 port map(
 	clk				=> clk_vga,
@@ -345,21 +345,8 @@ FLASH_WP_N 			<= '1';
 FLASH_HOLD_N 		<= '1';
 
 u_sdr_clk: ODDR2 -- negative DDR clock
-generic map(
-	DDR_ALIGNMENT 	=> "NONE",
-	INIT				=> '0',
-	SRTYPE			=> "SYNC"
-)
-port map(
-	Q 					=> SDR_CLK, 
-	C0 				=> clk_sdr, 
-	C1 				=> not(clk_sdr), 
-	CE 				=> '1', 
-	D0 				=> '0', 
-	D1 				=> '1', 
-	R 					=> '0', 
-	S 					=> '0'
-);
+generic map(DDR_ALIGNMENT 	=> "NONE", INIT => '0', SRTYPE => "SYNC")
+port map(Q => SDR_CLK, C0 => clk_sdr, C1 => not(clk_sdr), CE => '1', D0 => '1', D1 => '0', R => '0', S => '0');
 
 end Behavioral;
 
