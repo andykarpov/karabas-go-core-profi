@@ -81,7 +81,7 @@ architecture rtl of hid_parser is
 	constant SC_BTN_MODE : natural := 12;
 						 
 	type kb_matrix is array(matrix) of std_logic;						 
-	signal kb_data : kb_matrix := (others => '0'); -- 40 keys + 5th bit
+	signal kb_data, kb_data_latch : kb_matrix := (others => '0'); -- 40 keys + 5th bit
 	
 	signal is_macros : std_logic := '0';
 	type macros_machine is (MACRO_START, MACRO_CS_ON, MACRO_SS_ON, MACRO_SS_OFF, MACRO_KEY, MACRO_CS_OFF, MACRO_END);
@@ -90,7 +90,6 @@ architecture rtl of hid_parser is
 	signal macro_cnt : std_logic_vector(21 downto 0) := (others => '0');
 	
 	signal usb_idx: std_logic_vector(2 downto 0) := "000";
-	signal current_scancode : std_logic_vector(7 downto 0) := (others => '0');
 
 begin 
 
@@ -106,52 +105,52 @@ begin
 
 	process( kb_data, A)
 	begin
-		KB_DO(0) <=	not(( kb_data(ZX_K_CS)  and not( A(8)  ) ) 
-					or    ( kb_data(ZX_K_A)  and not(   A(9)  ) ) 
-					or    ( kb_data(ZX_K_Q) and not(    A(10) ) ) 
-					or    ( kb_data(ZX_K_1) and not(    A(11) ) ) 
-					or    ( kb_data(ZX_K_0) and not(    A(12) ) ) 
-					or    ( kb_data(ZX_K_P) and not(    A(13) ) ) 
-					or    ( kb_data(ZX_K_ENT) and not(  A(14) ) ) 
-					or    ( kb_data(ZX_K_SP) and not(   A(15) ) )  );
+		KB_DO(0) <=	not(( kb_data_latch(ZX_K_CS)  and not( A(8)  ) ) 
+					or    ( kb_data_latch(ZX_K_A)  and not(   A(9)  ) ) 
+					or    ( kb_data_latch(ZX_K_Q) and not(    A(10) ) ) 
+					or    ( kb_data_latch(ZX_K_1) and not(    A(11) ) ) 
+					or    ( kb_data_latch(ZX_K_0) and not(    A(12) ) ) 
+					or    ( kb_data_latch(ZX_K_P) and not(    A(13) ) ) 
+					or    ( kb_data_latch(ZX_K_ENT) and not(  A(14) ) ) 
+					or    ( kb_data_latch(ZX_K_SP) and not(   A(15) ) )  );
 
-		KB_DO(1) <=	not( ( kb_data(ZX_K_Z)  and not(A(8) ) ) 
-					or   ( kb_data(ZX_K_S)  and not(A(9) ) ) 
-					or   ( kb_data(ZX_K_W) and not(A(10)) ) 
-					or   ( kb_data(ZX_K_2) and not(A(11)) ) 
-					or   ( kb_data(ZX_K_9) and not(A(12)) ) 
-					or   ( kb_data(ZX_K_O) and not(A(13)) ) 
-					or   ( kb_data(ZX_K_L) and not(A(14)) ) 
-					or   ( kb_data(ZX_K_SS) and not(A(15)) ) );
+		KB_DO(1) <=	not( ( kb_data_latch(ZX_K_Z)  and not(A(8) ) ) 
+					or   ( kb_data_latch(ZX_K_S)  and not(A(9) ) ) 
+					or   ( kb_data_latch(ZX_K_W) and not(A(10)) ) 
+					or   ( kb_data_latch(ZX_K_2) and not(A(11)) ) 
+					or   ( kb_data_latch(ZX_K_9) and not(A(12)) ) 
+					or   ( kb_data_latch(ZX_K_O) and not(A(13)) ) 
+					or   ( kb_data_latch(ZX_K_L) and not(A(14)) ) 
+					or   ( kb_data_latch(ZX_K_SS) and not(A(15)) ) );
 
-		KB_DO(2) <=		not( ( kb_data(ZX_K_X) and not( A(8)) ) 
-					or   ( kb_data(ZX_K_D) and not( A(9)) ) 
-					or   ( kb_data(ZX_K_E) and not(A(10)) ) 
-					or   ( kb_data(ZX_K_3) and not(A(11)) ) 
-					or   ( kb_data(ZX_K_8) and not(A(12)) ) 
-					or   ( kb_data(ZX_K_I) and not(A(13)) ) 
-					or   ( kb_data(ZX_K_K) and not(A(14)) ) 
-					or   ( kb_data(ZX_K_M) and not(A(15)) ) );
+		KB_DO(2) <=		not( ( kb_data_latch(ZX_K_X) and not( A(8)) ) 
+					or   ( kb_data_latch(ZX_K_D) and not( A(9)) ) 
+					or   ( kb_data_latch(ZX_K_E) and not(A(10)) ) 
+					or   ( kb_data_latch(ZX_K_3) and not(A(11)) ) 
+					or   ( kb_data_latch(ZX_K_8) and not(A(12)) ) 
+					or   ( kb_data_latch(ZX_K_I) and not(A(13)) ) 
+					or   ( kb_data_latch(ZX_K_K) and not(A(14)) ) 
+					or   ( kb_data_latch(ZX_K_M) and not(A(15)) ) );
 
-		KB_DO(3) <=		not( ( kb_data(ZX_K_C) and not( A(8)) ) 
-					or   ( kb_data(ZX_K_F) and not( A(9)) ) 
-					or   ( kb_data(ZX_K_R) and not(A(10)) ) 
-					or   ( kb_data(ZX_K_4) and not(A(11)) ) 
-					or   ( kb_data(ZX_K_7) and not(A(12)) ) 
-					or   ( kb_data(ZX_K_U) and not(A(13)) ) 
-					or   ( kb_data(ZX_K_J) and not(A(14)) ) 
-					or   ( kb_data(ZX_K_N) and not(A(15)) ) );
+		KB_DO(3) <=		not( ( kb_data_latch(ZX_K_C) and not( A(8)) ) 
+					or   ( kb_data_latch(ZX_K_F) and not( A(9)) ) 
+					or   ( kb_data_latch(ZX_K_R) and not(A(10)) ) 
+					or   ( kb_data_latch(ZX_K_4) and not(A(11)) ) 
+					or   ( kb_data_latch(ZX_K_7) and not(A(12)) ) 
+					or   ( kb_data_latch(ZX_K_U) and not(A(13)) ) 
+					or   ( kb_data_latch(ZX_K_J) and not(A(14)) ) 
+					or   ( kb_data_latch(ZX_K_N) and not(A(15)) ) );
 
-		KB_DO(4) <=		not( ( kb_data(ZX_K_V) and not( A(8)) ) 
-					or   ( kb_data(ZX_K_G) and not( A(9)) ) 
-					or   ( kb_data(ZX_K_T) and not(A(10)) ) 
-					or   ( kb_data(ZX_K_5) and not(A(11)) ) 
-					or   ( kb_data(ZX_K_6) and not(A(12)) ) 
-					or   ( kb_data(ZX_K_Y) and not(A(13)) ) 
-					or   ( kb_data(ZX_K_H) and not(A(14)) ) 
-					or   ( kb_data(ZX_K_B) and not(A(15)) ) );
+		KB_DO(4) <=		not( ( kb_data_latch(ZX_K_V) and not( A(8)) ) 
+					or   ( kb_data_latch(ZX_K_G) and not( A(9)) ) 
+					or   ( kb_data_latch(ZX_K_T) and not(A(10)) ) 
+					or   ( kb_data_latch(ZX_K_5) and not(A(11)) ) 
+					or   ( kb_data_latch(ZX_K_6) and not(A(12)) ) 
+					or   ( kb_data_latch(ZX_K_Y) and not(A(13)) ) 
+					or   ( kb_data_latch(ZX_K_H) and not(A(14)) ) 
+					or   ( kb_data_latch(ZX_K_B) and not(A(15)) ) );
 					
-		KB_DO(5) <= not(kb_data(ZX_BIT5));
+		KB_DO(5) <= not(kb_data_latch(ZX_BIT5));
 	end process;
 
 process (RESET, CLK)
@@ -159,10 +158,12 @@ process (RESET, CLK)
 	variable is_shift : std_logic := '0';
 	variable is_cs_used : std_logic := '0';
 	variable is_ss_used : std_logic := '0';
+	variable current_scancode : std_logic_vector(7 downto 0) := (others => '0');
 
 	begin
 		if RESET = '1' then
 			kb_data <= (others => '0');
+			kb_data_latch <= (others => '0');
 			usb_idx <= (others => '0');
 			is_shift := '0';
 			is_cs_used := '0';
@@ -178,19 +179,20 @@ process (RESET, CLK)
 					macro_cnt <= macro_cnt + 1;
 					if (macro_cnt = "1111111111111111111111") then 
 					case macros_state is 
-						when MACRO_START  => kb_data <= (others => '0'); macros_state <= MACRO_CS_ON;
-						when MACRO_CS_ON  => kb_data(ZX_K_CS) <= '1';    macros_state <= MACRO_SS_ON;
-						when MACRO_SS_ON  => kb_data(ZX_K_SS) <= '1';    macros_state <= MACRO_SS_OFF;
-						when MACRO_SS_OFF => kb_data(ZX_K_SS) <= '0';    macros_state <= MACRO_KEY;
-						when MACRO_KEY    => kb_data(macros_key) <= '1'; macros_state <= MACRO_CS_OFF;
-						when MACRO_CS_OFF => kb_data(ZX_K_CS) <= '0'; kb_data(macros_key) <= '0'; macros_state <= MACRO_END;
-						when MACRO_END    => kb_data <= (others => '0'); is_macros <= '0';        macros_state <= MACRO_START;
+						when MACRO_START  =>kb_data_latch <= (others => '0'); macros_state <= MACRO_CS_ON;
+						when MACRO_CS_ON  => kb_data_latch(ZX_K_CS) <= '1';    macros_state <= MACRO_SS_ON;
+						when MACRO_SS_ON  => kb_data_latch(ZX_K_SS) <= '1';    macros_state <= MACRO_SS_OFF;
+						when MACRO_SS_OFF => kb_data_latch(ZX_K_SS) <= '0';    macros_state <= MACRO_KEY;
+						when MACRO_KEY    => kb_data_latch(macros_key) <= '1'; macros_state <= MACRO_CS_OFF;
+						when MACRO_CS_OFF => kb_data_latch(ZX_K_CS) <= '0'; kb_data_latch(macros_key) <= '0'; macros_state <= MACRO_END;
+						when MACRO_END    => kb_data_latch <= (others => '0'); is_macros <= '0';        macros_state <= MACRO_START;
 						when others => null;
 					end case;
 					end if;
 			else
 				if (usb_idx = "000") then
 					macro_cnt <= (others => '0');
+					kb_data_latch <= kb_data; -- latch processed kb_data
 					kb_data <= (others => '0');
 					is_shift := '0';
 					is_cs_used := '0';
@@ -245,12 +247,12 @@ process (RESET, CLK)
 				end if;
 				
 				case usb_idx is
-                when "000"  => current_scancode <= KB_DAT0;
-                when "001"  => current_scancode <= KB_DAT1;
-                when "010"  => current_scancode <= KB_DAT2;
-                when "011"  => current_scancode <= KB_DAT3;
-                when "100"  => current_scancode <= KB_DAT4;
-                when others => current_scancode <= KB_DAT5;
+                when "000"  => current_scancode := KB_DAT0;
+                when "001"  => current_scancode := KB_DAT1;
+                when "010"  => current_scancode := KB_DAT2;
+                when "011"  => current_scancode := KB_DAT3;
+                when "100"  => current_scancode := KB_DAT4;
+                when others => current_scancode := KB_DAT5;
             end case;
 
 				case current_scancode is							
