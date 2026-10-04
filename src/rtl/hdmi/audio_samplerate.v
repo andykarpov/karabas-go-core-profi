@@ -7,13 +7,11 @@ module audio_samplerate(
 
 parameter SAMPLERATE = 44100;
 //parameter CLKRATE = 28000000;
-//localparam prescaler = (CLKRATE / SAMPLERATE);
+localparam [11:0] DIV_24 = 24000000 / SAMPLERATE;
+localparam [11:0] DIV_28 = 28000000 / SAMPLERATE;
 
-reg [11:0] prescaler = 0;
-always @(*)
-begin
-	prescaler <= (clkrate * 1000000) / SAMPLERATE;
-end
+wire [11:0] prescaler =
+    (clkrate == 8'd24) ? DIV_24 : DIV_28;
 
 // audio samplerate
 reg clk_audio;

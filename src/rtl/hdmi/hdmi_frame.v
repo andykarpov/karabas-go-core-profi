@@ -41,10 +41,10 @@ assign {ds80, screen, mode60} = vmode;
 reg [99:0] vmode_params;
 always @(*) begin
 	casex(vmode)
-		// pengagon 50 (720x576 visible)
+		// pentagon 50 (720x576 visible)
 		// 720 732 796 896  576 581 586 640 -HSync -VSync
 		4'b0xx0: vmode_params <= {10'd24, 10'd743, 10'd755, 10'd819, 10'd895,  // h disp start, end, sync start, end, line end 
-										 10'd16, 10'd591, 10'd596, 10'd601, 10'd639}; // v disp start, end, sync start, end, frame end
+										 10'd16, 10'd591, 10'd594, 10'd601, 10'd639}; // v disp start, end, sync start, end, frame end
 		// pentagon 60 (720x480 visible)
 		// 720 736 798 896  480 489 495 528 -HSync -VSync		
 		4'b0xx1: vmode_params <= {10'd24, 10'd743, 10'd759, 10'd821, 10'd895, 
