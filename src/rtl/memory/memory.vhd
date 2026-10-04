@@ -38,6 +38,8 @@ port (
 	GS_N_RD		: in std_logic;
 	GS_N_WR		: in std_logic;
 	GS_N_RFSH	: in std_logic;
+	GS_WAIT_N		: out STD_LOGIC:='1';
+	GS_MREQ_N	: in STD_LOGIC;
 	
 	MA 			: out 	std_logic_vector(20 downto 0);
 	MD 			: inout 	std_logic_vector(15 downto 0) := "ZZZZZZZZZZZZZZZZ";
@@ -109,6 +111,10 @@ architecture RTL of memory is
 	signal port1_a, port2_a : std_logic_vector(20 downto 0);
 	signal port1_di, port2_di : std_logic_vector(7 downto 0);
 	signal port1_rd, port1_wr, port1_rfsh, port2_rd, port2_wr, port2_rfsh : std_logic;
+	signal port2_a_sdr : std_logic_vector(20 downto 0);
+	signal port2_di_sdr : std_logic_vector(7 downto 0);
+	signal port2_rd_sdr, port2_wr_sdr, port2_rfsh_sdr , n_mreq_sdr: std_logic;
+	signal sdr_wr, sdr_rfsh, sdr_idle, sdr_rd,sdr_gs_wait_n : std_logic;
 	
 begin
 
@@ -182,22 +188,71 @@ begin
 	-- sdram controller for GS
 	U_SDRAM: entity work.sdram
 	port map(
-		CLK	=> CLK_SDR,
-		A		=> "0000" & port2_a,
-		DI		=> port2_di,
+		CLK		=> CLK_SDR,
+		A		=> "0000" & port2_a_sdr,
+		DI		=> port2_di_sdr,
 		DO		=> GS_DO,
-		WR		=> port2_wr,
-		RD		=> port2_rd,
-		RFSH	=> port2_rfsh,
-		
+		WR		=> sdr_wr,
+		RD		=> sdr_rd,
+		RFSH	=> sdr_rfsh,
+		IDLE	=> sdr_idle,
+
 		RAS_n	=> SDR_RAS_N,
 		CAS_n	=> SDR_CAS_N,
 		WE_n	=> SDR_WE_N,
-		DQM	=> SDR_DQM,
+		DQM		=> SDR_DQM,
 		BA		=> SDR_BA,
 		MA		=> SDR_A,
 		DQ		=> SDR_DQ
+
 	);
+
+	process (clk_sdr,ARESET)
+	variable st: std_logic_vector(2 downto 0);
+	begin
+		if ARESET = '1' then
+			st:= "000";
+			sdr_wr <= '0';
+			sdr_rd <= '0';
+			sdr_rfsh <= '0';
+			sdr_gs_wait_n <= '1';
+		elsif rising_edge(clk_sdr) then
+			port2_a_sdr 	<= port2_a;
+			port2_rd_sdr 	<= port2_rd;
+			port2_wr_sdr 	<= port2_wr;
+			port2_rfsh_sdr 	<= port2_rfsh;
+			port2_di_sdr 	<= port2_di;
+			n_mreq_sdr		<= GS_MREQ_N;
+			case st is
+			when "000" =>
+					if port2_wr_sdr = '1' 	then sdr_wr <= '1'; st := "001"; sdr_gs_wait_n <= '0'; end if;
+					if port2_rd_sdr = '1'	then sdr_rd <= '1'; st := "001"; sdr_gs_wait_n <= '0'; end if;
+					if port2_rfsh_sdr = '1'	then sdr_rfsh <= '1'; st := "100";  sdr_gs_wait_n <= '0'; end if;
+			when "001" =>
+				if sdr_idle = '0' then sdr_wr <= '0'; sdr_rd <= '0'; st := "010"; end if; -- sdr_idle=0 - ???? ????????, ?????? ??????
+			when "010" =>
+				if sdr_idle = '1' then st := "011"; 	sdr_gs_wait_n <= '1'; end if;
+			when "011" =>
+				if n_mreq_sdr = '1' then st := "000"; end if;
+			when "100" => 		
+				if sdr_idle = '0' then sdr_rfsh <= '0'; st := "101"; end if;
+			when "101" =>
+				if sdr_idle = '1' and port2_rfsh_sdr = '0'  then 
+					if port2_wr_sdr = '1' or port2_rd_sdr = '1' then
+						sdr_gs_wait_n <= '0';
+						st := "000";
+					else
+						sdr_gs_wait_n <= '1';
+						st := "000";
+					end if;
+				end if;
+			when others => null;
+		end case;
+
+		end if;
+	end process;
+
+	GS_WAIT_N <= sdr_gs_wait_n;
 
 	-- connect sram (chip1) interface with main cpu
 	MA <= port1_a;
@@ -226,21 +281,21 @@ begin
 	port2_a <= loader_ram_a(20 downto 0) when loader_act = '1' else 
 				  GS_A;
 	port2_rd <= '0' when loader_act = '1' else 
-					'1' when GS_N_RD = '0' and ENA_GS = '1' else 
+					'1' when GS_N_RD = '0' else 
 					'0';
 	port2_wr <= loader_ram_wr when loader_act = '1' and loader_ram_a(31) = '1' else 
 					'0' when loader_act = '1' and loader_ram_a(31) = '0' else
-					'1' when GS_N_WR = '0' and ENA_GS = '1' else
+					'1' when GS_N_WR = '0' else
 					'0';
 	port2_rfsh <= '0' when loader_act = '1' else 
-						not GS_N_RFSH when ENA_GS = '1' else '0';
+						not GS_N_RFSH ;
 	port2_di <= loader_ram_do when loader_act = '1' else 
 					GS_D(7 downto 0);
 
 	is_romDIVMMC <= '1' when DIVMMC_EN = '1' and N_MREQ = '0' and (AUTOMAP ='1' or REG_E3(7) = '1') and A(15 downto 13) = "000" else '0';
 	is_ramDIVMMC <= '1' when DIVMMC_EN = '1' and N_MREQ = '0' and (AUTOMAP ='1' or REG_E3(7) = '1') and A(15 downto 13) = "001" else '0';
 	
-	is_rom <= '1' when N_MREQ = '0' and A(15 downto 14)  = "00"  and WOROM = '0' else '0';
+	is_rom <= '1' when N_MREQ = '0' and A(15 downto 14)  = "00"  and (WOROM = '0' or DIVMMC_EN = '1') else '0';
 	is_ram <= '1' when N_MREQ = '0' and is_rom = '0' else '0';	
 	
 	-- 00 - bank 0, CPM

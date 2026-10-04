@@ -32,11 +32,13 @@ module gs_top (
     output wire           ram_rfsh_n,
     output wire [7:0]     ram_di,
     input wire  [7:0]     ram_do,
+    output wire           ram_mreq,
+    input wire            gs_wait ,
 
     // sound output
 	output wire signed [14:0] out_l,
 	output wire signed [14:0] out_r
-
+	
 );
 
 // gs
@@ -47,6 +49,7 @@ wire  [7:0] gs_mem_din;
 wire        gs_mem_rd_n;
 wire        gs_mem_wr_n;
 wire        gs_mem_rfsh_n;
+wire        gs_mreq_n;
 
 gs gs 
 (
@@ -72,7 +75,9 @@ gs gs
     .MDO		(gs_mem_dout),
     .MRFSH_n(gs_mem_rfsh_n),
     .MWE_n	(gs_mem_wr_n),
-    .MRD_n	(gs_mem_rd_n)
+    .MRD_n	(gs_mem_rd_n),
+    .GS_MREQ_n (gs_mreq_n),
+    .GS_WAIT (gs_wait)
 );
 
 // ram
@@ -82,5 +87,6 @@ assign ram_rfsh_n = gs_mem_rfsh_n;
 assign ram_a      = gs_mem_addr;
 assign ram_di     = gs_mem_dout;
 assign gs_mem_din = ram_do; 
+assign ram_mreq = gs_mreq_n;
 
 endmodule

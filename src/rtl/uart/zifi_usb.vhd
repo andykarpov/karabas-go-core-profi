@@ -37,7 +37,10 @@ port(
 	 -- esp 8266
     UART_RX     : in std_logic;
     UART_TX     : out std_logic;
-    UART_CTS    : out std_logic        
+    UART_CTS    : out std_logic;
+
+	CPU_WAIT	: out std_logic
+
 );
 end zifi;
 
@@ -131,6 +134,8 @@ signal rs232_txstate : txmachine := idle;
 signal rs232_rxstate : rxmachine := idle;
 
 signal prev_usb_uart_rx_idx : std_logic_vector(7 downto 0) := (others => '0');
+
+signal cpu_wait_fifo_rx	: std_logic;
 
 begin
 
@@ -356,6 +361,10 @@ begin
 
         api_enabled <= '0';
         is_rs232 <= '0';
+
+		cpu_wait_fifo_rx <= '0';
+		zifi_fifo_rx_rd_req  <= '0';
+		rs232_fifo_rx_rd_req <= '0';
 		  
     elsif (rising_edge(CLK)) then
 	 
@@ -370,6 +379,8 @@ begin
 		
 		zifi_fifo_rx_rd_req <= '0';
 		rs232_fifo_rx_rd_req <= '0';
+
+		cpu_wait_fifo_rx <= '0';
 	 
         -- zifi_fifo_tx, rs232_fifo_tx write request
         if IORQ_N = '0' and WR_N = '0' then 
@@ -410,6 +421,7 @@ begin
 				if (zifi_fifo_rx_rd_req = '0' and zifi_rd_allow = '1') then
 					zifi_fifo_rx_rd_req <= '1';
 					zifi_rd_allow <= '0';
+					cpu_wait_fifo_rx <= '1';
 				end if;
         end if;
 
@@ -418,6 +430,7 @@ begin
 				if (rs232_fifo_rx_rd_req = '0' and rs232_rd_allow = '1') then
 					rs232_fifo_rx_rd_req <= '1';
 					rs232_rd_allow <= '0';
+					cpu_wait_fifo_rx <= '1';
 				end if;
         end if;
 
@@ -513,5 +526,7 @@ ZIFI_OE_N <= '0' when IORQ_N = '0' and RD_N = '0' and (
 
 ENABLED <= api_enabled;
 UART_CTS <= '1' when zifi_fifo_rx_used > 1792 else '0'; -- active 0
+
+CPU_WAIT <= cpu_wait_fifo_rx;
 
 end rtl;

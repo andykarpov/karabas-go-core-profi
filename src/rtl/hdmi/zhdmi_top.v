@@ -46,7 +46,7 @@ wire audio_clk;
 
 audio_samplerate #(.SAMPLERATE(SAMPLERATE)) audio_samplerate(
 	.clk(p_clk_int),
-	.reset(reset),
+	.reset(reset || pll_reset || ~lockedx5),
 	.clkrate(hdmi_freq),
 	.audio_stb(audio_clk)
 );

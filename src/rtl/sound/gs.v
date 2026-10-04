@@ -21,13 +21,15 @@ module gs(
 	output wire				MRFSH_n,
 	output wire 			MWE_n,
 	output wire				MRD_n,
+	output wire				GS_MREQ_n,
+	input wire 				GS_WAIT,
 	
 	output wire signed [14:0]	OUT_L,
 	output wire signed [14:0]	OUT_R
 );
 
-localparam INT = 373; // -- 14MHz / 373 = 0.0375MHz = 37.5kHz samplerate
-localparam INT_DS80 = 320; // -- 12MHz / 320
+localparam INT = 373*2; 	// -- 14MHz / 373 = 0.0375MHz = 37.5kHz samplerate
+localparam INT_DS80 = 320*2;// -- 12MHz / 320
 
 // cs from host
 wire gs_sel = ~IORQ_n & M1_n & (A[7:0] == 8'hB3 || A[7:0] == 8'hBB) & ~DS80; // 0xB3, 0xBB
@@ -46,7 +48,7 @@ t80s #(.Mode(0)) z80_unit (
 	.RESET_n					(~RESET),
 	.CLK						(CLK),
 	.CEN						(CE),
-	.WAIT_n					(1'b1),
+	.WAIT_n					(GS_WAIT),
 	.INT_n					(int_n),
 	.NMI_n					(1'b1),
 	.BUSRQ_n					(1'b1),
@@ -87,9 +89,15 @@ reg [7:0] port_xxbb_reg, port_xxb3_reg, port_xx03_reg;
 reg [5:0] port_xx00_reg;
 reg signed [6:0] port_xx06_reg, port_xx07_reg, port_xx08_reg, port_xx09_reg;
 reg signed [7:0] ch_a_reg, ch_b_reg, ch_c_reg, ch_d_reg;
-reg [6:0] mem;
+wire [6:0] mem = (cpu_a_bus[15:14] == 2'b00) ? 7'd0 :
+                 (cpu_a_bus[15:14] == 2'b01) ? 7'd2 :
+                 {port_xx00_reg, cpu_a_bus[14]};
 
 always @(posedge CLK) begin
+	if (RESET) begin
+		bit7_flag <= 0;
+		bit0_flag <= 0;
+	end else begin
 	if (~cpu_iorq_n & cpu_m1_n & CE) begin
 		case(cpu_a_bus[3:0])
 			'h2: bit7_flag <= 0;
@@ -103,6 +111,7 @@ always @(posedge CLK) begin
 		if (~a & ~RD_n) bit7_flag <= 0;
 		if (~a & ~WR_n) bit7_flag <= 1;
 		if ( a & ~WR_n) bit0_flag <= 1;
+	end
 	end
 end
 
@@ -126,7 +135,11 @@ always @(posedge CLK)
 begin
 	if (RESET) begin
 		port_xx00_reg <= 0;
-      port_xx03_reg <= 0;
+      	port_xx03_reg <= 0;
+		port_xx06_reg <= 0; port_xx07_reg <= 0;
+		port_xx08_reg <= 0; port_xx09_reg <= 0;
+		ch_a_reg <= 0; ch_b_reg <= 0;
+		ch_c_reg <= 0; ch_d_reg <= 0;
 	end
 	else if (CE) begin
 	
@@ -141,7 +154,7 @@ begin
 			endcase
 		end
 		
-		if (~cpu_mreq_n && ~cpu_rd_n && cpu_a_bus[15:13] == 3) begin
+		if (GS_WAIT && ~cpu_mreq_n && ~cpu_rd_n && cpu_a_bus[15:13] == 3) begin
 			case(cpu_a_bus[9:8])
 				0: ch_a_reg <= {~MDI[7], MDI[6:0]};
 				1: ch_b_reg <= {~MDI[7], MDI[6:0]};
@@ -150,11 +163,6 @@ begin
 			endcase
 		end
 
-		case (cpu_a_bus[15:14])
-			2'b00: mem <= 7'b0000000;  // #0000 - #3FFF  -   16Kb 
-			2'b01: mem <= 7'b0000010;	// #4000 - #7FFF  -   16Kb   
-			default: mem <= {port_xx00_reg[5:0],  cpu_a_bus[14]};	// #8000 - #FFFF  -     32Kb
-		endcase
 	end
 end
 
@@ -170,6 +178,7 @@ assign MDO = cpu_do_bus;
 assign MWE_n = cpu_wr_n || cpu_mreq_n || ~(mem[6] || mem[5] || mem[4] || mem[3] || mem[2] || mem[1]);
 assign MRD_n = cpu_rd_n || cpu_mreq_n;
 assign MRFSH_n = cpu_rfsh_n;
+assign GS_MREQ_n = cpu_mreq_n;
 assign OE = (~IORQ_n && ~RD_n && (A[7:0] == 8'hB3 || A[7:0] == 8'hBB) && ~DS80) ? 1'b1 : 1'b0;
 
 // sound mix
@@ -177,7 +186,10 @@ reg signed [14:0] out_a, out_b, out_c, out_d;
 reg signed [14:0] mix_l, mix_r;
 always @(posedge CLK)
 begin 
-	if (CE) begin
+	if (RESET) begin
+		out_a <= 0; out_b <= 0; out_c <= 0; out_d <= 0;
+		mix_l <= 0; mix_r <= 0;
+	end else if (CE) begin
 		out_a <= ch_a_reg * port_xx06_reg;
 		out_b <= ch_b_reg * port_xx07_reg;
 		out_c <= ch_c_reg * port_xx08_reg;
