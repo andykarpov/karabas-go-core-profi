@@ -264,7 +264,7 @@ port map(
 -- HDMI encoder
 U_HDMI: entity work.zhdmi_top
 generic map(
-	SAMPLERATE 		=> 44100
+	SAMPLERATE 		=> 192000
 )
 port map(
 	clk				=> clk_vga,
