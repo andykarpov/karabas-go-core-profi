@@ -38,7 +38,7 @@ use unisim.vcomponents.all;
 entity karabas_go is
 generic(
 	ENABLE_FDD : integer := 1;
-	ENABLE_GS : integer := 0;
+	ENABLE_GS : integer := 1;
 	ENABLE_OPL3 : integer := 1;
 	ENABLE_SAA : integer := 0;
 	ENABLE_SERIAL_MOUSE : integer :=1;
@@ -326,8 +326,8 @@ port map(
 	C0 				=> clk_sdr, 
 	C1 				=> not(clk_sdr), 
 	CE 				=> '1', 
-	D0 				=> '0', 
-	D1 				=> '1', 
+	D0 				=> '1', 
+	D1 				=> '0', 
 	R 					=> '0', 
 	S 					=> '0'
 );
