@@ -40,7 +40,7 @@ generic(
 	ENABLE_FDD : integer := 1;
 	ENABLE_GS : integer := 1;
 	ENABLE_OPL3 : integer := 1;
-	ENABLE_SAA : integer := 0;
+	ENABLE_SAA : integer := 1;
 	ENABLE_SERIAL_MOUSE : integer :=1;
 	NUM_KEYS: integer := 4
 );
