@@ -371,6 +371,10 @@ signal gs_oe 				: std_logic := '0';
 signal gs_wait_n			 : std_logic;
 signal gs_do_bus	 		: std_logic_vector(7 downto 0);
 
+signal gs_access      		: std_logic;
+signal gs_access_prev   		: std_logic := '0';
+signal cpu_wait_gs_io    		: std_logic := '0';
+
 -- gs memory
 signal gs_mem_a			: std_logic_vector(20 downto 0);
 signal gs_mem_di			: std_logic_vector(7 downto 0);
@@ -1334,6 +1338,28 @@ port map(
 	out_r 			=> gs_r
 	
 );
+
+gs_access <= '1' when ENABLE_GS = 1 and
+                      ds80 = '0' and
+                      cpu_m1_n = '1' and
+                      cpu_iorq_n = '0' and
+                      (cpu_rd_n = '0' or cpu_wr_n = '0') and
+                      (cpu_a_bus(7 downto 0) = x"B3" or
+                       cpu_a_bus(7 downto 0) = x"BB")
+             else '0';
+
+process(clk_bus, reset)
+begin
+    if reset = '1' then
+        gs_access_prev <= '0';
+        cpu_wait_gs_io <= '0';
+    elsif rising_edge(clk_bus) then
+        gs_access_prev <= gs_access;
+        cpu_wait_gs_io <= gs_access and not gs_access_prev;
+    end if;
+end process;
+
+
 end generate G_GS;
 
 G_NOGS: if ENABLE_GS=0 generate
@@ -1342,6 +1368,7 @@ G_NOGS: if ENABLE_GS=0 generate
 	gs_mem_wr_n    <= '1';
 	gs_mem_rfsh_n  <= '1';
 	gs_mem_mreq	   <= '1';
+	cpu_wait_gs_io 	<= '0';
 end generate G_NOGS;
 
 -- OPL3
@@ -1411,10 +1438,12 @@ cpu_wait <= '0';
 -- cpu wait condition
 cpu_wait_n <= '0' when zc_busy = '1' or 
 							cpu_wait_zifi_usb = '1' or
+							cpu_wait_gs_io = '1' or
 							ide_busy = '1' or 
 							kb_pause = '1' or  
 							(kb_screen_mode = "01" and memory_contention = '1' and automap = '0' and DS80 = '0') 
 							else '1';
+
 
 -------------------------------------------------------------------------------
 -- SD Card
