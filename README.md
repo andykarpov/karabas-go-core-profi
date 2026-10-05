@@ -11,6 +11,7 @@ A port of the Karabas Pro main core to the Karabas Go hardware
 - Turbosound + FM
 - SAA1099
 - OPL2
+- MIDI by Dream SAM2596
 - RTC
 - DivMMC / ZC support
 - ESP8266 (ZXUNO, Zifi and ZXEVO standard)
