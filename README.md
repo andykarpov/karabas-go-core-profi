@@ -6,19 +6,17 @@ A port of the Karabas Pro main core to the Karabas Go hardware
 - True turbo 28 MHz with no-wait mem cycles
 - Floppy disk support (based on Firefly FDC sources)
 - CF card by Profi / NemoIDE standard
-- General Sound (2MB)
-- Soundrive
+- General Sound (2MB) @ 16MHz
+- Soundrive / Covox
 - Turbosound + FM
+- SAA1099
+- OPL2
 - RTC
-- ESP8266 (Zifi and ZXEVO standard)
+- DivMMC / ZC support
+- ESP8266 (ZXUNO, Zifi and ZXEVO standard)
 - RS232 over USB (Zifi and ZXEVO standard)
 - OSD support
-- 2x Sega/Atari Joysticks
-- USB keyboard, mouse
-- VGA 8-8-8
+- 2x Sega/Atari Joysticks (go)
+- USB keyboard, mouse, joystiks
+- VGA 8-8-8 (go), HDMI output (mini/minig)
 
-## TODO:
-
-- Add FT812 support
-- Test a serial mouse
-- FDD fixes (conflicts ?)
