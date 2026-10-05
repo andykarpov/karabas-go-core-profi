@@ -6,21 +6,15 @@
 */
 module gs_top (
     // clocks
-    input wire            clk_sys,
     input wire            clk_bus,
     input wire            ce,
-
-	 input wire 			  ds80,
-	 input wire 			  cpm,
-	 input wire 			  dos,
-	 input wire 			  rom14,
-
     input wire            reset,
     input wire            areset,
+	 input wire            ds80,
 
     // cpu input signals
-    input wire [15:0]      a,
-    input wire [7:0]       di,
+    input wire [15:0]     a,
+    input wire [7:0]      di,
     input wire            mreq_n,
     input wire            iorq_n,
     input wire            m1_n,
@@ -28,29 +22,23 @@ module gs_top (
     input wire            wr_n,
 
     // data out to cpu
-    output wire           oe_n,
-    output wire [7:0]      do_bus,
+    output wire           oe,
+    output wire [7:0]     do_bus,
 
-	// interface to the MT48LC16M16 chip
-	output wire 			 sdram_clk,
-	inout  wire [15:0]    sdram_dq,
-	output wire [12:0]    sdram_a,
-	output wire [1:0]     sdram_dqm,
-	output wire [1:0]     sdram_ba,
-	output wire           sdram_we_n,
-	output wire           sdram_ras_n,
-	output wire           sdram_cas_n,
-
-    // rom loader interface
-   input wire            loader_act,
-	input wire [31:0]      loader_a,
-	input wire [7:0]       loader_d,
-	input wire            loader_wr,
+	 // gs memory interface 
+    output wire [20:0]    ram_a,
+    output wire           ram_rd_n,
+    output wire           ram_wr_n,
+    output wire           ram_rfsh_n,
+    output wire [7:0]     ram_di,
+    input wire  [7:0]     ram_do,
+    output wire           ram_mreq,
+    input wire            gs_wait ,
 
     // sound output
-	output wire [8:0] out_l,
-	output wire [8:0] out_r
-
+	output wire signed [14:0] out_l,
+	output wire signed [14:0] out_r
+	
 );
 
 // gs
@@ -60,86 +48,45 @@ wire  [7:0] gs_mem_dout;
 wire  [7:0] gs_mem_din;
 wire        gs_mem_rd_n;
 wire        gs_mem_wr_n;
-
-wire [8:0] gs_l, gs_r;
-wire [7:0] out_a, out_b, out_c, out_d;
+wire        gs_mem_rfsh_n;
+wire        gs_mreq_n;
 
 gs gs 
 (
-    .RESET(reset),
-    .CLK(clk_bus),
-    .CE(ce),
-	 
-	 .DS80(ds80),
-	 .CPM(cpm),
-	 .DOS(dos),
-	 .ROM14(rom14),
+    .RESET	(reset),
+    .CLK		(clk_bus),
+    .CE		(ce), 
+	 .DS80	(ds80),
     
-    .A(a),
-    .DI(di),
-    .DO(do_bus),
-    .OE_N(oe_n),
-    .WR_n(wr_n),
-    .RD_n(rd_n),
-    .IORQ_n(iorq_n),
-    .M1_n(m1_n),
+    .A		(a),
+    .DI		(di),
+    .DO		(do_bus),
+    .OE		(oe),
+    .WR_n	(wr_n),
+    .RD_n	(rd_n),
+    .IORQ_n	(iorq_n),
+    .M1_n	(m1_n),
 
-    .OUTA(out_a),
-    .OUTB(out_b),
-    .OUTC(out_c),
-    .OUTD(out_d),
+    .OUT_L	(out_l),
+    .OUT_R	(out_r),
 
-    .MA(gs_mem_addr),
-    .MDI(gs_mem_din),
-    .MDO(gs_mem_dout),
-    .MRFSH_n(sdr_rfsh_n),
-    .MWE_n(gs_mem_wr_n),
-    .MRD_n(gs_mem_rd_n)
+    .MA		(gs_mem_addr),
+    .MDI		(gs_mem_din),
+    .MDO		(gs_mem_dout),
+    .MRFSH_n(gs_mem_rfsh_n),
+    .MWE_n	(gs_mem_wr_n),
+    .MRD_n	(gs_mem_rd_n),
+    .GS_MREQ_n (gs_mreq_n),
+    .GS_WAIT (gs_wait)
 );
 
-// sdram, loder
-
-wire [24:0] sdr_a;
-wire [7:0] sdr_di;
-wire [7:0] sdr_do;
-wire sdr_wr, sdr_rd, sdr_rfsh_n;
-wire [7:0] gs_rom_dout;
-
-assign sdr_wr = (loader_act ?  loader_wr & loader_a[31] : ~gs_mem_wr_n);
-assign sdr_rd = (loader_act ? 1'b0 : ~gs_mem_rd_n);
-assign sdr_a = (loader_act & loader_a[31]) ? {10'b0000000000, loader_a[14:0]} : {4'b0000, gs_mem_addr};
-assign sdr_di = (loader_act & loader_a[31]) ? loader_d : gs_mem_dout;
-assign gs_mem_din = sdr_do;
-
-sdram sdram
-(
-    .CLK(clk_sys),
-
-    .A(sdr_a),
-    .DI(sdr_di),
-    .DO(sdr_do),
-    .WR(sdr_wr),
-    .RD(sdr_rd),
-    .RFSH(~loader_act & ~sdr_rfsh_n),
-    .RFSHREQ(),
-    .IDLE(),
-    
-    .CK(sdram_clk),
-    .RAS_n(sdram_ras_n),
-    .CAS_n(sdram_cas_n),
-    .WE_n(sdram_we_n),
-    .DQML(sdram_dqm[0]),
-    .DQMH(sdram_dqm[1]),
-    .BA(sdram_ba),
-    .MA(sdram_a),
-    .DQ(sdram_dq)
-    
-);
-
-assign gs_l = out_a + out_b;
-assign gs_r = out_c + out_d;
-
-assign out_l = gs_l;
-assign out_r = gs_r;
+// ram
+assign ram_wr_n   = gs_mem_wr_n;
+assign ram_rd_n   = gs_mem_rd_n;
+assign ram_rfsh_n = gs_mem_rfsh_n;
+assign ram_a      = gs_mem_addr;
+assign ram_di     = gs_mem_dout;
+assign gs_mem_din = ram_do; 
+assign ram_mreq = gs_mreq_n;
 
 endmodule

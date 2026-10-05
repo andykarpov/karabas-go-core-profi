@@ -16,20 +16,33 @@ port (
 	CLK			: in std_logic;
 	DS80			: in std_logic;
 	
-	CLK_BUS		: buffer std_logic; -- 56 / 48
+	CLK_BUS		: buffer std_logic; -- 28 / 24
 	CLK_16 		: buffer std_logic; -- 16
 	CLK_8			: buffer std_logic; -- 8
 	CLK_SDR		: buffer std_logic; -- 84 (sdram)
 	CLK_12      : buffer std_logic; -- 12
+	CLK_RGB 		: buffer std_logic; -- 7 / 12
+	CLK_VGA		: buffer std_logic; -- 28 / 24
+	CLK_ADC		: buffer std_logic;
+	CLK_CPU     : buffer std_logic;
 	
-	ENA_DIV2		: buffer std_logic;
-	ENA_DIV4		: buffer std_logic;
-	ENA_DIV8		: buffer std_logic;
-	ENA_DIV16   : buffer std_logic;
-	ENA_DIV32   : buffer std_logic;
-	ENA_CPU 		: buffer std_logic;
+	ENA_DIV2		: buffer std_logic; -- 14 p
+	ENA_DIV4		: buffer std_logic; -- 7 p
+	ENA_DIV8		: buffer std_logic; -- 3.5 p 
+	ENA_DIV16   : buffer std_logic; -- 1.75 p
+
+	ENA_DIV2N	: buffer std_logic; -- 14 n
+	ENA_DIV4N	: buffer std_logic; -- 7 n
+	ENA_DIV8N	: buffer std_logic; -- 3.5 n
+	ENA_DIV16N  : buffer std_logic; -- 1.75 n
 	
-	TURBO			: in std_logic_vector(2 downto 0);
+	ENA_CPU 		: buffer std_logic; -- 3.5/7/14/28 / 3/6/12/24
+	ENA_CPU_N	: buffer std_logic;
+	ENA_RGB 		: buffer std_logic; -- 7/12
+	
+	CE_14			: buffer std_logic;
+	
+	TURBO			: in std_logic_vector(1 downto 0);
 	WAIT_CPU		: in std_logic;
 	ARESET 		: out std_logic
 );
@@ -37,51 +50,79 @@ end clock;
 
 architecture rtl of clock is
 
-signal ena_cnt : std_logic_vector(4 downto 0) := "00000";
+signal ena_cnt : std_logic_vector(5 downto 0) := "000000";
 signal locked : std_logic := '0';
-signal ce_8 : std_logic := '0';
-signal clk_56, clk_48 : std_logic;
+signal clk_28, clk_24 : std_logic;
+signal clkin1, clkfbout, clkfbout_buf, clkout0, clkout1, clkout2, clkout3, clkout4 : std_logic;
+signal div16_2 : std_logic;
 
 begin 
 
--- PLL1
-U1: entity work.pll
-port map (
-	CLK_IN1			=> CLK,
-	CLK_OUT1			=> clk_56,
-	CLK_OUT2 		=> clk_48,
-	CLK_OUT3 		=> clk_16,
-	CLK_OUT4			=> clk_sdr,
-	CLK_OUT5       => clk_12,
-	LOCKED			=> locked
-	);
+U1: IBUFG port map (O => clkin1, I => CLK);
 
--- clock switch
--- U2 : BUFGMUX_1
-U2 : BUFGMUX
+U2: PLL_BASE
+generic map (
+	BANDWIDTH 				=> "OPTIMIZED",
+   CLK_FEEDBACK			=> "CLKFBOUT",
+   COMPENSATION			=> "SYSTEM_SYNCHRONOUS",
+	DIVCLK_DIVIDE			=> 2,
+	CLKFBOUT_MULT 			=> 27,
+	CLKFBOUT_PHASE			=> 0.000,
+	CLKOUT0_DIVIDE			=> 24,
+	CLKOUT0_PHASE			=> 0.000,
+   CLKOUT0_DUTY_CYCLE 	=> 0.500,
+   CLKOUT1_DIVIDE			=> 28,
+   CLKOUT1_PHASE			=> 0.000,
+   CLKOUT1_DUTY_CYCLE 	=> 0.500,
+   CLKOUT2_DIVIDE			=> 42,
+   CLKOUT2_PHASE			=> 0.000,
+	CLKOUT2_DUTY_CYCLE 	=> 0.500,
+   CLKOUT3_DIVIDE			=> 8, 
+   CLKOUT3_PHASE			=> 0.000,
+   CLKOUT3_DUTY_CYCLE 	=> 0.500,
+   CLKOUT4_DIVIDE			=> 56,
+   CLKOUT4_PHASE 			=> 0.000,
+   CLKOUT4_DUTY_CYCLE 	=> 0.500,
+   CLKIN_PERIOD			=> 20.000,
+   REF_JITTER				=> 0.010
+)
 port map (
- I0      => clk_56,
- I1      => clk_48,
- O       => clk_bus,
- S       => ds80
+   CLKFBOUT					=> clkfbout,
+   CLKOUT0					=> clkout0, -- 28
+   CLKOUT1          	 	=> clkout1, -- 24
+   CLKOUT2           	=> clkout2, -- 16
+   CLKOUT3           	=> clkout3, -- 84
+   CLKOUT4           	=> clkout4, -- 12
+   CLKOUT5           	=> open,
+   LOCKED            	=> locked,
+	RST 						=> '0',
+   CLKFBIN           	=> clkfbout_buf,
+   CLKIN             	=> clkin1
 );
-
 	
+U3 : BUFG port map (O => clkfbout_buf, I => clkfbout);
+U4 : BUFG port map (O => clk_28, I => clkout0);
+U5 : BUFG port map (O => clk_24, I => clkout1);
+U6 : BUFG port map (O => clk_16, I => clkout2);
+U7 : BUFG port map (O => clk_sdr, I => clkout3);
+U8 : BUFG port map (O => clk_12, I => clkout4);
+U9 : BUFGMUX port map (I0 => clk_28, I1 => clk_24, O => clk_bus, S => ds80);
+U10: BUFGCE port map(I => clk_bus, O => clk_rgb, CE => ena_rgb);
+--U11: BUFGCE port map(I => clk_bus, O => clk_vga, CE => ena_div2);
+--U12: BUFG port map(I => ena_cnt(0), O => clk_adc); -- 28, 50/50 duty cycle
+clk_vga <= clk_bus;
+clk_adc <= clk_bus;
+U13: BUFG port map(I => ena_cpu, O => clk_cpu);
+U14: BUFGCE port map(I => clk_16, O => clk_8, CE => div16_2);
+
 ARESET 		<= not locked;
 
 process (clk_16)
 begin
 	if rising_edge(clk_16) then
-		ce_8 <= not ce_8;
+		div16_2 <= not div16_2;
 	end if;
 end process;
-
-U_BUFG: BUFGCE 
-port map(
-	O => clk_8,
-	I => clk_16,
-	CE	=> ce_8
-);
 
 -- ena counters
 process (clk_bus)
@@ -98,27 +139,37 @@ begin
 		ENA_DIV4 <= ena_cnt(1) and ena_cnt(0);
 		ENA_DIV8 <= ena_cnt(2) and ena_cnt(1) and ena_cnt(0);
 		ENA_DIV16 <= ena_cnt(3) and ena_cnt(2) and ena_cnt(1) and ena_cnt(0);
-		ENA_DIV32 <= ena_cnt(4) and ena_cnt(3) and ena_cnt(2) and ena_cnt(1) and ena_cnt(0);
+
+		ENA_DIV2N <= not ena_cnt(0);
+		ENA_DIV4N <= not ena_cnt(1) and not ena_cnt(0);
+		ENA_DIV8N <= not ena_cnt(2) and not ena_cnt(1) and not ena_cnt(0);
+		ENA_DIV16N <= not ena_cnt(3) and not ena_cnt(2) and not ena_cnt(1) and not ena_cnt(0);
+		
+		if (ds80 = '1') then
+			ENA_RGB <= ena_cnt(0); -- 12
+		else
+			ENA_RGB <= ena_cnt(0) and ena_cnt(1); -- 7
+		end if;
+		
+		CE_14 <= ena_cnt(0);
 
 		if (WAIT_CPU = '1') then 
 			ENA_CPU <= '0';
-		elsif turbo = "011" then -- 28
+			ENA_CPU_N <= '0';
+		elsif turbo = "11" then -- 28
+			ENA_CPU <= '1';
+			ENA_CPU_N <= '1';
+		elsif turbo = "10" then -- 14
 			ENA_CPU <= ena_cnt(0);
-		elsif turbo = "010" then -- 14
+			ENA_CPU_N <= not(ena_cnt(0));
+		elsif turbo = "01" then -- 7
 			ENA_CPU <= ena_cnt(1) and ena_cnt(0);
-		elsif turbo = "001" then -- 7
-			ENA_CPU <= ena_cnt(2) and ena_cnt(1) and ena_cnt(0);
+			ENA_CPU_N <= not(ena_cnt(1)) and not(ena_cnt(0));
 		else
-			ENA_CPU <= ena_cnt(3) and ena_cnt(2) and ena_cnt(1) and ena_cnt(0); -- 3.5
+			ENA_CPU <= ena_cnt(2) and ena_cnt(1) and ena_cnt(0); -- 3.5
+			ENA_CPU_N <= not(ena_cnt(2)) and not(ena_cnt(1)) and not(ena_cnt(0));
 		end if;
 	end if;
 end process;
-
---U_BUFG_DIV2: BUFGCE
---port map (
---	O => CLK_DIV2,
---	I => clk_bus,
---	CE => ena_div2
---);
 
 end rtl;

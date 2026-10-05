@@ -29,17 +29,24 @@ module vga_scandoubler (
   input wire clk14en,
   input wire enable_scandoubling,
   input wire disable_scaneffect,  // 1 to disable scanlines
+  input wire ds80,
+  input wire pix_start,
+  input wire [1:0] screen_mode,
   input wire [2:0] ri,
   input wire [2:0] gi,
   input wire [2:0] bi,
   input wire hsync_ext_n,
   input wire vsync_ext_n,
   input wire csync_ext_n,
+  input wire blanki,
+  input wire [9:0] hcnti,
+  input wire [8:0] vcnti,
   output reg [5:0] ro,
   output reg [5:0] go,
   output reg [5:0] bo,
   output reg hsync,
-  output reg vsync
+  output reg vsync,
+  output reg blank
   );
  
   parameter [31:0] CLKVIDEO = 12000;
@@ -48,17 +55,42 @@ module vga_scandoubler (
   // SVGA 800x600
   // HSYNC = 3.36us  VSYNC = 114.32us
   
-  parameter [63:0] HSYNC_COUNT = (CLKVIDEO * 3360 * 2)/1000000;
-  parameter [63:0] VSYNC_COUNT = (CLKVIDEO * 114320 * 2)/1000000;
+  parameter [63:0] HSYNC_COUNT = (CLKVIDEO * 3360 * 2)/1000000; // 80
+  parameter [63:0] VSYNC_COUNT = (CLKVIDEO * 114320 * 2)/1000000; // 2744
+
+	// счетчики hcnt и vcnt начинаются с началом синхры.
+	// соотв. для расчета blank мы считаем синхру + back porche от начала отсчета, а в конце строки или кадра - 
+	// отнимаем front porche
+
+  // в режиме пентагона горизонтальная и вертикальная синхронизация не имеет front porche
+  parameter [9:0] SPEC_BLANK_H = 128; // (0 fp + 32 hs + 32 bp) * 2
+  parameter [9:0] SPEC_BLANK_V = 64; // (16 vs) * 2
+
+  // в режиме профи горизонтальная и вертикальная синхра начинается после front porche,
+  // поэтому в условиях blank_h и blank_v при ds80=1 условие чуть сложнее
+  parameter [9:0] PROF_BLANK_H = 128; // (48 fp + 64 hs + 80 bp)
+  parameter [9:0] PROF_BLANK_V = 64; //64; // (16 fp + 32 vs + 32 bp)
+
+  // spec: 
+  // profi: 608x544 visible : (512+48+48) x (240+16+16)x2
+  
+	// счетчики
+  reg [10:0] hcnt = 11'd0, vcnt = 11'd0;  
+
+	// сигналы горизонтального и вертикального blank vga
+  wire blank_h = (ds80) ? (hcnt < PROF_BLANK_H) : (hcnt < SPEC_BLANK_H);
+  wire blank_v = (ds80) ? (vcnt < PROF_BLANK_V) : (vcnt < SPEC_BLANK_V);
+
+	// ------------------------------------------------------------------
  
   reg [10:0] addrvideo = 11'd0, addrvga = 11'b00000000000;
   reg [9:0] totalhor = 10'd0;
+  
 
   wire [2:0] rout, gout, bout;
-  // Memoria de doble puerto que guarda la informacin de dos scans
-  // Cada scan puede ser de hasta 1024 puntos, incluidos aqu los
-  // puntos en negro que se pintan durante el HBlank
-
+  // Dual-port memory that stores information from two scans 
+  // Each scan can be up to 1024 points, including the 
+  // black points painted during HBlank
   vgascanline_dport memscan (
     .clk(clk),
 	 .clk28en(clk28en),
@@ -69,7 +101,7 @@ module vga_scandoubler (
     .dout({rout,gout,bout})
   );
 
-  // Para generar scanlines:
+  // Generate scanlines:
   reg scaneffect = 1'b0;
   wire [2:0] rout_dimmed, gout_dimmed, bout_dimmed;
   color_dimmed apply_to_red   (rout, rout_dimmed);
@@ -79,9 +111,9 @@ module vga_scandoubler (
   wire [2:0] go_vga = (scaneffect | disable_scaneffect)? gout : gout_dimmed;
   wire [2:0] bo_vga = (scaneffect | disable_scaneffect)? bout : bout_dimmed;
   
-  // Voy alternativamente escribiendo en una mitad o en otra del scan buffer
-  // Cambio de mitad cada vez que encuentro un pulso de sincronismo horizontal
-  // En "totalhor" mido el nmero de ciclos de reloj que hay en un scan
+	// I alternately write to one half or the other of the scan buffer. 
+	// I switch halves every time I find a horizontal sync pulse. 
+	// In "totalhor" I measure the number of clock cycles in a scan
   reg hsync_ext_n_prev = 1'b1;
   always @(posedge clk) begin
     if (clk28en == 1'b1 && clk14en == 1'b1) begin
@@ -95,15 +127,12 @@ module vga_scandoubler (
     end
   end
  
-  // Recorro el scanbuffer al doble de velocidad, generando direcciones para
-  // el scan buffer. Cada vez que el video original ha terminado una linea,
-  // cambio de mitad de buffer. Cuando termino de recorrerlo pero an no
-  // estoy en un retrazo horizontal, simplemente vuelvo a recorrer el scan buffer
-  // desde el mismo origen
-  // Cada vez que termino de recorrer el scan buffer basculo "scaneffect" que
-  // uso despus para mostrar los pxeles a su brillo nominal, o con su brillo
-  // reducido para un efecto chachi de scanlines en la VGA
- 
+	// Scan the scanbuffer at twice the speed, generating addresses for the scanbuffer. 
+	// Each time the original video finishes a line, It switch to the other half of the buffer. 
+	// When It finish scanning but I'm not yet at a horizontal delay, I simply scan the buffer again 
+	// from the same starting point.
+   // Each time I finish scanning the buffer, I toggle "scaneffect," which I then use to display the pixels 
+	// at their nominal brightness, or with their brightness reduced for a cool scanline effect on VGA. 
   reg hsync_ext_n_prev2 = 1'b1;
   always @(posedge clk) begin
 	 if (clk28en == 1'b1) begin
@@ -121,8 +150,7 @@ module vga_scandoubler (
 	 end
   end
 
-  // El HSYNC de la VGA est bajo slo durante HSYNC_COUNT ciclos a partir del comienzo
-  // del barrido de un scanline
+  // The VGA HSYNC is low only during HSYNC_COUNT cycles from the start of a scanline front
   reg hsync_vga, vsync_vga;
     
   always @* begin
@@ -132,8 +160,8 @@ module vga_scandoubler (
        hsync_vga = 1'b1;
   end
  
-  // El VSYNC de la VGA est bajo slo durante VSYNC_COUNT ciclos a partir del flanco de
-  // bajada de la seal de sincronismo vertical original
+  // The VSYNC of the VGA is low only during VSYNC_COUNT cycles starting from the 
+  // falling edge of the original vertical sync signal
   reg [15:0] cntvsync = 16'hFFFF;
   initial vsync_vga = 1'b1;
   always @(posedge clk) begin
@@ -156,6 +184,26 @@ module vga_scandoubler (
         cntvsync <= 16'hFFFF;
 	 end
   end
+  
+  // горизонтальный и вертикальный счетчики от начала vga синхры
+  reg prev_vsync_vga = 1'b1;
+  reg prev_hsync_vga = 1'b1;
+  
+  always @(posedge clk) begin
+		prev_hsync_vga <= hsync_vga;
+		// на каждой горизонтальной синхре считаем количество линий, 
+		// обнуляем счетчик когда поймали начало вертикальной синхры
+		if (prev_hsync_vga == 1'b1 && hsync_vga == 1'b0) begin			
+			prev_vsync_vga <= vsync_vga;
+			hcnt <= 0;
+			if (prev_vsync_vga == 1'b1 && vsync_vga == 1'b0) 
+				vcnt <= 0;
+			else
+				vcnt <= vcnt + 1;
+		end
+		else
+			hcnt <= hcnt + 1;
+  end
 
   always @* begin
     if (enable_scandoubling == 1'b0) begin // 15kHz output
@@ -164,6 +212,9 @@ module vga_scandoubler (
       bo = {bi,bi};
       hsync = csync_ext_n;
       vsync = 1'b1;
+		//hsync = hsync_ext_n;
+		//vsync = vsync_ext_n;
+		blank = blanki;
     end
     else begin  // VGA output
       ro = {ro_vga,ro_vga};
@@ -171,14 +222,15 @@ module vga_scandoubler (
       bo = {bo_vga,bo_vga};
       hsync = hsync_vga;
       vsync = vsync_vga;
+		//blank = ((hsync_vga == 1'b0) || (vsync_vga == 1'b0));
+		blank = blank_h || blank_v;
     end
   end
-    
+  
 endmodule
 
-// Una memoria de doble puerto: uno para leer, y otro para
-// escribir. Es de 2048 direcciones: 1024 se emplean para
-// guardar un scan, y otros 1024 para el siguiente scan
+// A dual-port memory: one port for reading, and one for writing.
+// It has 2048 addresses: 1024 are used to save a scan, and another 1024 for the next scan.
 module vgascanline_dport (
  input wire clk,
  input wire clk28en,

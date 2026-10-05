@@ -41,6 +41,9 @@ entity mcu is
 	 -- joysticks
 	 JOY_L			: out std_logic_vector(12 downto 0) := "000000000000";
 	 JOY_R			: out std_logic_vector(12 downto 0) := "000000000000";
+	 
+	 -- hw buttons
+	 BTNS 			: out std_logic_vector(1 downto 0) := "00";
 
     -- rtc	 
 	 RTC_A 		: in std_logic_vector(7 downto 0);
@@ -55,13 +58,6 @@ entity mcu is
 	 
 	 UART_TX_DATA			: in std_logic_vector(7 downto 0);
 	 UART_TX_WR				: in std_logic := '0';
-	 UART_TX_MODE 			: in std_logic := '0'; -- 0 = zifi data @ 115200, 1 = evo rs232 data @ dll/dlm speed
-	 
-	 -- evo rs232 dlm/dll registers
-	 UART_DLM : in std_logic_vector(7 downto 0);
-	 UART_DLL : in std_logic_vector(7 downto 0);
-	 UART_DLM_WR : in std_logic;
-	 UART_DLL_WR : in std_logic;
 	 
 	 -- soft switches command
 	 SOFTSW_COMMAND : out std_logic_vector(15 downto 0);
@@ -90,6 +86,14 @@ entity mcu is
 	 SD2_MISO	  : in  std_logic := '1';
 	 SD2_CS_N   : out std_logic := '1';	 
 	 
+	 -- dot matrix
+	 MATRIX_CMD : in std_logic_vector(23 downto 0) := (others => '0');
+	 MATRIX_CMD_WR : in std_logic := '0';
+
+	 -- hw setup
+	 HWID : out std_logic_vector(7 downto 0) := (others => '0');
+	 DVI_ONLY : out std_logic := '0';
+	 
 	 -- busy
 	 BUSY: buffer std_logic := '1'
 	 
@@ -111,6 +115,7 @@ architecture rtl of mcu is
 	-- 11, 12 - usb gamepad, joy : todo
 
 	constant CMD_OSD 			: std_logic_vector(7 downto 0) := x"20";
+	constant CMD_HW_SETUP	: std_logic_vector(7 downto 0) := x"F9";
 	constant CMD_RTC 			: std_logic_vector(7 downto 0) := x"FA";
 	constant CMD_FLASHBOOT  : std_logic_vector(7 downto 0) := x"FB";
 	constant CMD_UART			: std_logic_vector(7 downto 0) := x"FC";
@@ -120,6 +125,7 @@ architecture rtl of mcu is
 
 	 -- spi
 	 signal spi_do_valid 	: std_logic := '0';
+	 signal prev_spi_do_valid : std_logic := '0';
 	 signal spi_di 			: std_logic_vector(23 downto 0);
 	 signal spi_do 			: std_logic_vector(23 downto 0);
 	 signal spi_di_req 		: std_logic;
@@ -129,7 +135,7 @@ architecture rtl of mcu is
 	 -- rtc 2-port ram signals
 	 signal rtcw_di 			: std_logic_vector(7 downto 0);
 	 signal rtcw_a 			: std_logic_vector(7 downto 0);
-	 signal rtcw_wr 			: std_logic_vector(0 downto 0) := "0";
+	 signal rtcw_wr 			: std_logic := '0';
 	 signal rtcr_do 			: std_logic_vector(7 downto 0);
 
 	-- rtc data from mcu
@@ -219,10 +225,11 @@ begin
 		end if;
 	end process;
 
-	process (CLK, spi_do_valid, spi_do)
+	process (CLK, spi_do_valid, spi_do, prev_spi_do_valid)
 	begin
 		if (rising_edge(CLK)) then
-			if spi_do_valid = '1' then
+			prev_spi_do_valid <= spi_do_valid;
+			if spi_do_valid = '1' and prev_spi_do_valid = '0' then
 				case spi_do(23 downto 16) is 
 					-- keyboard
 					when CMD_KBD => 
@@ -284,6 +291,14 @@ begin
 							when others => null;
 						end case;
 
+					-- hw buttons
+					when CMD_BTNS => 
+						case spi_do(15 downto 8) is
+							when x"00" => BTNS(0) <= spi_do(0);
+							when x"01" => BTNS(1) <= spi_do(0);
+							when others => null;
+						end case;
+
 					-- soft switches
 					when CMD_SWITCHES => SOFTSW_COMMAND <= spi_do(15 downto 0);
 							
@@ -318,6 +333,14 @@ begin
 					when CMD_UART =>
 						UART_RX_DATA <= spi_do(7 downto 0);
 						UART_RX_IDX <= spi_do(15 downto 8);
+						
+					-- hw setup
+					when CMD_HW_SETUP => 
+						case spi_do(15 downto 8) is
+							when x"00" => HWID <= spi_do(7 downto 0);
+							when x"01" => DVI_ONLY <= spi_do(0);
+							when others => null;
+						end case;
 
 					-- init start
 					when CMD_INIT_START => BUSY <= '1';
@@ -366,8 +389,10 @@ begin
    -- 000111 = 07 = Date of Month bin/bcd (1-31)
    -- 001000 = 08 = Month         bin/bcd (1-12)
 	-- 001001 = 09 = Year          bin/bcd (0-99)
-	-- 001010 = 0A = Register A RW 7-UIP, 6-DV2, 5-DV1, 4-DV0, 3-RS3, 2-RS2, 1-RS1, 0-RS0. (uip = update in progress, dv-dividers, rs-rate selection)
-	-- 001011 = 0B = Register B RW 7-SET, 6-PIE, 5-AIE, 4-UIE, 3-SQWE, 2-DM, 1-24/12. 0-DSE (SET=update mode,PIE=int en,AIE=alarm int en,UIE=update int en, SQWE, DM 1=bcd, 0=bin, 24/12 1=24,0=12, DSE=daylight saving mode 1/0)
+	-- 001010 = 0A = Register A RW 7-UIP, 6-DV2, 5-DV1, 4-DV0, 3-RS3, 2-RS2, 1-RS1, 0-RS0. 
+	--                             (UIP = update in progress, DV-dividers, RS-rate selection)
+	-- 001011 = 0B = Register B RW 7-SET, 6-PIE, 5-AIE, 4-UIE, 3-SQWE, 2-DM, 1-24/12. 0-DSE 
+	--                             (SET=update mode, PIE=int en, AIE=alarm int en, UIE=update int en, SQWE, DM 1=bcd, 0=bin, 24/12 1=24,0=12, DSE=daylight saving mode 1/0)
 	-- 001100 = 0C = Register C RO 7-IRFQ, 6-PF, 5-AF, 4-UF, 0000
 	-- 001101 = 0D = Register D RO 7-VRT, 0000000 (VRT = valid ram and time)
 	-- 001110 = 0E = Register E - memory, 50 bytes
@@ -375,33 +400,43 @@ begin
 	-- 011111 = 3F = Register 3F
 	
 	-- memory for rtc registers
-	URTC: entity work.rtc 
+	URTC: entity work.dpram 
+	generic map(
+		DATAWIDTH => 8,
+		ADDRWIDTH => 8
+	)
 	port map (
-		clka	 => CLK,
-		dina		 => rtcw_di,
-		addra => rtcw_a,
-		wea 		 => rtcw_wr,
+		clock	 => CLK,
+		data_a	 => rtcw_di,
+		address_a => rtcw_a,
+		wren_a 	 => rtcw_wr,
+		q_a => open,
 		
-		clkb 	 => CLK,
-		addrb => RTC_A,
-		doutb			 => rtcr_do
+		address_b => RTC_A,
+		data_b => "00000000",
+		wren_b => '0',
+		q_b	 => rtcr_do
 	);
 	RTC_DO <= rtcr_do;
 	
 	-- fifo for write commands to send them on mcu side 
-	UFIFO: entity work.queue 
+	UFIFO: entity work.fifo
+	generic map (
+		ADDR_WIDTH => 9,
+		DATA_WIDTH => 24
+	)
 	port map (
 		clk 	=> CLK,
+		reset  => not N_RESET,
 
-		din 		=> queue_di,
-		wr_en 	=> queue_wr_req,
-		full 		=> queue_wr_full,
+		empty  => queue_rd_empty,
+		full   => queue_wr_full,
 		
-		rd_en 	=> queue_rd_req,
-		dout 		=> queue_do,
-		empty 	=> queue_rd_empty,
+		rd     => queue_rd_req,
+		dout  => queue_do,
 		
-		data_count => queue_data_count
+		wr     => queue_wr_req,
+		din 		=> queue_di
 	);
 	
 	-- fifo handling / queue commands to mcu side
@@ -411,21 +446,15 @@ begin
 			queue_wr_req <= '0';
 			if UART_TX_WR = '1' then -- send UART byte
 				queue_wr_req <= '1';
-				if (UART_TX_MODE = '1') then
-					queue_di <= CMD_UART & "00000011" & UART_TX_DATA;
-				else 
-					queue_di <= CMD_UART & "00000000" & UART_TX_DATA;
-				end if;
-			elsif UART_DLL_WR = '1' then -- send UART DLL reg
-				queue_wr_req <= '1';
-				queue_di <= CMD_UART & "00000001" & UART_DLL;
-			elsif UART_DLM_WR = '1' then -- send UART RLM reg
-				queue_wr_req <= '1';
-				queue_di <= CMD_UART & "00000010" & UART_DLM;
-			elsif RTC_WR_N = '0' AND RTC_CS = '1' and BUSY = '0' then -- add rtc register write to queue
+				queue_di <= CMD_UART & "00000000" & UART_TX_DATA;
+			elsif RTC_WR_N = '0' AND RTC_CS = '1' and BUSY = '0' and (RTC_A /= x"0C" and RTC_A /= x"0D") then -- add rtc register write to queue
+			--elsif RTC_WR_N = '0' AND RTC_CS = '1' and BUSY = '0' and (RTC_A /= x"0C" and RTC_A < x"F0") then -- add rtc register write to queue
 				queue_wr_req <= '1';
 				queue_di <= CMD_RTC & RTC_A & RTC_DI;
-			elsif queue_rd_empty = '1' or queue_data_count < 5 then -- anti-empty queue
+         elsif MATRIX_CMD_WR = '1' then -- send matrix cmd
+				queue_wr_req <= '1';
+				queue_di <= MATRIX_CMD;
+			elsif queue_rd_empty = '1' then -- anti-empty queue
 				queue_wr_req <= '1';
 				queue_di <= CMD_NOPE & x"0000";
 			end if;
@@ -437,15 +466,15 @@ begin
 	process (CLK) 
 	begin 
 		if rising_edge(CLK) then
-			rtcw_wr <= "0";
+			rtcw_wr <= '0';
 			if RTC_WR_N = '0' AND RTC_CS = '1' and BUSY = '0' then
 				-- rtc mem write by host
-				rtcw_wr <= "1";
+				rtcw_wr <= '1';
 				rtcw_a <= RTC_A;
 				rtcw_di <= RTC_DI;
 			elsif last_rtcr_command /= rtcr_command then
 				-- rtc mem write by mcu
-				rtcw_wr <= "1";
+				rtcw_wr <= '1';
 				rtcw_a <= rtcr_a;
 				rtcw_di <= rtcr_d;
 				last_rtcr_command <= rtcr_command;
