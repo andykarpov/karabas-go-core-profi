@@ -37,11 +37,11 @@ use unisim.vcomponents.all;
 
 entity profi is
 generic(
-	ENABLE_FDD: integer := 0;
+	ENABLE_FDD: integer := 1;
 	ENABLE_GS : integer := 1;
 	ENABLE_OPL3 : integer := 1;
 	ENABLE_SAA : integer := 1;
-	ENABLE_SERIAL_MOUSE : integer := 1;
+	ENABLE_SERIAL_MOUSE : integer :=1;
 	NUM_KEYS : integer := 4;
 	USE_T80s : integer := 1
 );

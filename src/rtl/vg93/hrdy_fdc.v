@@ -86,12 +86,12 @@ vg93_top vg93_top(
 	.RG(rg),
 	.RCLK(rclk),
 	.RAWREAD_n(rawread_n),
-	.READY(port_ff_reg[3]),
+	.READY(motor),
 	.TR00_n(~FDC_TR00),
 	.IP_n(~FDC_INDEX),
 	.WPRT_n(~FDC_WPRT),
 	.WF_n_VFOE_n(vfoe),
-	.HLT(1'b0),
+	.HLT(port_ff_reg[3]),
 	.TEST_n(1'b1),
 	.DDEN_n(1'b0)
 );
@@ -156,6 +156,8 @@ always @(posedge clk_8) begin
 			fa[3:0] <= fa[3:0] - 1;
 		else
 			fa <= fa + 1;
+	else 
+		fa <= fa + 1;
 end
 
 assign rclk = ~fa[4];
