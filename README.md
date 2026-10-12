@@ -4,7 +4,7 @@ A port of the Karabas Pro main core to the Karabas Go hardware
 
 ## What's done:
 - True turbo 28 MHz with no-wait mem cycles
-- Floppy disk support (based on (HRDY Verilog sources)[https://github.com/demyanenko-d/FD1793_1818VG93])
+- Floppy disk support (based on [HRDY Verilog sources](https://github.com/demyanenko-d/FD1793_1818VG93))
 - CF card by Profi / NemoIDE standard
 - General Sound (2MB) @ 16MHz
 - Soundrive / Covox
