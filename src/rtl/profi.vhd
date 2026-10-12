@@ -1230,6 +1230,7 @@ port map(
 	clk 				=> clk_bus,
 	clk_8 			=> clk_8,
 	reset 			=> reset,
+	turbo_fdc      => not(turbo_fdc_off),
 
 	a 					=> cpu_a_bus,
 	d 					=> cpu_do_bus,

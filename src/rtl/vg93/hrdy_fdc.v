@@ -8,6 +8,7 @@ module hrdy_fdc (
 	input wire         clk,
 	input wire         clk_8,
 	input wire         reset,
+	input wire         turbo_fdc,
 
 	// cpu signals
 	input	wire [15:0] 	a,
@@ -124,18 +125,27 @@ end
 
 wire f4 = f[0]; // 4 MHz
 
+reg turbo_fdc_sync;
+always @(posedge clk_8) begin
+	turbo_fdc_sync <= turbo_fdc;
+end
+
 // выбор клока для ВГшки (турбирование)
-reg f_sel;	
+reg f_sel;
 always @(posedge reset, posedge clk_8) begin
 	if (reset) begin
-		f_sel <= 1'b1; // По умолчанию стартуем в Турбо (2 МГц)
+		f_sel <= 1'b0;
 	end else begin
-		if (FDC_STEP) begin
-			f_sel <= 1'b1; // Шаг головки -> 2 МГц
-		end else if (wg || rg) begin
-			f_sel <= 1'b0; // Реальное чтение или запись на дискету -> 1 МГц
-		end else begin
-			f_sel <= 1'b1; // Между секторами и во время ожидания команд -> 2 МГц
+		if (turbo_fdc_sync) begin // логика выбора скорости для турбо
+			if (FDC_STEP) begin
+				f_sel <= 1'b1; // Шаг головки -> 2 МГц
+			end else if (wg || rg) begin
+				f_sel <= 1'b0; // Реальное чтение или запись на дискету -> 1 МГц
+			end else begin
+				f_sel <= 1'b1; // Между секторами и во время ожидания команд -> 2 МГц
+			end
+		end else begin // обычная скорость
+			f_sel <= 1'b0;
 		end
 	end
 end
