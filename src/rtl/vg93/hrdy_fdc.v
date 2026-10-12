@@ -120,12 +120,19 @@ always @(posedge reset, posedge clk_8) begin
 		f_sel <= 0; // FDC clock (1Mc)
 end
 
+// fdc_clk
 reg fdc_clk;
+reg clk_1m_en, clk_2m_en;
+
 always @(posedge clk_8) begin
-	if (f_sel)
-		fdc_clk <= f[1]; // FDC clock (2Mc)
-	else
-		fdc_clk <= f[2]; // FDC clock (1Mc)
+    clk_2m_en <= f_sel  & ~f[1];
+    clk_1m_en <= ~f_sel & ~f[2];
+end
+
+always @(posedge clk_8) begin
+    if (clk_2m_en) fdc_clk <= 1'b1;
+    else if (clk_1m_en) fdc_clk <= 1'b1;
+    else fdc_clk <= 1'b0;
 end
 	
 // RAWR 125 ms
@@ -139,25 +146,19 @@ assign rawread_n = ~(rd_reg[1] & rd_reg[0]);
 // FAPCH (calculating RCLK shifts)
 reg [4:0] fa;
 always @(posedge clk_8) begin
-	if (~rawread_n)
-		if (fa[3:0] < 3)
-			fa[3:0] <= fa[3:0] + 4;
-		else if (fa[3:0] < 5) 
-			fa[3:0] <= fa[3:0] + 3;
-		else if (fa[3:0] < 7)
-			fa[3:0] <= fa[3:0] + 2;
-		else if (fa[3:0] == 7)
-			fa[3:0] <= fa[3:0] + 1;
-		else if (fa[3:0] > 12)
-			fa[3:0] <= fa[3:0] - 3;
-		else if (fa[3:0] > 9)
-			fa[3:0] <= fa[3:0] - 2;
-		else if (fa[3:0] > 8)
-			fa[3:0] <= fa[3:0] - 1;
-		else
-			fa <= fa + 1;
-	else 
-		fa <= fa + 1;
+    if (~rawread_n) begin
+        // phase correction (lower 4 bits)
+        if (fa[3:0] < 3)       fa[3:0] <= fa[3:0] + 4;
+        else if (fa[3:0] < 5)  fa[3:0] <= fa[3:0] + 3;
+        else if (fa[3:0] < 7)  fa[3:0] <= fa[3:0] + 2;
+        else if (fa[3:0] == 7) fa[3:0] <= fa[3:0] + 1;
+        else if (fa[3:0] > 12) fa[3:0] <= fa[3:0] - 3;
+        else if (fa[3:0] > 9)  fa[3:0] <= fa[3:0] - 2;
+        else if (fa[3:0] > 8)  fa[3:0] <= fa[3:0] - 1;
+        else                   fa <= fa + 1'b1; // if out of range
+    end else begin
+        fa <= fa + 1'b1; // if no count pulses
+    end
 end
 
 assign rclk = ~fa[4];
