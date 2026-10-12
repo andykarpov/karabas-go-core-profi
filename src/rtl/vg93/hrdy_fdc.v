@@ -60,8 +60,8 @@ end
 
 // data output
 assign oe_n = ~((~cs_n | ~csff_n) & ~rd_n);
-assign dout = (~cs_n)  ? dal : 
-              (~csff_n) ? {intrq_sync, drq_sync, 6'b111111} : 
+assign dout = (~cs_n & ~rd_n)  ? dal : 
+              (~csff_n & ~rd_n) ? {intrq_sync, drq_sync, 6'b111111} : 
               8'b11111111;
 
 // Reset from port #FF clocked by clk8
@@ -73,15 +73,16 @@ end
 // vg93
 wire [7:0] dal = (~cs_n & ~wr_n) ? d : 8'bZ;
 wire drq, intrq, motor, vfoe, wg, wd, rg, rclk, tr43, early, late, rawread_n;
-
+wire fdc_re_n = rd_n | cs_n;
+wire fdc_we_n = wr_n | cs_n;
 vg93_top vg93_top(
 	.SYSCLK (clk_8),
 	.CLK(fdc_clk),
 	.MR_n(mr_n_sync),
 	
 	.CS_n(cs_n),
-	.RE_n(rd_n),
-	.WE_n(wr_n),
+	.RE_n(fdc_re_n),
+	.WE_n(fdc_we_n),
 	.A(a[6:5]),
 	.DAL(dal),
 	.DRQ(drq),
@@ -123,14 +124,20 @@ end
 
 wire f4 = f[0]; // 4 MHz
 
+// выбор клока для ВГшки (турбирование)
 reg f_sel;	
 always @(posedge reset, posedge clk_8) begin
-	if (reset) 
-		f_sel <= 0;				
-	else if (FDC_STEP)
-		f_sel <= 1; // Turbo step (2 MHz)
-	else if (drq)
-		f_sel <= 0; // Normal step (1 МГц)
+	if (reset) begin
+		f_sel <= 1'b1; // По умолчанию стартуем в Турбо (2 МГц)
+	end else begin
+		if (FDC_STEP) begin
+			f_sel <= 1'b1; // Шаг головки -> 2 МГц
+		end else if (wg || rg) begin
+			f_sel <= 1'b0; // Реальное чтение или запись на дискету -> 1 МГц
+		end else begin
+			f_sel <= 1'b1; // Между секторами и во время ожидания команд -> 2 МГц
+		end
+	end
 end
 
 reg fdc_clk;
