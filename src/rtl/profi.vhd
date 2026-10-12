@@ -1211,10 +1211,10 @@ port map(
 
 -- FDD controller
 G_FDD: if ENABLE_FDD=1 generate
-U20: entity work.firefly_fdc
+U20: entity work.hrdy_fdc
 port map(
 	clk 				=> clk_bus,
-	clk_16 			=> clk_16,
+	clk_8 			=> clk_8,
 	reset 			=> reset,
 
 	a 					=> cpu_a_bus,
