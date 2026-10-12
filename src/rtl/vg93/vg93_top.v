@@ -15,6 +15,8 @@
 //   VG93_ROM_FILE  path of the microcode ROM image (default "vg93-microcode-rom.hex")
 //   VG93_UTRACE    microword trace port utr_* for the testbench (vg93_trace.vh; simulation only)
 //   VG93_CHECKS    warnings of the event model (vg93_timing; simulation only)
+//   VG93_EMBEDDED  the model inside a larger FPGA design: DRQ, INTRQ and /VFOE push-pull (active high DRQ / INTRQ,
+//                  WF_n_VFOE_n = /VFOE, the /WF input unused) instead of open drain
 //
 // The blocks:
 //   vg93_timing        CLK / RCLK -> word end, second half of a word, cell end; read mode, MR_S, DDEN_S
@@ -64,7 +66,8 @@ module vg93_top (
     output wire HLD,            // head load, active high
     output wire TG43,           // track greater than 43, active high
     output wire WG,             // write gate, active high
-    output wire WD,             // write data pulses, active high
+    output wire WD,             // write data pulses, active high; combinational (as on the chip): register it before
+                                // an FPGA pin, its glitches at the SYSCLK edges are real pulses for a drive
     output wire RG,             // read gate (data separator sync), active high
     input  wire RCLK,           // read clock from the data separator
     input  wire RAWREAD_n,      // raw read pulses from the drive, active low
@@ -290,9 +293,15 @@ module vg93_top (
     assign TG43  = tg43;
     assign WG    = wg;
     assign WD    = wd;
+`ifdef VG93_EMBEDDED
+    assign WF_n_VFOE_n = !vfoe_seen;
+    assign DRQ   = drq;
+    assign INTRQ = intrq;
+`else
     assign WF_n_VFOE_n = vfoe_seen ? 1'b0 : 1'bz;   // open drain: /VFOE
     assign DRQ   = drq ? 1'bz : 1'b0;               // open drain
     assign INTRQ = intrq ? 1'bz : 1'b0;             // open drain
+`endif
 
     // simulation only: pull-ups of the inputs a board may leave open (I/O pin options in an FPGA), the trace port
     // synthesis translate_off

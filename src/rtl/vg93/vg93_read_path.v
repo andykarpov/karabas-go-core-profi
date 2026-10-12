@@ -111,8 +111,9 @@ module vg93_read_path (
     always @(posedge sysclk) begin
         caught0_q <= {caught0_q[0], caught0};
         caught1_q <= {caught1_q[0], caught1};
-        raw_lat0 <= lat0_now && !lat0_clear;
-        raw_lat1 <= lat1_now && !lat1_clear;
+        // a pulse still low at the cell end sets its latch again at once (the level wins over the reset)
+        raw_lat0 <= (lat0_now && !lat0_clear) || (rawread_q && !rclk_q);
+        raw_lat1 <= (lat1_now && !lat1_clear) || (rawread_q && rclk_q);
         mark_latch_n_held <= mark_latch_n;
 
         if (cell_ends) begin

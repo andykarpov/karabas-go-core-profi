@@ -334,6 +334,14 @@ signal cs_028b				: std_logic := '0';
 signal fdd_cs_pff_n		: std_logic;
 signal fdd_cs_n			: std_logic;
 
+signal RT_F2_1          : std_logic;
+signal RT_F2_2          : std_logic;
+signal RT_F2_3          : std_logic;
+signal RT_F1_1          : std_logic;
+signal RT_F1_2          : std_logic;
+signal RT_F1            : std_logic;
+signal P0               : std_logic;
+
 -- TurboSound
 signal ts_do_bus			: std_logic_vector(7 downto 0);
 signal ssg_cn0_a			: std_logic_vector(7 downto 0);
@@ -536,6 +544,12 @@ signal io_rd				: std_logic := '0';
 signal iowr : std_logic;
 signal matrix_cmd: std_logic_vector(23 downto 0);
 signal matrix_cmd_wr : std_logic := '0';
+
+-- wait signal
+signal WAIT_C			:std_logic_vector(1 downto 0);
+signal WAIT_IO			:std_logic;
+signal WAIT_EN			:std_logic;
+signal WAIT_C_STOP	:std_logic;
 
 component zxunoregs
 port (
@@ -1441,9 +1455,29 @@ cpu_wait_n <= '0' when zc_busy = '1' or
 							cpu_wait_gs_io = '1' or
 							ide_busy = '1' or 
 							kb_pause = '1' or  
-							(kb_screen_mode = "01" and memory_contention = '1' and automap = '0' and DS80 = '0') 
+							(kb_screen_mode = "01" and memory_contention = '1' and automap = '0' and DS80 = '0') or 
+							WAIT_IO = '0'
 							else '1';
 
+-- одновибратор - по спаду /IORQ отсчитывает 400нс вейта проца 
+-- для работы периферии в турбе или в режиме расширенного экрана 
+WAIT_IO <= WAIT_C(1);
+WAIT_C_STOP <=WAIT_C(1) and not WAIT_C(0);
+WAIT_EN <= reset or not turbo_mode(1);
+process (clk_bus) 	
+	begin
+		if rising_edge(clk_bus) and ena_div2='0' then
+			if WAIT_EN = '1' then	
+				WAIT_C <= "11";
+			elsif cpu_mreq_n='1' then
+				WAIT_C <= "11"; --WAIT MREQ = 0
+			elsif WAIT_C_STOP='0' then
+				WAIT_C <= WAIT_C + "01"; --COUNT
+			elsif WAIT_C_STOP='1' then
+				WAIT_C <= WAIT_C; --STOP
+			end if;
+		end if;
+	end process;
 
 -------------------------------------------------------------------------------
 -- SD Card
@@ -1548,19 +1582,18 @@ port_xxfe_reg <= cpu_do_bus when cs_xxfe = '1' and (cpu_wr_n'event and cpu_wr_n 
 
 -- 1F 3F 5F 7F FF -- spectrum bdi
 -- 1F 3F 5F 7F BF -- основная периферия в короткой адресации
--- 83 A3 C3 E3 3F -- расш периферия Profi 2+, 3+
+					 
+RT_F2_1 <='0' when (loa(7 downto 5)="001" and loa(1 downto 0)="11" and cpu_iorq_n='0') and ((cpm='1' and rom14='1') or (dos_act='1' and rom14='0')) else '1'; --6D
+RT_F2_2 <='0' when loa(7 downto 5)="101" and loa(1 downto 0)="11" and cpu_iorq_n='0' and cpm='1' and dos_act='0' and rom14='0' else '1'; --75
+RT_F2_3 <='0' when loa(7 downto 5)="111" and loa(1 downto 0)="11" and cpu_iorq_n='0' and cpm='0' and dos_act='1' and rom14='1' else '1'; --F3 and FB
+fdd_cs_pff_n <= RT_F2_1 and RT_F2_2 and RT_F2_3;
 
--- fdd BDI RQ port FF (3F,BF)
-fdd_cs_pff_n <= '0' when ((loa=x"FF" and cpu_iorq_n='0') and ((cpm='0' and dos_act='1' and rom14='1'))) or					  -- FF
-								 ((loa=x"BF" and cpu_iorq_n='0') and ((cpm='1' and dos_act='0' and rom14='0'))) or 					  -- BF
-								 ((loa=x"3F" and cpu_iorq_n='0') and ((cpm='1' and rom14='1') or (dos_act='1' and rom14='0')))    -- 3F								 
-								 else '1';
+RT_F1_1 <= '0' when loa(7)='0' and loa(1 downto 0)="11" and cpu_iorq_n='0' and cpm='1' and dos_act='0' and rom14='0' else '1';
+RT_F1_2 <= '0' when loa(7)='0' and loa(1 downto 0)="11" and cpu_iorq_n='0' and cpm='0' and dos_act='1' and rom14='1' else '1';
+RT_F1 <= RT_F1_1 and RT_F1_2;
+P0 <='0' when (loa(7)='1' and loa(4 downto 0)="00011" and cpu_iorq_n='0') and ((cpm='1' and rom14='1') or (dos_act='1' and rom14='0')) else '1';
+fdd_cs_n <= RT_F1 and P0;
 
--- fdd control ports 1F,3F,5F,7F (83,A3,C3,E3)
-fdd_cs_n <= '0' when ((loa=x"1F" or loa=x"3F" or loa=x"5F" or loa=x"7F") and cpu_iorq_n='0' and cpm='0' and dos_act='1' and rom14='1') or -- bdi
-							((loa=x"1F" or loa=x"3F" or loa=x"5F" or loa=x"7F") and cpu_iorq_n='0' and cpm='1' and dos_act='0' and rom14='0') or -- main
-							((loa=x"83" or loa=x"A3" or loa=x"C3" or loa=x"E3") and cpu_iorq_n='0' and ((cpm='1' and rom14='1') or (dos_act='1' and rom14='0'))) -- ext
-							else '1';
 -- Ports
 process (reset, areset, clk_bus, ena_cpu, cpu_a_bus, dos_act, cs_xxfe, cs_eff7, cs_7ffd, cs_xxfd, port_7ffd_reg, port_1ffd_reg, cpu_mreq_n, cpu_m1_n, cpu_wr_n, cpu_do_bus, fd_port, cs_008b, kb_turbo, kb_turbo_old)
 begin

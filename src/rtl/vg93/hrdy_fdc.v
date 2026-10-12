@@ -39,9 +39,7 @@ module hrdy_fdc (
 	output wire	[1:0]	FDC_DS
 );
 
-/////////////////////////////////////////////////////////////////
-
-// port #FF (TR-DOS) 
+// BDI status port #FF
 reg [7:0] port_ff_reg;
 always @(posedge clk) begin
 	if (reset)
@@ -50,21 +48,36 @@ always @(posedge clk) begin
 		port_ff_reg <= d;
 end
 
-// data out
-assign oe_n = ~((~cs_n | ~csff_n) & ~rd_n & ~iorq_n);
-assign dout = (~cs_n & ~rd_n) ?  dal : 
-				  (~csff_n & ~rd_n) ? {intrq, drq, 6'b111111} : 
-				  8'b11111111;
+// CDC for drq, intrq
+reg drq_m1, drq_sync;
+reg intrq_m1, intrq_sync;
+always @(posedge clk) begin
+    drq_m1     <= drq;
+    drq_sync   <= drq_m1;
+    intrq_m1   <= intrq;
+    intrq_sync <= intrq_m1;
+end
 
+// data output
+assign oe_n = ~((~cs_n | ~csff_n) & ~rd_n);
+assign dout = (~cs_n)  ? dal : 
+              (~csff_n) ? {intrq_sync, drq_sync, 6'b111111} : 
+              8'b11111111;
+
+// Reset from port #FF clocked by clk8
+reg mr_n_sync;
+always @(posedge clk_8) begin
+    mr_n_sync <= port_ff_reg[2];
+end
 
 // vg93
-wire [7:0] dal = (~wr_n) ? d : 8'bZ;
+wire [7:0] dal = (~cs_n & ~wr_n) ? d : 8'bZ;
 wire drq, intrq, motor, vfoe, wg, wd, rg, rclk, tr43, early, late, rawread_n;
 
 vg93_top vg93_top(
 	.SYSCLK (clk_8),
 	.CLK(fdc_clk),
-	.MR_n(port_ff_reg[2]),
+	.MR_n(mr_n_sync),
 	
 	.CS_n(cs_n),
 	.RE_n(rd_n),
@@ -102,52 +115,43 @@ assign FDC_DS[1] = motor & (port_ff_reg[1:0] == 2'b01);
 assign FDC_MOTOR = motor;
 assign FDC_WG = wg;
 
-// FAPCH
+// fdc_clk generator (1 MHz / 2 MHz)
 reg [2:0] f;
 always @(negedge clk_8) begin
-	f <= f+1;
+	f <= f + 1'b1;
 end
 
-wire f4 = f[0]; // write pre-compensation freq
+wire f4 = f[0]; // 4 MHz
 
 reg f_sel;	
 always @(posedge reset, posedge clk_8) begin
 	if (reset) 
-		f_sel <= 0; // FDC clock (1Mc)				
+		f_sel <= 0;				
 	else if (FDC_STEP)
-		f_sel <= 1; // FDC clock (2Mc)	
+		f_sel <= 1; // Turbo step (2 MHz)
 	else if (drq)
-		f_sel <= 0; // FDC clock (1Mc)
+		f_sel <= 0; // Normal step (1 МГц)
 end
 
-// fdc_clk
 reg fdc_clk;
-reg clk_1m_en, clk_2m_en;
-
 always @(posedge clk_8) begin
-    clk_2m_en <= f_sel  & ~f[1];
-    clk_1m_en <= ~f_sel & ~f[2];
-end
-
-always @(posedge clk_8) begin
-    if (clk_2m_en) fdc_clk <= 1'b1;
-    else if (clk_1m_en) fdc_clk <= 1'b1;
-    else fdc_clk <= 1'b0;
+    if (f_sel) 
+        fdc_clk <= f[1]; // 8 MHz / 4 = 2 MHz
+    else 
+        fdc_clk <= f[2]; // 8 MHz / 8 = 1 MHz
 end
 	
-// RAWR 125 ms
+// RAW Read
 reg [1:0] rd_reg;
 always @(posedge clk_8) begin
-	rd_reg <= {~rd_reg[0], FDC_RDATA};
+	rd_reg <= {rd_reg[0], FDC_RDATA};
 end
+assign rawread_n = ~(~rd_reg[1] & rd_reg[0]); // Detect 125 ns pulse
 
-assign rawread_n = ~(rd_reg[1] & rd_reg[0]);
-
-// FAPCH (calculating RCLK shifts)
+// PLL VG93
 reg [4:0] fa;
 always @(posedge clk_8) begin
     if (~rawread_n) begin
-        // phase correction (lower 4 bits)
         if (fa[3:0] < 3)       fa[3:0] <= fa[3:0] + 4;
         else if (fa[3:0] < 5)  fa[3:0] <= fa[3:0] + 3;
         else if (fa[3:0] < 7)  fa[3:0] <= fa[3:0] + 2;
@@ -155,16 +159,14 @@ always @(posedge clk_8) begin
         else if (fa[3:0] > 12) fa[3:0] <= fa[3:0] - 3;
         else if (fa[3:0] > 9)  fa[3:0] <= fa[3:0] - 2;
         else if (fa[3:0] > 8)  fa[3:0] <= fa[3:0] - 1;
-        else                   fa <= fa + 1'b1; // if out of range
+        else                   fa <= fa + 1'b1;
     end else begin
-        fa <= fa + 1'b1; // if no count pulses
+        fa <= fa + 1'b1;
     end
 end
-
 assign rclk = ~fa[4];
 
 // Write pre-compensation
-
 reg [3:0] wdata;
 always @(posedge clk_8) begin
 	if (f4) begin
@@ -178,7 +180,6 @@ always @(posedge clk_8) begin
 		end
 	end
 end
-
 assign FDC_WR_DATA = wdata[3];
 
 endmodule
