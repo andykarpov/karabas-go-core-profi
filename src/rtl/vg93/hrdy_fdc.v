@@ -46,19 +46,19 @@ reg [7:0] port_ff_reg;
 always @(posedge clk) begin
 	if (reset)
 		port_ff_reg <= 8'b0;
-	else if (!csff_n & !wr_n & !iorq_n) 
+	else if (~csff_n & ~wr_n & ~iorq_n) 
 		port_ff_reg <= d;
 end
 
 // data out
 assign oe_n = ~((~cs_n | ~csff_n) & ~rd_n & ~iorq_n);
-assign dout = (~cs_n & ~rd_n & ~iorq_n) ?  dal : 
-				  (!csff_n & ~rd_n & ~iorq_n) ? {intrq, drq, 6'b111111} : 
+assign dout = (~cs_n & ~rd_n) ?  dal : 
+				  (~csff_n & ~rd_n) ? {intrq, drq, 6'b111111} : 
 				  8'b11111111;
 
 
 // vg93
-wire [7:0] dal = (!cs_n & !wr_n) ? d : 8'bZ;
+wire [7:0] dal = (~wr_n) ? d : 8'bZ;
 wire drq, intrq, motor, vfoe, wg, wd, rg, rclk, tr43, early, late, rawread_n;
 
 vg93_top vg93_top(
@@ -87,16 +87,16 @@ vg93_top vg93_top(
 	.RCLK(rclk),
 	.RAWREAD_n(rawread_n),
 	.READY(port_ff_reg[3]),
-	.TR00_n(FDC_TR00),
-	.IP_n(FDC_INDEX),
-	.WPRT_n(FDC_WPRT),
+	.TR00_n(~FDC_TR00),
+	.IP_n(~FDC_INDEX),
+	.WPRT_n(~FDC_WPRT),
 	.WF_n_VFOE_n(vfoe),
 	.HLT(1'b0),
 	.TEST_n(1'b1),
 	.DDEN_n(1'b0)
 );
 
-assign FDC_SIDE1 = !port_ff_reg[4];
+assign FDC_SIDE1 = ~port_ff_reg[4];
 assign FDC_DS[0] = motor & (port_ff_reg[1:0] == 2'b00);
 assign FDC_DS[1] = motor & (port_ff_reg[1:0] == 2'b01);
 assign FDC_MOTOR = motor;
@@ -131,15 +131,15 @@ end
 // RAWR 125 ms
 reg [1:0] rd_reg;
 always @(posedge clk_8) begin
-	rd_reg <= {!rd_reg[0], FDC_RDATA};
+	rd_reg <= {~rd_reg[0], FDC_RDATA};
 end
 
-assign rawread_n = !(rd_reg[1] & rd_reg[0]);
+assign rawread_n = ~(rd_reg[1] & rd_reg[0]);
 
 // FAPCH (calculating RCLK shifts)
 reg [4:0] fa;
 always @(posedge clk_8) begin
-	if (!rawread_n)
+	if (~rawread_n)
 		if (fa[3:0] < 3)
 			fa[3:0] <= fa[3:0] + 4;
 		else if (fa[3:0] < 5) 
@@ -158,7 +158,7 @@ always @(posedge clk_8) begin
 			fa <= fa + 1;
 end
 
-assign rclk = !fa[4];
+assign rclk = ~fa[4];
 
 // Write pre-compensation
 
