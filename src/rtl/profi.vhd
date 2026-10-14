@@ -342,6 +342,12 @@ signal RT_F1_2          : std_logic;
 signal RT_F1            : std_logic;
 signal P0               : std_logic;
 
+signal io_access		: std_logic;
+signal io_access_prev		: std_logic;
+signal io_access_pulse_d : std_logic;
+signal cpu_wait_io_28	:std_logic;
+signal fdd_access		:std_logic;
+
 -- TurboSound
 signal ts_do_bus			: std_logic_vector(7 downto 0);
 signal ssg_cn0_a			: std_logic_vector(7 downto 0);
@@ -378,10 +384,6 @@ signal gs_r 				: std_logic_vector(14 downto 0);
 signal gs_oe 				: std_logic := '0';
 signal gs_wait_n			 : std_logic;
 signal gs_do_bus	 		: std_logic_vector(7 downto 0);
-
-signal gs_access      		: std_logic;
-signal gs_access_prev   		: std_logic := '0';
-signal cpu_wait_gs_io    		: std_logic := '0';
 
 -- gs memory
 signal gs_mem_a			: std_logic_vector(20 downto 0);
@@ -535,6 +537,8 @@ signal ide_busy 			: std_logic := '0';
 signal fdd_do_bus 		: std_logic_vector(7 downto 0);
 signal fdd_oe_n 			: std_logic := '1';
 signal fdd_mode 			: std_logic_vector(1 downto 0);
+signal fdd_cnt			: std_logic_vector(3 downto 0) := (others => '1');
+signal cpu_slowdown_on_fdd		: std_logic;
 
 signal loa 					: std_logic_vector(7 downto 0);
 signal hia					: std_logic_vector(15 downto 8);
@@ -546,10 +550,10 @@ signal matrix_cmd: std_logic_vector(23 downto 0);
 signal matrix_cmd_wr : std_logic := '0';
 
 -- wait signal
-signal WAIT_C			:std_logic_vector(1 downto 0);
-signal WAIT_IO			:std_logic;
-signal WAIT_EN			:std_logic;
-signal WAIT_C_STOP	:std_logic;
+-- signal WAIT_C			:std_logic_vector(1 downto 0);
+-- signal WAIT_IO			:std_logic;
+-- signal WAIT_EN			:std_logic;
+-- signal WAIT_C_STOP	:std_logic;
 
 component zxunoregs
 port (
@@ -625,10 +629,11 @@ begin
 -- Clock generator
 U1: entity work.clock
 port map(
-	CLK 				=> CLK_50MHZ,	
+	CLK 			=> CLK_50MHZ,	
 	ARESET 			=> areset,
-	
-	DS80 				=> ds80,
+	FDD_WAIT 		=> cpu_slowdown_on_fdd,
+	DIVMMC_EN 		=> divmmc_en,
+	DS80 			=> ds80,
 	
 	CLK_BUS 			=> clk_bus, -- 28 / 24
 	CLK_16 			=> clk_16,
@@ -1268,6 +1273,7 @@ G_NOFDD: if ENABLE_FDD=0 generate
 	FDC_WGATE      <= 'Z';
 	FDC_SIDE_N     <= 'Z';
 	fdd_oe_n       <= '1';
+	cpu_slowdown_on_fdd	   <= '0';
 end generate G_NOFDD;
 
 -- Audio mixer
@@ -1354,26 +1360,6 @@ port map(
 	
 );
 
-gs_access <= '1' when ENABLE_GS = 1 and
-                      ds80 = '0' and
-                      cpu_m1_n = '1' and
-                      cpu_iorq_n = '0' and
-                      (cpu_rd_n = '0' or cpu_wr_n = '0') and
-                      (cpu_a_bus(7 downto 0) = x"B3" or
-                       cpu_a_bus(7 downto 0) = x"BB")
-             else '0';
-
-process(clk_bus, reset)
-begin
-    if reset = '1' then
-        gs_access_prev <= '0';
-        cpu_wait_gs_io <= '0';
-    elsif rising_edge(clk_bus) then
-        gs_access_prev <= gs_access;
-        cpu_wait_gs_io <= gs_access and not gs_access_prev;
-    end if;
-end process;
-
 
 end generate G_GS;
 
@@ -1383,7 +1369,6 @@ G_NOGS: if ENABLE_GS=0 generate
 	gs_mem_wr_n    <= '1';
 	gs_mem_rfsh_n  <= '1';
 	gs_mem_mreq	   <= '1';
-	cpu_wait_gs_io 	<= '0';
 end generate G_NOGS;
 
 -- OPL3
@@ -1453,32 +1438,75 @@ cpu_wait <= '0';
 -- cpu wait condition
 cpu_wait_n <= '0' when zc_busy = '1' or 
 							cpu_wait_zifi_usb = '1' or
-							cpu_wait_gs_io = '1' or
+                            cpu_wait_io_28 = '1' or
 							ide_busy = '1' or 
 							kb_pause = '1' or  
-							(kb_screen_mode = "01" and memory_contention = '1' and automap = '0' and DS80 = '0') or 
-							WAIT_IO = '0'
+							(kb_screen_mode = "01" and memory_contention = '1' and automap = '0' and DS80 = '0') --or 
+							--WAIT_IO = '0'
 							else '1';
 
 -- одновибратор - по спаду /IORQ отсчитывает 400нс вейта проца 
 -- для работы периферии в турбе или в режиме расширенного экрана 
-WAIT_IO <= WAIT_C(1);
-WAIT_C_STOP <=WAIT_C(1) and not WAIT_C(0);
-WAIT_EN <= reset or not turbo_mode(1);
-process (clk_bus) 	
-	begin
-		if rising_edge(clk_bus) and ena_div2='0' then
-			if WAIT_EN = '1' then	
-				WAIT_C <= "11";
-			elsif cpu_mreq_n='1' then
-				WAIT_C <= "11"; --WAIT MREQ = 0
-			elsif WAIT_C_STOP='0' then
-				WAIT_C <= WAIT_C + "01"; --COUNT
-			elsif WAIT_C_STOP='1' then
-				WAIT_C <= WAIT_C; --STOP
-			end if;
+-- WAIT_IO <= WAIT_C(1);
+-- WAIT_C_STOP <=WAIT_C(1) and not WAIT_C(0);
+-- WAIT_EN <= reset or not turbo_mode(1);
+-- process (clk_bus) 	
+-- 	begin
+-- 		if rising_edge(clk_bus) and ena_div2='0' then
+-- 			if WAIT_EN = '1' then	
+-- 				WAIT_C <= "11";
+-- 			elsif cpu_mreq_n='1' then
+-- 				WAIT_C <= "11"; --WAIT MREQ = 0
+-- 			elsif WAIT_C_STOP='0' then
+-- 				WAIT_C <= WAIT_C + "01"; --COUNT
+-- 			elsif WAIT_C_STOP='1' then
+-- 				WAIT_C <= WAIT_C; --STOP
+-- 			end if;
+-- 		end if;
+-- 	end process;
+
+-- After every access to the VG93 ports, the processor operates at 3.5 MHz 
+-- instead of 28 MHz for ~10 × 20 ms to avoid errors (almost for procedural delays during the disk presence check, no disk error)
+G_NOFDDWAIT: if ENABLE_FDD=1 generate
+process (fdd_access, vid_int_n, reset,fdd_cs_n, cpu_rd_n, cpu_wr_n)
+begin
+	if fdd_access = '1' or reset='1' then
+		fdd_cnt <= (others => '0');
+		cpu_slowdown_on_fdd <= '1';
+	elsif vid_int_n'event and vid_int_n ='0' then
+		if fdd_cnt = x"B" then
+			cpu_slowdown_on_fdd <= '0';
+		else
+			fdd_cnt <= fdd_cnt + 1;
 		end if;
-	end process;
+	end if;
+end process;
+
+fdd_access <= '1' when fdd_cs_n = '0' and (cpu_rd_n = '0' or cpu_wr_n = '0')
+              else '0';
+end generate G_NOFDDWAIT;
+
+--additional wait states for all io in turbo mode 28 MHz (x8)
+io_access <= '1' when cpu_iorq_n = '0' and (cpu_rd_n = '0' or cpu_wr_n = '0')
+              else '0';
+
+process(clk_bus, reset)
+begin
+    if reset = '1' then
+        cpu_wait_io_28 <= '0';
+        io_access_prev <= '0';
+        io_access_pulse_d <= '0';
+    elsif rising_edge(clk_bus) then
+        io_access_prev <= io_access;
+        io_access_pulse_d <= io_access and not io_access_prev;
+        -- Hold WAIT for two clk_bus cycles after detecting an access.
+		if turbo_mode = "11" then
+        	cpu_wait_io_28 <= (io_access and not io_access_prev) or io_access_pulse_d;
+		else
+			cpu_wait_io_28 <='0';
+		end if;
+    end if;
+end process;
 
 -------------------------------------------------------------------------------
 -- SD Card
