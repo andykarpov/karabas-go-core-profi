@@ -120,7 +120,7 @@ port (
 	MCU_SCK 				: in  STD_LOGIC;
 	MCU_MOSI 			: in  STD_LOGIC;
 	MCU_MISO 			: out  STD_LOGIC;
-	MCU_IO 			: inout  std_logic_vector(3 downto 0);
+	MCU_IO 			: inout  std_logic_vector(3 downto 0); -- [0] burst ready (N9), [1] burst cs_n (M11), [2] sd2 cs_n, [3] ft cs_n
 
 	MIDI_TX 				: out std_logic;
 	MIDI_CLK 			: out std_logic;
@@ -151,7 +151,14 @@ signal audio_mix_l, audio_mix_r : std_logic_vector(15 downto 0);
 signal hdmi_rgb : std_logic_vector(23 downto 0);
 signal hdmi_hsync, hdmi_vsync, hdmi_blank : std_logic;
 
+
+-- burst transfers from the mcu (karabas-go-firmware docs/burst_protocol.md)
+signal mcu_burst_ready : std_logic;
+
 begin
+
+MCU_IO(0) <= mcu_burst_ready;
+MCU_IO(3 downto 1) <= (others => 'Z');
 
 U1: entity work.profi
 generic map(
@@ -239,6 +246,8 @@ port map(
 	MCU_MOSI 		=> MCU_MOSI,
 	MCU_MISO 		=> MCU_MISO,
 	MCU_IO 			=> MCU_IO,
+	MCU_BURST_CS_N	=> MCU_IO(1), -- firmware IO0 (GPIO14), M11
+	MCU_BURST_READY	=> mcu_burst_ready,
 
 	-- midi
 	MIDI_TX 			=> MIDI_TX,

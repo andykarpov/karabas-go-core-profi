@@ -43,7 +43,8 @@ generic(
 	ENABLE_SAA : integer := 1;
 	ENABLE_SERIAL_MOUSE : integer :=1;
 	NUM_KEYS : integer := 4;
-	USE_T80s : integer := 1
+	USE_T80s : integer := 1;
+	BURST_MAX_MHZ : integer := 0 -- burst transfers from the mcu, see mcu.vhd
 );
 port ( 
 	 
@@ -129,6 +130,8 @@ port (
 	MCU_MOSI : in  STD_LOGIC;
 	MCU_MISO : out  STD_LOGIC;
 	MCU_IO : in  std_logic_vector(3 downto 0);
+	MCU_BURST_CS_N : in std_logic := '1';   -- burst transfers (karabas-go-firmware docs/burst_protocol.md)
+	MCU_BURST_READY : out std_logic;
 
 	-- midi
 	MIDI_TX : out std_logic;
@@ -865,6 +868,9 @@ port map (
 
 -- MCU
 U7: entity work.mcu
+generic map(
+	BURST_MAX_MHZ	=> BURST_MAX_MHZ
+)
 port map(
 	CLK 				=> clk_bus,
 	N_RESET 			=> not areset,
@@ -875,6 +881,8 @@ port map(
 	MCU_SS 			=> MCU_CS_N,
 	MCU_SPI_FT_SS 	=> MCU_IO(3),
 	MCU_SPI_SD2_SS => MCU_IO(2),
+	MCU_BURST_CS_N	=> MCU_BURST_CS_N,
+	MCU_BURST_READY => MCU_BURST_READY,
 	
 	MS_X 				=> hid_ms_x,
 	MS_Y 				=> hid_ms_y,
