@@ -14,11 +14,19 @@ The board modules (MCU link, memories, clocks, DACs, HDMI, OSD helpers) come fro
 - Inputs per board: `karabas_<board>.prj` (the source list, add new files here; the shared modules as `"../modules/rtl/..."`), `.xst`, `.ucf`, `.ut`. There is no ISE GUI project (`.xise`) any more; the Makefile has its map / par options.
 - `core` packs `karabas_<board>.bin` and the ROMs of `core.json` (Go), `core_mini.json`, `core_minig.json` into `profi.kg1` / `kg2` / `kg3` with `make_core.py`, a symlink to karabas-go-tools (the sibling repo must be checked out next to this one). The `.bin` and `.kg*` files are committed as the release.
 - The `osd` items of the json are the soft switch registers in their order: `SOFTSW_LAYOUT` 0 for `core.json` (Go, with the floppy items), 1 for the Mini / Mini G files; the fields are cut out of the `kg_soft_switches` registers in `profi.vhd`. A new item changes the index of the items after it.
-- Check `karabas_<board>_map.mrp` (LUTs, slices, block RAMs: the design is close to full) and `karabas_<board>.par` (timing) after a change.
+- Check `karabas_<board>_map.mrp` (LUTs, slices, block RAMs: the design is close to full) and `karabas_<board>.par` (timing) after a change; `make <board>-report` prints both, and the result of `make <board>-ds80`.
+- `make <board>-ds80`: trce of the routed board with clk_bus at 24 MHz. clk_bus is a BUFGMUX of 28 and 24 MHz (the DS80 video mode); both PERIODs cover the same flip-flops and trce analyses 28 MHz only, while the phases to the other clocks (clk_sdr, clk_8, HDMI) differ at 24 MHz. Run it after every build; both analyses must report "All constraints were met".
+
+## Timing
+
+- Clocks (`rtl/clock/clock.vhd`), one PLL (VCO 675 MHz), phase 0: clk_bus (28 / 24 MHz by ds80, BUFGMUX), clk_rgb (clk_bus gated by ena_rgb, BUFGCE), clk_gs (28 MHz in both modes: the General Sound, so its SDRAM on clk_sdr 84 MHz is always 1:3), clk_sdr, clk_12 (MIDI clock out), clk_8 (FDC of the Go, FT812 clock out). The SAA1099 runs on clk_bus with an 8 MHz clock enable. HDMI: a DCM on clk_bus.
+- The three ucf have the same timing block (the end of each file): PERIOD on CLK_50MHZ (derived onto the PLL outputs), TS_CLK_MCU, bounded DATAPATHONLY paths for the asynchronous crossings (MCU_SCK <-> clk_bus, clk_bus <-> clk_8 of the FDC), the SRAM budget (12 ns out + 10 ns tAA + 12 ns in in one 28 MHz clock). Each exception is explained there; do not TIG paths that are real.
+- No clocks from logic and no latches (check "Clock Information" of the `.syr`): a register loaded by a CPU strobe uses `rtl/bus/strobe_reg.vhd`, a decoded enable becomes a clock enable or a register with a bypass (OSD, `rtl/bus/divmmc_map.vhd`). A register whose initial value differs from its asynchronous reset value makes XST build a latch.
 
 ## Simulation
 
 - `src/sim/run_burst_sim.sh` (ISim): `tb_mcu_burst.vhd`, the CMD_CAPS answer and the rom loader over classic frames and bursts at 16 / 32 MHz, `kg_mcu` with the parameters of `profi.vhd`.
+- `src/sim/run_eq_sim.sh` (ghdl, ISim): the rewrites of the timing work against the old code in `sim/ref` (the version of master 3d016a4, entities renamed `*_ref`): `tb_eq_strobes` (strobe_reg, divmmc_map; a T80 running random code in every turbo mode), `tb_eq_ide` (ide_controller), `tb_eq_overlay` (overlay, icons). Each prints `<tb>: 0 errors`.
 - The tests of the shared modules are in `modules/sim` (`run_all.sh`).
 
 ## Layout
@@ -27,3 +35,4 @@ The board modules (MCU link, memories, clocks, DACs, HDMI, OSD helpers) come fro
 - `src/rtl/osd`: the OSD of this core (`overlay.vhd`, 9-bit RGB, with `icons.vhd`), on `kg_sdpram` / `kg_sprom` / `kg_pix_doubler`.
 - `src/rtl/mcu`: the core-specific parts of the HID input: `hid_parser.vhd` (keyboard matrix, joysticks), `usb_ps2_lut.vhd`, `dot_matrix.v`.
 - `src/rtl/clock/clock.vhd`: the clocks (`kg_pll`) and the clock enables of the machine.
+- `src/rtl/bus`: `strobe_reg.vhd` (registers loaded at the end of a CPU strobe: the #FD opcode latch, port #FE), `divmmc_map.vhd` (DivMMC automap).

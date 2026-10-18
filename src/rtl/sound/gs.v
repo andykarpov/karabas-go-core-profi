@@ -29,7 +29,8 @@ module gs(
 );
 
 localparam INT = 373*2; 	// -- 14MHz / 373 = 0.0375MHz = 37.5kHz samplerate
-localparam INT_DS80 = 320*2;// -- 12MHz / 320
+// karabas: CLK is 28 MHz in both video modes (clk_gs); it was clk_bus, 24 MHz with DS80, with INT_DS80 = 320*2.
+// DS80 only turns the host access off.
 
 // cs from host
 wire gs_sel = ~IORQ_n & M1_n & (A[7:0] == 8'hB3 || A[7:0] == 8'hBB) & ~DS80; // 0xB3, 0xBB
@@ -74,7 +75,7 @@ always @(posedge CLK) begin
 		int_n <= 1;
 	end else if (CE) begin
 		cnt <= cnt + 1;
-		if ((DS80 && (cnt == INT_DS80)) || (~DS80 && (cnt == INT))) begin
+		if (cnt == INT) begin
 			cnt <= 0;
 			int_n <= 0;
 		end

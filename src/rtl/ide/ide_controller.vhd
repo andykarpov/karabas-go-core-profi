@@ -232,14 +232,15 @@ begin
   end if;
 end process;
 
--- latch high byte from z80 (profi/nemo)
-process (profi_wrh_n, nemo_wrh_n, DI)
+-- latch high byte from z80 (profi/nemo): taken on CLK while the write strobe is low. It was a flip-flop clocked by
+-- the decoded strobes, and XST built it with the Profi strobe only (the Nemo one was lost).
+process (CLK)
 begin
-		if profi_wrh_n'event and profi_wrh_n = '1' then
-				wd_reg_in (15 downto 8) <= DI;
-		elsif nemo_wrh_n'event and nemo_wrh_n = '1' then
-				wd_reg_in (15 downto 8) <= DI;
+	if rising_edge(CLK) then
+		if profi_wrh_n = '0' or nemo_wrh_n = '0' then
+			wd_reg_in (15 downto 8) <= DI;
 		end if;
+	end if;
 end process;
 
 -- data output to z80
