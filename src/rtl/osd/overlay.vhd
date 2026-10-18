@@ -64,6 +64,7 @@ architecture rtl of overlay is
 	 signal osdfont_upd, osdfont_prev_upd : std_logic := '0';	 
 	 
 	 signal load_dbl: std_logic; -- load pix doubler shift register
+	 signal quad_dbl: std_logic_vector(1 downto 0); -- pix doubler mode: ds80, popup
 	 signal shift_dbl: std_logic; -- shift the doubler shift register
 	 
 	 signal hcnt_i : std_logic_vector(9 downto 0); -- frame counters
@@ -84,20 +85,21 @@ begin
 	ds80 <= vmode(3);
 
 	 -- 8x8 font RAM
-	 U_FONT: entity work.dpram2
+	 U_FONT: entity work.kg_sdpram
 	 generic map(
-		addr_width_g => 11,
-		data_width_g => 8
+		DW 		=> 8,
+		AW 		=> 11
 	 )
 	 port map(
-		clk_a_i	=> clk_bus,
-		we_i		=> osdfont_we,
-		addr_a_i	=> osdfont_addr,
-		data_a_i	=> osdfont_data,
+		clka		=> clk_bus,
+		wea		=> osdfont_we,
+		addra		=> osdfont_addr,
+		dina		=> osdfont_data,
 		
-		clk_b_i	=> clk,
-		addr_b_i => rom_addr,
-		data_b_o => font_word
+		clkb		=> clk,
+		enb		=> '1',
+		addrb 	=> rom_addr,
+		doutb 	=> font_word
 	 );
 
 	 -- OSD icons
@@ -116,20 +118,21 @@ begin
     );
 
 	-- osd vram
-	 U_VRAM: entity work.dpram2
+	 U_VRAM: entity work.kg_sdpram
 	 generic map(
-		addr_width_g => 10,
-		data_width_g => 16
+		DW 		=> 16,
+		AW 		=> 10
 	 )
 	 port map(
-		clk_a_i	=> clk_bus,
-		we_i		=> vram_wr,
-		addr_a_i	=> addr_write,
-		data_a_i	=> vram_di,
+		clka		=> clk_bus,
+		wea		=> vram_wr,
+		addra		=> addr_write,
+		dina		=> vram_di,
 		
-		clk_b_i	=> clk,
-		addr_b_i => addr_read,
-		data_b_o => vram_do
+		clkb		=> clk,
+		enb		=> '1',
+		addrb 	=> addr_read,
+		doutb 	=> vram_do
 	 );
 	 
 
@@ -273,15 +276,16 @@ begin
 	 end process;
 	 
 	 -- pix doubler shifter
-	 U_DBL: entity work.pix_doubler
+	 U_DBL: entity work.kg_pix_doubler
 	 port map(
-		CLK => CLK,
-		LOAD => load_dbl,
-		SHIFT => shift_dbl,
-		D => bitmap,
-		QUAD => DS80 & OSD_POPUP,
-		DOUT => pixel_reg
+		clk => CLK,
+		load => load_dbl,
+		shift => shift_dbl,
+		d => bitmap,
+		quad => quad_dbl,
+		dout => pixel_reg
 	 );
+	 quad_dbl <= DS80 & OSD_POPUP;
 	 
 	 -- output rgb
 	 flash <= fcnt(5);

@@ -287,7 +287,7 @@ port map(
 );
 
 -- Audio I2S DAC
-U3: entity work.pcm5102
+U3: entity work.kg_pcm5102
 port map (
 	clk 				=> clk_adc,
 	reset 			=> reset,

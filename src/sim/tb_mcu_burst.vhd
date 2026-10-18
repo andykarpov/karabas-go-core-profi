@@ -1,5 +1,5 @@
 -------------------------------------------------------------------------------
--- Testbench: mcu.vhd burst transfers and capability query
+-- Testbench: kg_mcu (karabas-go-modules) burst transfers and capability query
 -- (karabas-go-firmware docs/burst_protocol.md)
 --
 -- Plays the RP2040 side: classic 3-byte frames on MCU_SS and bursts on
@@ -54,9 +54,19 @@ begin
 
 	clk <= not clk after CLK_PERIOD / 2 when not done;
 
-	DUT: entity work.mcu
+	-- kg_mcu with the parameters of profi.vhd
+	DUT: entity work.kg_mcu
 	generic map (
-		BURST_MAX_MHZ => MAX_MHZ
+		BURST_MAX_MHZ => MAX_MHZ,
+		CS_FILTER => 3,
+		ENABLE_RTC => 1,
+		ENABLE_UART => 1,
+		ENABLE_MATRIX => 1,
+		ENABLE_DEBUG => 0,
+		ENABLE_IMG => 0,
+		ENABLE_FILE => 0,
+		ENABLE_FT => 0,
+		ENABLE_SD2 => 0
 	)
 	port map (
 		CLK => clk,
@@ -71,20 +81,27 @@ begin
 		MCU_BURST_READY => ready,
 		RTC_A => x"00",
 		RTC_DI => x"00",
-		RTC_DO => open,
 		RTC_CS => '0',
 		RTC_WR_N => '1',
-		UART_RX_DATA => open,
-		UART_RX_IDX => open,
 		UART_TX_DATA => x"00",
 		UART_TX_WR => '0',
-		SOFTSW_COMMAND => open,
+		UART_TX_MODE => '0',
+		UART_DLM => x"00",
+		UART_DLL => x"00",
+		UART_DLM_WR => '0',
+		UART_DLL_WR => '0',
 		ROMLOADER_ACTIVE => rl_active,
 		ROMLOAD_ADDR => rl_addr,
 		ROMLOAD_DATA => rl_data,
 		ROMLOAD_WR => rl_wr,
-		OSD_COMMAND => open,
-		BUSY => open
+		FT_MISO => '1',
+		SD2_MISO => '1',
+		MATRIX_CMD => x"000000",
+		MATRIX_CMD_WR => '0',
+		DEBUG_ADDR => x"0000",
+		DEBUG_DATA => x"0000",
+		IMG_Q_WR => '0',
+		IMG_Q_DI => x"000000"
 	);
 
 	-- record every ROMLOAD write

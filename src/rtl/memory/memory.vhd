@@ -119,43 +119,39 @@ architecture RTL of memory is
 begin
 
 	-- video ram 16k
-	U_SPEC_VRAM: entity work.dpram
+	U_SPEC_VRAM: entity work.kg_sdpram
 	generic map(
-		DATAWIDTH 	=> 8,
-		ADDRWIDTH	=> 14
+		DW 			=> 8,
+		AW				=> 14
 	)
 	port map(
-		clock 		=> CLK_BUS,
+		clka 			=> CLK_BUS,
+		wea 			=> vid_spec_wr,
+		addra 		=> vid_spec_wr_a_bus,
+		dina 			=> D,
 		
-		address_a 	=> vid_spec_wr_a_bus,
-		data_a 		=> D,
-		wren_a 		=> vid_spec_wr,
-		q_a 			=> open,
-		
-		address_b 	=> vid_spec_rd_a_bus,
-		data_b 		=> "00000000",
-		wren_b 		=> '0',
-		q_b 			=> vid_spec_do
+		clkb 			=> CLK_BUS,
+		enb 			=> '1',
+		addrb 		=> vid_spec_rd_a_bus,
+		doutb 		=> vid_spec_do
 	);
 
 	-- video ram 64k
-	U_PROFI_VRAM: entity work.dpram
+	U_PROFI_VRAM: entity work.kg_sdpram
 	generic map(
-		DATAWIDTH 	=> 8,
-		ADDRWIDTH	=> 16
+		DW 			=> 8,
+		AW				=> 16
 	)
 	port map(
-		clock 		=> CLK_BUS,
+		clka 			=> CLK_BUS,
+		wea 			=> vid_profi_wr,
+		addra 		=> vid_profi_wr_a_bus,
+		dina 			=> D,
 		
-		address_a 	=> vid_profi_wr_a_bus,
-		data_a 		=> D,
-		wren_a 		=> vid_profi_wr,
-		q_a 			=> open,
-		
-		address_b 	=> vid_profi_rd_a_bus,
-		data_b 		=> "00000000",
-		wren_b 		=> '0',
-		q_b 			=> vid_profi_do
+		clkb 			=> CLK_BUS,
+		enb 			=> '1',
+		addrb 		=> vid_profi_rd_a_bus,
+		doutb 		=> vid_profi_do
 	);
 	
 	VID_DO <= vid_profi_do when DS80 = '1' else vid_spec_do;

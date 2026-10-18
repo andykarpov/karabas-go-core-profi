@@ -151,7 +151,8 @@ MCU_IO(3 downto 2) <= (others => 'Z');
 
 U1: entity work.profi
 generic map(
-	ENABLE_FDD		=> 0
+	ENABLE_FDD		=> 0,
+	SOFTSW_LAYOUT	=> 1
 )
 port map(
 		-- clock
@@ -292,20 +293,20 @@ port map(
 );
 
 -- Audio PWM
-U_DAC_L: entity work.dac
+U_DAC_L: entity work.kg_sigma_delta_dac
 port map(
-	I_CLK 			=> clk_bus,
-	I_RESET 			=> areset,
-	I_DATA 			=> not(audio_mix_l(15)) & audio_mix_l(14 downto 0),
-	O_DAC 			=> AUDIO_L
+	clk 				=> clk_bus,
+	reset 			=> areset,
+	din 				=> not(audio_mix_l(15)) & audio_mix_l(14 downto 0),
+	dout 				=> AUDIO_L
 );
 
-U_DAC_R: entity work.dac
+U_DAC_R: entity work.kg_sigma_delta_dac
 port map(
-	I_CLK 			=> clk_bus,
-	I_RESET 			=> areset,
-	I_DATA 			=> not(audio_mix_r(15)) & audio_mix_r(14 downto 0),
-	O_DAC 			=> AUDIO_R
+	clk 				=> clk_bus,
+	reset 			=> areset,
+	din 				=> not(audio_mix_r(15)) & audio_mix_r(14 downto 0),
+	dout 				=> AUDIO_R
 );
 
 -- ADC
