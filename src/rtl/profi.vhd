@@ -300,9 +300,6 @@ signal nemoide_en 		: std_logic;
 signal divmmc_en			: std_logic;
 signal automap				: std_logic;
 signal port_e3_reg   	: std_logic_vector(7 downto 0);
-signal mapterm 			: std_logic;
-signal map3DXX 			: std_logic; 
-signal map1F00 			: std_logic;
 signal mapcond 			: std_logic;
 
 -- MC146818A RTC
@@ -378,8 +375,12 @@ signal saa_out_l			: std_logic_vector(7 downto 0);
 signal saa_out_r			: std_logic_vector(7 downto 0);
 
 -- gs
-signal gs_l 				: std_logic_vector(14 downto 0);
-signal gs_r 				: std_logic_vector(14 downto 0);
+signal gs_l 				: std_logic_vector(14 downto 0) := (others => '0');
+signal gs_r 				: std_logic_vector(14 downto 0) := (others => '0');
+signal gs_out_l, gs_out_r : std_logic_vector(14 downto 0);
+signal gs_out_s1, gs_out_s2 : std_logic_vector(29 downto 0) := (others => '0');
+signal gs_reset_a			: std_logic;
+signal gs_reset_s			: std_logic_vector(1 downto 0) := "11";
 signal gs_oe 				: std_logic := '0';
 signal gs_wait_n			 : std_logic;
 signal gs_do_bus	 		: std_logic_vector(7 downto 0);
@@ -410,15 +411,14 @@ signal opl3_do_bus		: std_logic_vector(7 downto 0);
 
 -- CLOCK
 --signal clk_bus				: std_logic; -- outer
-signal clk_16 				: std_logic;
 --signal clk_8 				: std_logic; -- outer
 signal clk_vid 			: std_logic;
+signal clk_gs				: std_logic;
 --signal clk_sdr 			: std_logic; -- outer
 --signal clk_12        	: std_logic; -- outer
 signal clk_rgb 			: std_logic;
 signal clk_vga 			: std_logic;
 signal clk_adc				: std_logic;
-signal clk_cpu          : std_logic;
 
 signal ena_div2			: std_logic := '0';
 signal ena_div4			: std_logic := '0';
@@ -432,6 +432,7 @@ signal ena_cpu 			: std_logic := '0';
 signal ena_cpu_n			: std_logic := '0';
 signal ena_rgb				: std_logic := '0';
 signal ce_14				: std_logic := '0';
+signal ce_8					: std_logic := '0';
 
 -- System
 --signal reset				: std_logic; -- outer
@@ -636,14 +637,13 @@ port map(
 	DS80 				=> ds80,
 	
 	CLK_BUS 			=> clk_bus, -- 28 / 24
-	CLK_16 			=> clk_16,
 	CLK_8 			=> clk_8,
+	CLK_GS 			=> clk_gs, -- 28
 	CLK_SDR  		=> clk_sdr, -- 84
 	CLK_12   		=> clk_12,
 	CLK_RGB  		=> clk_rgb,
 	CLK_VGA			=> clk_vga,
 	CLK_ADC			=> clk_adc,
-   CLK_CPU        => clk_cpu,
 
 	ENA_DIV2 		=> ena_div2, -- 14 / 12 p
 	ENA_DIV4 		=> ena_div4, -- 7 / 6 p
@@ -660,6 +660,7 @@ port map(
 	ENA_RGB 			=> ena_rgb,
 	
 	CE_14 			=> ce_14,
+	CE_8 				=> ce_8,
 	
 	TURBO 			=> turbo_mode,
 	WAIT_CPU 		=> cpu_wait
@@ -1124,8 +1125,8 @@ port map (
 G_SAA1099: if ENABLE_SAA=1 generate
 U14: entity work.saa1099
 port map(
-	clk				=> clk_8,
-	ena				=> '1',
+	clk				=> clk_bus,
+	ena				=> ce_8, -- 8 MHz
 	rst_n				=> not reset,
 	cs_n				=> '0',
 	a0					=> hia(8),		-- 0=data, 1=address
@@ -1369,14 +1370,29 @@ port map(
 );
 
 -- General Sound
+-- It runs on clk_gs, 28 MHz in both video modes, so its memory (the SDRAM on clk_sdr, 84 MHz) is always at 1:3.
+-- On clk_bus it was 24 MHz in the DS80 mode, 3.5 periods of clk_sdr, and its SDRAM accesses failed timing there.
+-- The host does not access it in the DS80 mode (gs.v, gs_access), where clk_bus and clk_gs differ.
 G_GS: if ENABLE_GS=1 generate
+
+-- reset: set at once, released on clk_gs
+gs_reset_a <= areset or kb_gs_reset or loader_act or mcu_busy;
+process (clk_gs, gs_reset_a)
+begin
+	if gs_reset_a = '1' then
+		gs_reset_s <= "11";
+	elsif rising_edge(clk_gs) then
+		gs_reset_s <= gs_reset_s(0) & '0';
+	end if;
+end process;
+
 U22: entity work.gs_top
 port map(
-	clk_bus 			=> clk_bus, -- 28/24
+	clk_bus 			=> clk_gs, -- 28
 	ce 				=> 	'1',--ena_div2, -- 14 n
 	ds80				=> ds80,
 
-	reset 			=> areset or kb_gs_reset or loader_act or mcu_busy,
+	reset 			=> gs_reset_s(1),
 	areset 			=> areset,
 	
 	a 					=> cpu_a_bus,
@@ -1399,10 +1415,24 @@ port map(
 	ram_mreq		=> gs_mem_mreq,
 	gs_wait         => gs_wait_n,
 	
-	out_l 			=> gs_l,
-	out_r 			=> gs_r
+	out_l 			=> gs_out_l,
+	out_r 			=> gs_out_r
 	
 );
+
+-- the output to clk_bus: taken when two samples in a row are equal (it changes at most once in a sample period
+-- of the GS, so a sample taken while it changes is never passed on)
+process (clk_bus)
+begin
+	if rising_edge(clk_bus) then
+		gs_out_s1 <= gs_out_l & gs_out_r;
+		gs_out_s2 <= gs_out_s1;
+		if gs_out_s1 = gs_out_s2 then
+			gs_l <= gs_out_s2(29 downto 15);
+			gs_r <= gs_out_s2(14 downto 0);
+		end if;
+	end if;
+end process;
 
 gs_access <= '1' when ENABLE_GS = 1 and
                       ds80 = '0' and
@@ -1547,14 +1577,19 @@ fd_sel <= '0' when (
 	cpu_do_bus = x"DB" or cpu_do_bus = x"D3" or 
 	cpu_di_bus = x"DB" or cpu_di_bus = x"D3") else '1'; 
 
-process(fd_sel, reset, cpu_m1_n)
-begin
-	if reset='1' then
-		fd_port <= '1';
-	elsif rising_edge(cpu_m1_n) then -- latch opcode after M1 cycle
-		fd_port <= fd_sel;
-	end if;
-end process;
+-- latch opcode after M1 cycle (fd_sel of the clock where the T80 takes the opcode)
+U_FD_PORT: entity work.strobe_reg
+generic map(
+	W					=> 1,
+	INIT				=> '1'
+)
+port map(
+	CLK				=> clk_bus,
+	RESET				=> reset,
+	STROBE_N			=> cpu_m1_n,
+	D(0)				=> fd_sel,
+	Q(0)				=> fd_port
+);
 
 -- Config PORT X"008B"
 cs_008b <='1' when cpu_a_bus(15 downto 0)=X"008B" and cpu_iorq_n='0' and cpu_m1_n = '1' and ((cpm='1' and rom14='1') or (dos_act='1' and rom14='0')) else '0';
@@ -1627,7 +1662,17 @@ cs_rtc_ds <= '1' when cpu_iorq_n = '0' and cpu_m1_n = '1' and
 				     else '0';
 					  
 -- port #7E - write by cpu_wr_n front
-port_xxfe_reg <= cpu_do_bus when cs_xxfe = '1' and (cpu_wr_n'event and cpu_wr_n = '1');
+U_PORT_FE: entity work.strobe_reg
+generic map(
+	W					=> 8
+)
+port map(
+	CLK				=> clk_bus,
+	STROBE_N			=> cpu_wr_n,
+	EN					=> cs_xxfe,
+	D					=> cpu_do_bus,
+	Q					=> port_xxfe_reg
+);
 
 --  Profi FDD
 
@@ -1803,56 +1848,17 @@ port map(
 );
 
 ------------------------ divmmc-----------------------------
--- Engineer:   Mario Prato
--- 11.07.2013:OCH: adapted by me
--- i take this implementation to correctly and easy make nmi 
-
-process (reset, divmmc_en, cpu_a_bus)
-begin
-	if reset = '1' or divmmc_en = '0' then 
-		mapterm <= '0';
-		map3DXX <= '0';
-		map1F00 <= '1';
-	else
-		 if cpu_a_bus(15 downto 0) = x"0000"   or 
-			 cpu_a_bus(15 downto 0) = x"0008"   or 
-			 cpu_a_bus(15 downto 0) = x"0038"   or 
-			 cpu_a_bus(15 downto 0) = x"0066"   or 
-			 cpu_a_bus(15 downto 0) = x"04c6"   or 
-			 cpu_a_bus(15 downto 0) = x"0562" then 
-			mapterm <= '1';
-		else 
-			mapterm <= '0';
-		end if;	
-
-		-- mappa 3D00 - 3DFF
-		if hia(15 downto 8) = "00111101" then 
-			map3DXX <= '1'; 
-		else 
-			map3DXX <= '0';
-		end if; 
-
-		-- 1ff8 - 1fff
-		if cpu_a_bus(15 downto 3) =   "0001111111111" then 
-			map1F00 <= '0';
-		else 
-			map1F00 <= '1';
-		end if; 
-	end if;
-end process;
-
-process(reset, divmmc_en, cpu_mreq_n, cpu_m1_n, mapcond, mapterm, map3DXX, map1F00, automap)
-begin
-	if reset = '1' or divmmc_en = '0' then 
-		mapcond <= '0';
-		automap <= '0';
-   elsif falling_edge(cpu_mreq_n) then
-		   if cpu_m1_n = '0' then
-				 mapcond <= (mapterm or map3DXX or (mapcond and map1F00)) and divmmc_en;
-				 automap <= (mapcond or map3DXX) and divmmc_en;
-		  end if;
-	end if;	  
-end process; 
+U_DIVMMC_MAP: entity work.divmmc_map
+port map(
+	CLK				=> clk_bus,
+	RESET				=> reset,
+	DIVMMC_EN		=> divmmc_en,
+	A					=> cpu_a_bus,
+	M1_N				=> cpu_m1_n,
+	MREQ_N			=> cpu_mreq_n,
+	MAPCOND			=> mapcond,
+	AUTOMAP			=> automap
+);
 
 -------------------------------------------------------------------------------
 -- CPU Data bus

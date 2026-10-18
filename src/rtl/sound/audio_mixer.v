@@ -43,8 +43,8 @@ module audio_mixer (
 	input wire [15:0] opl3_l,
 	input wire [15:0] opl3_r,
 	
-	output wire signed [15:0] audio_l,
-	output wire signed [15:0] audio_r
+	output reg signed [15:0] audio_l = 16'sd0,
+	output reg signed [15:0] audio_r = 16'sd0
 );
 
 reg signed [11:0] psg_l, psg_r, opn_s;
@@ -86,7 +86,10 @@ wire signed [15:0] mix_r = 	$signed({tsfm_r[11:0], 4'b0000}) +
 										$signed({covox_r[11:0], 4'b0000}) + 
 										$signed({2'b00, speaker, 7'b0000000, 6'b000000});
 
-assign audio_l = mix_l;
-assign audio_r = mix_r;
+// registered: the sum goes to the DACs, HDMI and the level meters from flip-flops
+always @(posedge clk) begin
+	audio_l <= mix_l;
+	audio_r <= mix_r;
+end
 
 endmodule

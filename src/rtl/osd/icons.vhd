@@ -50,6 +50,7 @@ architecture rtl of icons is
 	 signal icons_h8 : std_logic := '0';
 	 
 	 signal icon_pos : std_logic_vector(2 downto 0);
+	 signal icon_pos_r : std_logic_vector(2 downto 0) := "000";
 	 
 	 signal cnt_icon_fd : std_logic_vector(20 downto 0) := (others => '1');
 	 signal cnt_icon_sd : std_logic_vector(20 downto 0) := (others => '1'); 
@@ -82,10 +83,18 @@ begin
 	 paper_icon_sd <= '1' when icons_h = '1' and vcnt >= icons_start_v + icon_h and vcnt < icons_start_v + 2*icon_h else '0';
 	 paper_icon_cf <= '1' when icons_h = '1' and vcnt >= icons_start_v + 2*icon_h and vcnt < icons_start_v + 3*icon_h else '0';
 	 
+	 -- held in icon_pos_r outside the icons (it was a latch)
 	 icon_pos <= "000" when paper_icon_fd = '1' else
 					 "001" when paper_icon_sd = '1' else 
 					 "010" when paper_icon_cf = '1' else 
-					 icon_pos;
+					 icon_pos_r;
+
+	 process (clk)
+	 begin
+		if rising_edge(clk) then
+			icon_pos_r <= icon_pos;
+		end if;
+	 end process;
 	 
 	 icon_addr <= icon_y(3) & icon_pos &  not(icon_x(3)) & icon_y(2 downto 0) & icon_x(2 downto 0) when DS80='1' else 
 					  icon_y(3) & icon_pos &  icon_x(3) & icon_y(2 downto 0) & icon_x(2 downto 0); --spectrum pos shifter 8 px

@@ -35,10 +35,11 @@ architecture rtl of overlay is
     signal font_word: std_logic_vector(7 downto 0);
 	 signal pixel_reg: std_logic;
 
-    signal attr, attr2: std_logic_vector(7 downto 0);
-    signal bitmap, bitmap2: std_logic_vector(7 downto 0);
+    signal attr, attr2, attr2_r: std_logic_vector(7 downto 0);
+    signal bitmap, bitmap2, bitmap2_r: std_logic_vector(7 downto 0);
+    signal rom_addr_r: std_logic_vector(10 downto 0);
     
-    signal addr_read: std_logic_vector(9 downto 0);
+    signal addr_read, addr_read_r: std_logic_vector(9 downto 0);
     signal addr_write: std_logic_vector(9 downto 0);
     signal vram_di: std_logic_vector(15 downto 0);
     signal vram_do: std_logic_vector(15 downto 0);
@@ -216,9 +217,25 @@ begin
 	end process;
 	 
 	 -- mem read character / attribute
-	 process (clk, osd_popup, paper_load, hcnt, vcnt)
+	 -- addr_read, attr2, rom_addr and bitmap2 take their value in the clocks of their HCNT and hold it in *_r after
+	 -- (they were latches with a decoded enable; the memories and attr / bitmap take them on clk, so the values
+	 -- on every clk edge are the same)
+	 process (clk)
 	 begin
---		if (rising_edge(clk)) then 
+		if rising_edge(clk) then
+			addr_read_r <= addr_read;
+			attr2_r <= attr2;
+			rom_addr_r <= rom_addr;
+			bitmap2_r <= bitmap2;
+		end if;
+	 end process;
+
+	 process (osd_popup, paper_load, hcnt, vcnt, vram_do, font_word, addr_read_r, attr2_r, rom_addr_r, bitmap2_r)
+	 begin
+			addr_read <= addr_read_r;
+			attr2 <= attr2_r;
+			rom_addr <= rom_addr_r;
+			bitmap2 <= bitmap2_r;
 			if (OSD_POPUP = '1') then 
 				if paper_load = '1' then
 					case (HCNT(3 downto 0)) is -- read every 16 pixels
@@ -242,7 +259,6 @@ begin
 					end case;
 				end if;
 			end if;
---		end if;
 	 end process;
 	 
 	 process (clk) 
