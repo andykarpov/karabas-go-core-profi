@@ -53,59 +53,34 @@ architecture rtl of clock is
 signal ena_cnt : std_logic_vector(5 downto 0) := "000000";
 signal locked : std_logic := '0';
 signal clk_28, clk_24 : std_logic;
-signal clkin1, clkfbout, clkfbout_buf, clkout0, clkout1, clkout2, clkout3, clkout4 : std_logic;
+signal pll_clk : std_logic_vector(5 downto 0);
 signal div16_2 : std_logic;
 
 begin 
 
-U1: IBUFG port map (O => clkin1, I => CLK);
-
-U2: PLL_BASE
+-- 50 MHz -> 28, 24, 16, 84, 12 MHz (karabas-go-modules kg_pll: IBUFG, PLL_BASE, BUFG)
+U2: entity work.kg_pll
 generic map (
-	BANDWIDTH 				=> "OPTIMIZED",
-   CLK_FEEDBACK			=> "CLKFBOUT",
-   COMPENSATION			=> "SYSTEM_SYNCHRONOUS",
 	DIVCLK_DIVIDE			=> 2,
 	CLKFBOUT_MULT 			=> 27,
-	CLKFBOUT_PHASE			=> 0.000,
-	CLKOUT0_DIVIDE			=> 24,
-	CLKOUT0_PHASE			=> 0.000,
-   CLKOUT0_DUTY_CYCLE 	=> 0.500,
-   CLKOUT1_DIVIDE			=> 28,
-   CLKOUT1_PHASE			=> 0.000,
-   CLKOUT1_DUTY_CYCLE 	=> 0.500,
-   CLKOUT2_DIVIDE			=> 42,
-   CLKOUT2_PHASE			=> 0.000,
-	CLKOUT2_DUTY_CYCLE 	=> 0.500,
-   CLKOUT3_DIVIDE			=> 8, 
-   CLKOUT3_PHASE			=> 0.000,
-   CLKOUT3_DUTY_CYCLE 	=> 0.500,
-   CLKOUT4_DIVIDE			=> 56,
-   CLKOUT4_PHASE 			=> 0.000,
-   CLKOUT4_DUTY_CYCLE 	=> 0.500,
-   CLKIN_PERIOD			=> 20.000,
-   REF_JITTER				=> 0.010
+	CLKOUT0_DIVIDE			=> 24, -- 28
+	CLKOUT1_DIVIDE			=> 28, -- 24
+	CLKOUT2_DIVIDE			=> 42, -- 16
+	CLKOUT3_DIVIDE			=> 8,  -- 84
+	CLKOUT4_DIVIDE			=> 56  -- 12
 )
 port map (
-   CLKFBOUT					=> clkfbout,
-   CLKOUT0					=> clkout0, -- 28
-   CLKOUT1          	 	=> clkout1, -- 24
-   CLKOUT2           	=> clkout2, -- 16
-   CLKOUT3           	=> clkout3, -- 84
-   CLKOUT4           	=> clkout4, -- 12
-   CLKOUT5           	=> open,
-   LOCKED            	=> locked,
-	RST 						=> '0',
-   CLKFBIN           	=> clkfbout_buf,
-   CLKIN             	=> clkin1
+	clk_in					=> CLK,
+	rst						=> '0',
+	clk_out					=> pll_clk,
+	locked					=> locked
 );
-	
-U3 : BUFG port map (O => clkfbout_buf, I => clkfbout);
-U4 : BUFG port map (O => clk_28, I => clkout0);
-U5 : BUFG port map (O => clk_24, I => clkout1);
-U6 : BUFG port map (O => clk_16, I => clkout2);
-U7 : BUFG port map (O => clk_sdr, I => clkout3);
-U8 : BUFG port map (O => clk_12, I => clkout4);
+clk_28 <= pll_clk(0);
+clk_24 <= pll_clk(1);
+clk_16 <= pll_clk(2);
+clk_sdr <= pll_clk(3);
+clk_12 <= pll_clk(4);
+
 U9 : BUFGMUX port map (I0 => clk_28, I1 => clk_24, O => clk_bus, S => ds80);
 U10: BUFGCE port map(I => clk_bus, O => clk_rgb, CE => ena_rgb);
 --U11: BUFGCE port map(I => clk_bus, O => clk_vga, CE => ena_div2);

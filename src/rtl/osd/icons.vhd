@@ -58,16 +58,18 @@ architecture rtl of icons is
 begin
 
 	 -- 
-	 U_FONT_ICONS: entity work.sprom
+	 -- icons.bit: one bit per word, 0 / 1 (read as hex by kg_sprom)
+	 U_FONT_ICONS: entity work.kg_sprom
 	 generic map (
-		DATAWIDTH => 1,
-		ADDRWIDTH => 11,
-		MEM_INIT_FILE => "rtl/osd/icons.bit"
+		DW => 1,
+		AW => 11,
+		INIT_FILE => "rtl/osd/icons.bit"
 	 )
     port map (
-		clock => clk,
-      address_a  => icon_addr,
-      q_a  => icon_pixel
+		clk => clk,
+		en => '1',
+      addr  => icon_addr,
+      dout  => icon_pixel
     );
 		
 	 icon_x <= hcnt(3 downto 0);

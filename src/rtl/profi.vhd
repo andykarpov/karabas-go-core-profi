@@ -44,7 +44,8 @@ generic(
 	ENABLE_SERIAL_MOUSE : integer :=1;
 	NUM_KEYS : integer := 4;
 	USE_T80s : integer := 1;
-	BURST_MAX_MHZ : integer := 0 -- burst transfers from the mcu, see mcu.vhd
+	BURST_MAX_MHZ : integer := 0; -- burst transfers from the mcu, see kg_mcu
+	SOFTSW_LAYOUT : integer := 0 -- OSD items: 0 Go (core.json), 1 Mini / Mini G (core_mini.json, core_minig.json)
 );
 port ( 
 	 
@@ -271,6 +272,7 @@ signal osd_command 		: std_logic_vector(15 downto 0);
 
 -- SOFT switches command
 signal softsw_command	: std_logic_vector(15 downto 0);
+signal softsw_regs		: std_logic_vector(17*8-1 downto 0);
 
 -- loader
 signal loader_act			: std_logic := '0';
@@ -861,10 +863,20 @@ port map (
 	OSD_COMMAND 	=> osd_command
 );
 
--- MCU
-U7: entity work.mcu
+-- MCU (karabas-go-modules kg_mcu: the link fixes of nanomig, a chip select filter of 3 clocks)
+U7: entity work.kg_mcu
 generic map(
-	BURST_MAX_MHZ	=> BURST_MAX_MHZ
+	BURST_MAX_MHZ	=> BURST_MAX_MHZ,
+	CS_FILTER		=> 3,
+	ENABLE_RTC		=> 1,
+	ENABLE_UART		=> 1,
+	ENABLE_MATRIX	=> 1,
+	ENABLE_DEBUG	=> 0,
+	ENABLE_IMG		=> 0,
+	ENABLE_FILE		=> 0,
+	-- ft and sd2 by mcu aren't supported by this core
+	ENABLE_FT		=> 0,
+	ENABLE_SD2		=> 0
 )
 port map(
 	CLK 				=> clk_bus,
@@ -907,6 +919,11 @@ port map(
 	UART_RX_IDX		=> usb_uart_rx_idx,
 	UART_TX_DATA 	=> usb_uart_tx_data,
 	UART_TX_WR 		=> usb_uart_tx_wr,
+	UART_TX_MODE	=> '0',
+	UART_DLM			=> x"00",
+	UART_DLL			=> x"00",
+	UART_DLM_WR		=> '0',
+	UART_DLL_WR		=> '0',
 	
 	ROMLOADER_ACTIVE => loader_act,
 	ROMLOAD_ADDR 	=> loader_ram_a,
@@ -916,25 +933,18 @@ port map(
 	SOFTSW_COMMAND => softsw_command,	
 	OSD_COMMAND 	=> osd_command,
 
-	-- ft by mcu isn't supported by this core
-	FT_VGA_ON 		=> open,
-	FT_SPI_ON 		=> open,
-	FT_CS_N 			=> open,
-	FT_MOSI			=> open,
 	FT_MISO 			=> '1',
-	FT_SCK 			=> open,
-
-	-- sd2 isn't supported by this core
-	SD2_CS_N 		=> open,
-	SD2_MOSI 		=> open,
 	SD2_MISO 		=> '1',
-	SD2_SCK 			=> open,
 
-    -- dot matrix
-    MATRIX_CMD_WR       => matrix_cmd_wr,
-    MATRIX_CMD          => matrix_cmd,
+	-- dot matrix
+	MATRIX_CMD_WR	=> matrix_cmd_wr,
+	MATRIX_CMD		=> matrix_cmd,
+
+	DEBUG_ADDR		=> x"0000",
+	DEBUG_DATA		=> x"0000",
+	IMG_Q_WR			=> '0',
+	IMG_Q_DI			=> x"000000",
 	
-	HWID				=> open,
 	DVI_ONLY			=> DVI_ONLY,
 	
 	BUSY 				=> mcu_busy
@@ -978,52 +988,84 @@ port map (
 	KEYCODE 			=> kb_keycode
 );
 
--- Soft switches parser from MCU
-U9: entity work.soft_switches
+-- Soft switches from MCU: register n = OSD item n of core.json (Go) / core_mini.json, core_minig.json
+U9: entity work.kg_soft_switches
+generic map(
+	N 					=> 17
+)
 port map (
-	CLK 				=> clk_bus,
-	
-	SOFTSW_COMMAND => softsw_command,
-	
-	ROM_BANK 		=> kb_rom_bank,
-	TURBO_FDC 		=> kb_turbofdc,
-	COVOX 			=> kb_covox,
-	PSG_MIX 			=> kb_psg_mix,
-	PSG_TYPE 		=> kb_psg_type,
-	VIDEO 			=> kb_video,
-	VSYNC 			=> kb_vsync,
-	TURBO 			=> kb_turbo,
-	SWAP_FDD 		=> kb_swap_fdd,
-	JOY_TYPE_L 		=> kb_joy_type_l,
-	JOY_TYPE_R 		=> kb_joy_type_r,
-	MODE 				=> kb_screen_mode,
-	DIVMMC_EN 		=> kb_divmmc_en,
-	NEMOIDE_EN 		=> kb_nemoide_en,
-	KB_TYPE 			=> kb_type,
-	PAUSE 			=> kb_pause,
-	GS_RESET 		=> kb_gs_reset,
-	NMI 				=> kb_nmi,
-	RESET 			=> kb_reset	
+	clk 				=> clk_bus,
+	command 			=> softsw_command,
+	regs 				=> softsw_regs,
+	upd 				=> open
 );
 
+G_SOFTSW_GO: if SOFTSW_LAYOUT = 0 generate
+	kb_rom_bank 	<= softsw_regs(0*8+1 downto 0*8);
+	kb_turbofdc 	<= softsw_regs(1*8);
+	kb_covox 		<= softsw_regs(2*8);
+	kb_psg_mix 		<= softsw_regs(3*8+1 downto 3*8);
+	kb_psg_type 	<= softsw_regs(4*8);
+	kb_vsync 		<= softsw_regs(5*8);
+	kb_turbo 		<= softsw_regs(6*8+1 downto 6*8);
+	kb_swap_fdd 	<= softsw_regs(7*8);
+	kb_joy_type_l 	<= softsw_regs(8*8+2 downto 8*8);
+	kb_joy_type_r 	<= softsw_regs(9*8+2 downto 9*8);
+	kb_divmmc_en 	<= softsw_regs(10*8);
+	kb_nemoide_en 	<= softsw_regs(11*8);
+	kb_type 			<= softsw_regs(12*8);
+	kb_pause 		<= softsw_regs(13*8);
+	kb_gs_reset 	<= softsw_regs(14*8);
+	kb_nmi 			<= softsw_regs(15*8);
+	kb_reset 		<= softsw_regs(16*8);
+	kb_screen_mode <= "00";
+end generate;
+
+G_SOFTSW_MINI: if SOFTSW_LAYOUT = 1 generate
+	kb_rom_bank 	<= softsw_regs(0*8+1 downto 0*8);
+	kb_turbofdc 	<= '0';
+	kb_covox 		<= softsw_regs(1*8);
+	kb_psg_mix 		<= softsw_regs(2*8+1 downto 2*8);
+	kb_psg_type 	<= softsw_regs(3*8);
+	kb_vsync 		<= '0';
+	kb_turbo 		<= softsw_regs(4*8+1 downto 4*8);
+	kb_swap_fdd 	<= '0';
+	kb_joy_type_l 	<= softsw_regs(5*8+2 downto 5*8);
+	kb_joy_type_r 	<= softsw_regs(6*8+2 downto 6*8);
+	kb_screen_mode <= softsw_regs(7*8+1 downto 7*8);
+	kb_divmmc_en 	<= softsw_regs(8*8);
+	kb_nemoide_en 	<= softsw_regs(9*8);
+	kb_type 			<= softsw_regs(10*8);
+	kb_pause 		<= softsw_regs(11*8);
+	kb_gs_reset 	<= softsw_regs(12*8);
+	kb_nmi 			<= softsw_regs(13*8);
+	kb_reset 		<= softsw_regs(14*8);
+end generate;
+
+kb_video <= '0';
+
 -- USB HID mouse transformer to absolute coords
-U10: entity work.cursor
+U10: entity work.kg_cursor
+generic map(
+	Z_W 				=> 4,
+	Z_NEG 			=> 0,
+	Z_ACC 			=> 1
+)
 port map(
-	CLK 				=> clk_bus,
-	RESET 			=> areset,
+	clk 				=> clk_bus,
 	
 	-- inputs from usb hid mouse
-	MS_X 				=> hid_ms_x,
-	MS_Y 				=> hid_ms_y,
-	MS_Z 				=> hid_ms_z,
-	MS_B 				=> hid_ms_b,
-	MS_UPD 			=> hid_ms_upd,
+	ms_x 				=> hid_ms_x,
+	ms_y 				=> hid_ms_y,
+	ms_z 				=> hid_ms_z,
+	ms_b 				=> hid_ms_b,
+	ms_upd 			=> hid_ms_upd,
 	
 	-- output delta
-	OUT_X 			=> ms_x,
-	OUT_Y 			=> ms_y,
-	OUT_Z 			=> ms_z,
-	OUT_B 			=> ms_b
+	x 					=> ms_x,
+	y 					=> ms_y,
+	z 					=> ms_z,
+	b 					=> ms_b
 	
 );
 

@@ -154,7 +154,8 @@ U1: entity work.profi
 generic map(
 	ENABLE_FDD		=> 0,
 	-- Rev.G has MCU_SCK on a global clock pin: bursts at up to 32 MHz
-	BURST_MAX_MHZ	=> 32
+	BURST_MAX_MHZ	=> 32,
+	SOFTSW_LAYOUT	=> 1
 )
 port map(
 		-- clock
@@ -312,9 +313,9 @@ port map(
 );
 
 -- DAC
-u_dac : entity work.PCM5102
+u_dac : entity work.kg_pcm5102
 generic map(
-	DAC_CLK_DIV_BITS => 2
+	DIV_BITS => 2
 )
 port map(
 	clk => CLK_BUS,

@@ -66,3 +66,8 @@ xst/
 _ngo/
 _xmsgs/
 
+
+# build inputs of the boards (src/Makefile)
+!src/karabas_*.prj
+!src/karabas_*.xst
+!src/karabas_*.ut

@@ -137,15 +137,16 @@ always @(posedge clk_hdmi) begin
 end
 
 // 2-port scanline ram (2 rows, 1024 px each)
-wire [9:0] rgb_raw;
-dpram2 #(.addr_width_g(11), .data_width_g(9)) hdmi_buffer(
-	.clk_a_i(clk_rgb),
-	.we_i(rgb_active),
-	.addr_a_i(waddr),
-	.data_a_i(rgb),
-	.clk_b_i(clk_hdmi),
-	.addr_b_i(raddr),
-	.data_b_o(rgb_raw)
+wire [8:0] rgb_raw;
+kg_sdpram #(.DW(9), .AW(11)) hdmi_buffer(
+	.clka(clk_rgb),
+	.wea(rgb_active),
+	.addra(waddr),
+	.dina(rgb),
+	.clkb(clk_hdmi),
+	.enb(1'b1),
+	.addrb(raddr),
+	.doutb(rgb_raw)
 );
 
 // output
