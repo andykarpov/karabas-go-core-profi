@@ -15,6 +15,8 @@ entity clock is
 port (
 	CLK			: in std_logic;
 	DS80			: in std_logic;
+	FDD_WAIT		: in std_logic;
+	DIVMMC_EN	: in std_logic;
 	
 	CLK_BUS		: buffer std_logic; -- 28 / 24
 	CLK_16 		: buffer std_logic; -- 16
@@ -131,13 +133,13 @@ begin
 		if (WAIT_CPU = '1') then 
 			ENA_CPU <= '0';
 			ENA_CPU_N <= '0';
-		elsif turbo = "11" then -- 28
+		elsif turbo = "11" and (FDD_WAIT = '0' or DIVMMC_EN = '1') then -- 28
 			ENA_CPU <= '1';
 			ENA_CPU_N <= '1';
-		elsif turbo = "10" then -- 14
+		elsif turbo = "10" and (FDD_WAIT = '0' or DIVMMC_EN = '1') then -- 14
 			ENA_CPU <= ena_cnt(0);
 			ENA_CPU_N <= not(ena_cnt(0));
-		elsif turbo = "01" then -- 7
+		elsif turbo = "01" and (FDD_WAIT = '0' or DIVMMC_EN = '1') then -- 7
 			ENA_CPU <= ena_cnt(1) and ena_cnt(0);
 			ENA_CPU_N <= not(ena_cnt(1)) and not(ena_cnt(0));
 		else
