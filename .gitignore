@@ -26,6 +26,7 @@ karabas_*.bit
 *.unroutes
 *.ut
 *.xpi
+*_ds80.log
 *.xst
 *_bitgen.xwbt
 *_envsettings.html
