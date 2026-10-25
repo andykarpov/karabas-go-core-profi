@@ -945,6 +945,10 @@ port map(
 	DEBUG_DATA		=> x"0000",
 	IMG_Q_WR			=> '0',
 	IMG_Q_DI			=> x"000000",
+	ESP_UART_RX_DATA => x"00",
+	ESP_UART_RX_WR	=> '0',
+	FLASHBOOT_START => '0',
+	FLASHBOOT_COREID => "00000",
 	
 	DVI_ONLY			=> DVI_ONLY,
 	

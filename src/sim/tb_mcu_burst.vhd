@@ -101,7 +101,11 @@ begin
 		DEBUG_ADDR => x"0000",
 		DEBUG_DATA => x"0000",
 		IMG_Q_WR => '0',
-		IMG_Q_DI => x"000000"
+		IMG_Q_DI => x"000000",
+		ESP_UART_RX_DATA => x"00",
+		ESP_UART_RX_WR => '0',
+		FLASHBOOT_START => '0',
+		FLASHBOOT_COREID => "00000"
 	);
 
 	-- record every ROMLOAD write
