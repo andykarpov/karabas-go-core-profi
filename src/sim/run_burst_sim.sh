@@ -15,7 +15,7 @@ cd $OUT
 M=../../../modules/rtl
 vlogcomp -work work -i $M/mcu $M/mem/kg_fifo.v $M/mem/kg_sdpram.v $M/mcu/kg_spi_slave.v $M/mcu/kg_burst_rx.v \
 	$M/mcu/kg_mcu_link.v $M/mcu/kg_mcu_ctl.v $M/mcu/kg_mcu_hid.v $M/mcu/kg_mcu_loader.v $M/mcu/kg_mcu_rtc.v \
-	$M/mcu/kg_mcu_uart.v $M/mcu/kg_mcu_img.v $M/mcu/kg_mcu_debug.v $M/mcu/kg_mcu.v > vlogcomp.log
+	$M/mcu/kg_mcu_uart.v $M/mcu/kg_mcu_img.v $M/mcu/kg_mcu_debug.v $M/mcu/kg_mcu_esp.v $M/mcu/kg_mcu.v > vlogcomp.log
 vhpcomp -work work ../tb_mcu_burst.vhd > vhpcomp.log
 echo "run 2 ms; quit" > run.tcl
 

@@ -35,7 +35,8 @@ MAP_go = -logic_opt off -ol high -t 1 -xt 0 -register_duplication off -r 4 -glob
 PAR_go = -ol high -mt off
 MAP_mini = -logic_opt off -ol high -xe n -t 1 -xt 0 -register_duplication off -r 4 -global_opt off -mt 2 -detail -ir off -pr b -lc off -power off
 PAR_mini = -ol high -xe n -mt 4
-MAP_minig = $(MAP_mini)
+# Mini G: cost table 3 (with 1 the placement of 26102512 missed TS_SRAM_OUT by 0.5 ns; 2, 3, 4 met it, 3 with the most slack)
+MAP_minig = $(subst -t 1 ,-t 3 ,$(MAP_mini))
 PAR_minig = $(PAR_mini)
 
 # included by the sources, not in the prj
