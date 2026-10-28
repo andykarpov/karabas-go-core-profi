@@ -272,7 +272,64 @@ signal osd_command 		: std_logic_vector(15 downto 0);
 
 -- SOFT switches command
 signal softsw_command	: std_logic_vector(15 downto 0);
-signal softsw_regs		: std_logic_vector(13*8-1 downto 0);
+signal softsw_regs		: std_logic_vector(15*8-1 downto 0);
+
+-- MCU file mounter
+signal mcu_img_mounted    : std_logic_vector(7 downto 0);
+signal mcu_img_size       : std_logic_vector(63 downto 0);
+signal mcu_img_data_wr    : std_logic;
+signal mcu_img_data_addr  : std_logic_vector(8 downto 0);
+signal mcu_img_data       : std_logic_vector(7 downto 0);
+signal mcu_img_result_wr  : std_logic;
+signal mcu_img_result     : std_logic_vector(7 downto 0);
+signal mcu_img_sum        : std_logic_vector(15 downto 0);
+signal mcu_img_q_wr       : std_logic;
+signal mcu_img_q_di       : std_logic_vector(23 downto 0);
+signal mcu_img_q_ack      : std_logic;
+signal mcu_img_phys_wr    : std_logic;
+signal mcu_img_phys       : std_logic_vector(15 downto 0);
+
+-- SDC sector interface
+signal sdc_img_mounted    : std_logic_vector(7 downto 0);
+signal sdc_img_size       : std_logic_vector(63 downto 0);
+signal sdc_rd             : std_logic_vector(7 downto 0);
+signal sdc_wr             : std_logic_vector(7 downto 0);
+signal sdc_sector         : std_logic_vector(31 downto 0);
+signal sdc_busy           : std_logic;
+signal sdc_done           : std_logic;
+signal sdc_error          : std_logic;
+signal sdc_slot           : std_logic_vector(2 downto 0);
+signal sdc_byte_in_strobe : std_logic;
+signal sdc_byte_addr      : std_logic_vector(8 downto 0);
+signal sdc_byte_in_data   : std_logic_vector(7 downto 0);
+signal sdc_byte_out_data  : std_logic_vector(7 downto 0);
+signal sdc_active         : std_logic;
+
+-- HDF ATA device (slots 4 and 5)
+signal hdf_rd             : std_logic_vector(1 downto 0);
+signal hdf_wr             : std_logic_vector(1 downto 0);
+signal hdf_sector         : std_logic_vector(31 downto 0);
+signal hdf_out_data       : std_logic_vector(7 downto 0);
+signal hdf_dout           : std_logic_vector(15 downto 0);
+signal hdf_dev            : std_logic;
+signal hdf_dev1_here      : std_logic;
+signal hdf_led            : std_logic;
+signal hdf_own            : std_logic;
+signal cf_sel             : std_logic;
+signal dev0_en            : std_logic;
+signal sw_hdd             : std_logic;
+signal hdf_sdc_busy       : std_logic;
+signal hdf_sdc_done       : std_logic;
+signal hdf_sdc_byte_in_strobe : std_logic;
+signal ata_rst            : std_logic;
+
+-- Internal IDE signals
+signal ide_a              : std_logic_vector(2 downto 0);
+signal ide_cs_n           : std_logic_vector(1 downto 0);
+signal ide_rd_n           : std_logic;
+signal ide_wr_n           : std_logic;
+signal ide_reset_n        : std_logic;
+signal ide_d              : std_logic_vector(15 downto 0);
 
 -- loader
 signal loader_act			: std_logic := '0';
@@ -859,7 +916,7 @@ port map (
 	-- icons
 	STATUS_FD		=> not(fdd_cs_n) and (not(cpu_rd_n) or not(cpu_wr_n)),
 	STATUS_SD 		=> zc_spi_start and zc_wr_en,
-	STATUS_CF 		=> hdd_active,
+	STATUS_CF 		=> hdd_active or sdc_active or hdf_led,
 	
 	OSD_COMMAND 	=> osd_command
 );
@@ -873,7 +930,7 @@ generic map(
 	ENABLE_UART		=> 1,
 	ENABLE_MATRIX	=> 1,
 	ENABLE_DEBUG	=> 0,
-	ENABLE_IMG		=> 0,
+	ENABLE_IMG		=> 1,
 	ENABLE_FILE		=> 0,
 	-- ft and sd2 by mcu aren't supported by this core
 	ENABLE_FT		=> 0,
@@ -943,8 +1000,19 @@ port map(
 
 	DEBUG_ADDR		=> x"0000",
 	DEBUG_DATA		=> x"0000",
-	IMG_Q_WR			=> '0',
-	IMG_Q_DI			=> x"000000",
+	IMG_MOUNTED 	=> mcu_img_mounted,
+	IMG_SIZE 		=> mcu_img_size,
+	IMG_DATA_WR 	=> mcu_img_data_wr,
+	IMG_DATA_ADDR 	=> mcu_img_data_addr,
+	IMG_DATA 		=> mcu_img_data,
+	IMG_RESULT_WR 	=> mcu_img_result_wr,
+	IMG_RESULT 		=> mcu_img_result,
+	IMG_SUM 		=> mcu_img_sum,
+	IMG_Q_WR 		=> mcu_img_q_wr,
+	IMG_Q_DI 		=> mcu_img_q_di,
+	IMG_Q_ACK 		=> mcu_img_q_ack,
+	IMG_PHYS_WR 	=> mcu_img_phys_wr,
+	IMG_PHYS 		=> mcu_img_phys,
 	ESP_UART_RX_DATA => x"00",
 	ESP_UART_RX_WR	=> '0',
 	FLASHBOOT_START => '0',
@@ -954,6 +1022,93 @@ port map(
 	
 	BUSY 				=> mcu_busy
 	
+);
+
+-- File mounter sector interface (karabas-go-modules img_sdc)
+u_img_sdc: entity work.img_sdc
+generic map(
+	OUT_LATENCY => 3,
+	TIMEOUT     => 5600000,
+	RETRIES     => 3
+)
+port map (
+	clk                => clk_bus,
+	reset              => areset,
+
+	img_mounted        => mcu_img_mounted,
+	img_size           => mcu_img_size,
+	img_data_wr        => mcu_img_data_wr,
+	img_data_addr      => mcu_img_data_addr,
+	img_data           => mcu_img_data,
+	img_result_wr      => mcu_img_result_wr,
+	img_result         => mcu_img_result,
+	img_sum            => mcu_img_sum,
+	img_q_wr           => mcu_img_q_wr,
+	img_q_di           => mcu_img_q_di,
+	img_q_ack          => mcu_img_q_ack,
+
+	sdc_img_mounted    => sdc_img_mounted,
+	sdc_img_size       => sdc_img_size,
+	sdc_rd             => sdc_rd,
+	sdc_wr             => sdc_wr,
+	sdc_sector         => sdc_sector,
+	sdc_busy           => sdc_busy,
+	sdc_done           => sdc_done,
+	sdc_error          => sdc_error,
+	sdc_slot           => sdc_slot,
+	sdc_byte_in_strobe => sdc_byte_in_strobe,
+	sdc_byte_addr      => sdc_byte_addr,
+	sdc_byte_in_data   => sdc_byte_in_data,
+	sdc_byte_out_data  => sdc_byte_out_data,
+
+	active             => sdc_active
+);
+
+-- HDF ATA device 0 and 1 (slots 4 and 5)
+hdf_own <= '1' when sdc_slot(2 downto 1) = "10" else '0';
+sdc_rd <= "00" & hdf_rd & "0000";
+sdc_wr <= "00" & hdf_wr & "0000";
+sdc_sector <= hdf_sector;
+sdc_byte_out_data <= hdf_out_data;
+
+dev0_en <= '1' when sw_hdd = '1' else '0';
+cf_sel  <= '1' when (sw_hdd = '0' and hdf_dev = '0') else '0';
+
+hdf_sdc_busy <= sdc_busy and hdf_own;
+hdf_sdc_done <= sdc_done and hdf_own;
+hdf_sdc_byte_in_strobe <= sdc_byte_in_strobe and hdf_own;
+ata_rst <= not ide_reset_n;
+
+u_hdf_ata: entity work.hdf_ata
+port map (
+	clk                => clk_bus,
+	reset              => areset,
+	ata_reset          => ata_rst,
+	dev0_en            => dev0_en,
+	dev                => hdf_dev,
+	dev1_here          => hdf_dev1_here,
+
+	a                  => ide_a,
+	cs_n               => ide_cs_n,
+	rd_n               => ide_rd_n,
+	wr_n               => ide_wr_n,
+	din                => ide_d,
+	dout               => hdf_dout,
+
+	img_mounted        => sdc_img_mounted(5 downto 4),
+	img_size           => sdc_img_size,
+	sdc_rd             => hdf_rd,
+	sdc_wr             => hdf_wr,
+	sdc_sector         => hdf_sector,
+	sdc_busy           => hdf_sdc_busy,
+	sdc_done           => hdf_sdc_done,
+	sdc_error          => sdc_error,
+	sdc_byte_in_strobe => hdf_sdc_byte_in_strobe,
+	sdc_byte_addr      => sdc_byte_addr,
+	sdc_byte_in_data   => sdc_byte_in_data,
+	sdc_byte_out_data  => hdf_out_data,
+
+	led                => hdf_led
 );
 
 -- USB HID parser / transformer to 8x5 matrix + joy mapper on keyboard
@@ -996,7 +1151,7 @@ port map (
 -- Soft switches from MCU: register n = OSD item n of core.json (Go) / core_mini.json, core_minig.json
 U9: entity work.kg_soft_switches
 generic map(
-	N 					=> 13
+	N 					=> 15
 )
 port map (
 	clk 				=> clk_bus,
@@ -1022,11 +1177,13 @@ G_SOFTSW_GO: if SOFTSW_LAYOUT = 0 generate
 	kb_joy_type_l 	<= softsw_regs(5*8+2 downto 5*8);
 	kb_joy_type_r 	<= softsw_regs(6*8+2 downto 6*8);
 	kb_divmmc_en 	<= softsw_regs(7*8);
-	kb_type 		<= softsw_regs(8*8);
-	kb_pause 		<= softsw_regs(9*8);
-	kb_gs_reset 	<= softsw_regs(10*8);
-	kb_nmi 			<= softsw_regs(11*8);
-	kb_reset 		<= softsw_regs(12*8);
+	sw_hdd 			<= softsw_regs(8*8);
+	-- item 9 is HDF0 file slot
+	kb_type 		<= softsw_regs(10*8);
+	kb_pause 		<= softsw_regs(11*8);
+	kb_gs_reset 	<= softsw_regs(12*8);
+	kb_nmi 			<= softsw_regs(13*8);
+	kb_reset 		<= softsw_regs(14*8);
 	kb_screen_mode <= "00";
 end generate;
 
@@ -1041,11 +1198,13 @@ G_SOFTSW_MINI: if SOFTSW_LAYOUT = 1 generate
 	kb_joy_type_r 	<= softsw_regs(5*8+2 downto 5*8);
 	kb_screen_mode <= softsw_regs(6*8+1 downto 6*8);
 	kb_divmmc_en 	<= softsw_regs(7*8);
-	kb_type 		<= softsw_regs(8*8);
-	kb_pause 		<= softsw_regs(9*8);
-	kb_gs_reset 	<= softsw_regs(10*8);
-	kb_nmi 			<= softsw_regs(11*8);
-	kb_reset 		<= softsw_regs(12*8);
+	sw_hdd 			<= softsw_regs(8*8);
+	-- item 9 is HDF0 file slot
+	kb_type 		<= softsw_regs(10*8);
+	kb_pause 		<= softsw_regs(11*8);
+	kb_gs_reset 	<= softsw_regs(12*8);
+	kb_nmi 			<= softsw_regs(13*8);
+	kb_reset 		<= softsw_regs(14*8);
 end generate;
 
 kb_video <= '0';
@@ -1270,14 +1429,27 @@ port map(
 	ACTIVE			=> hdd_active,
 	OE_N 				=> ide_oe_n,
 
-	IDE_A 			=> WA,
-	IDE_D 			=> WD,
-	IDE_CS_N 		=> WCS_N,
-	IDE_RD_N 		=> WRD_N,
-	IDE_WR_N 		=> WWR_N,
-	IDE_RESET_N 	=> WRESET_N,
+	IDE_A 			=> ide_a,
+	IDE_D 			=> ide_d,
+	IDE_CS_N 		=> ide_cs_n,
+	IDE_RD_N 		=> ide_rd_n,
+	IDE_WR_N 		=> ide_wr_n,
+	IDE_RESET_N 	=> ide_reset_n,
 	IDE_BUSY 		=> ide_busy
 );
+
+-- IDE bus multiplexer (CF card vs HDF virtual image)
+WA <= ide_a;
+WCS_N <= ide_cs_n when cf_sel = '1' else "11";
+WRD_N <= ide_rd_n when cf_sel = '1' else '1';
+WWR_N <= ide_wr_n when cf_sel = '1' else '1';
+WRESET_N <= ide_reset_n;
+
+WD <= ide_d when (cf_sel = '1' and ide_wr_n = '0') else (others => 'Z');
+
+ide_d <= WD when (cf_sel = '1' and ide_rd_n = '0') else
+         hdf_dout when (cf_sel = '0' and ide_rd_n = '0') else
+         (others => 'Z');
 
 -- FDD controller
 G_FDD: if ENABLE_FDD=1 generate
