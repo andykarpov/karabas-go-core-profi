@@ -272,7 +272,7 @@ signal osd_command 		: std_logic_vector(15 downto 0);
 
 -- SOFT switches command
 signal softsw_command	: std_logic_vector(15 downto 0);
-signal softsw_regs		: std_logic_vector(17*8-1 downto 0);
+signal softsw_regs		: std_logic_vector(13*8-1 downto 0);
 
 -- loader
 signal loader_act			: std_logic := '0';
@@ -996,7 +996,7 @@ port map (
 -- Soft switches from MCU: register n = OSD item n of core.json (Go) / core_mini.json, core_minig.json
 U9: entity work.kg_soft_switches
 generic map(
-	N 					=> 17
+	N 					=> 13
 )
 port map (
 	clk 				=> clk_bus,
@@ -1005,24 +1005,28 @@ port map (
 	upd 				=> open
 );
 
+kb_psg_type <= '1' when softsw_regs(2*8+2 downto 2*8) >= "011" else '0';
+
+with softsw_regs(2*8+2 downto 2*8) select kb_psg_mix <=
+	"00" when "000" | "011", -- ABC
+	"01" when "001" | "100", -- ACB
+	"10" when others;        -- Mono
+
 G_SOFTSW_GO: if SOFTSW_LAYOUT = 0 generate
 	kb_rom_bank 	<= softsw_regs(0*8+1 downto 0*8);
-	kb_turbofdc 	<= softsw_regs(1*8);
-	kb_covox 		<= softsw_regs(2*8);
-	kb_psg_mix 		<= softsw_regs(3*8+1 downto 3*8);
-	kb_psg_type 	<= softsw_regs(4*8);
-	kb_vsync 		<= softsw_regs(5*8);
-	kb_turbo 		<= softsw_regs(6*8+1 downto 6*8);
-	kb_swap_fdd 	<= softsw_regs(7*8);
-	kb_joy_type_l 	<= softsw_regs(8*8+2 downto 8*8);
-	kb_joy_type_r 	<= softsw_regs(9*8+2 downto 9*8);
-	kb_divmmc_en 	<= softsw_regs(10*8);
-	kb_nemoide_en 	<= softsw_regs(11*8);
-	kb_type 			<= softsw_regs(12*8);
-	kb_pause 		<= softsw_regs(13*8);
-	kb_gs_reset 	<= softsw_regs(14*8);
-	kb_nmi 			<= softsw_regs(15*8);
-	kb_reset 		<= softsw_regs(16*8);
+	kb_turbofdc 	<= '0';
+	kb_covox 		<= softsw_regs(1*8);
+	kb_vsync 		<= softsw_regs(3*8);
+	kb_turbo 		<= softsw_regs(4*8+1 downto 4*8);
+	kb_swap_fdd 	<= '0';
+	kb_joy_type_l 	<= softsw_regs(5*8+2 downto 5*8);
+	kb_joy_type_r 	<= softsw_regs(6*8+2 downto 6*8);
+	kb_divmmc_en 	<= softsw_regs(7*8);
+	kb_type 		<= softsw_regs(8*8);
+	kb_pause 		<= softsw_regs(9*8);
+	kb_gs_reset 	<= softsw_regs(10*8);
+	kb_nmi 			<= softsw_regs(11*8);
+	kb_reset 		<= softsw_regs(12*8);
 	kb_screen_mode <= "00";
 end generate;
 
@@ -1030,21 +1034,18 @@ G_SOFTSW_MINI: if SOFTSW_LAYOUT = 1 generate
 	kb_rom_bank 	<= softsw_regs(0*8+1 downto 0*8);
 	kb_turbofdc 	<= '0';
 	kb_covox 		<= softsw_regs(1*8);
-	kb_psg_mix 		<= softsw_regs(2*8+1 downto 2*8);
-	kb_psg_type 	<= softsw_regs(3*8);
 	kb_vsync 		<= '0';
-	kb_turbo 		<= softsw_regs(4*8+1 downto 4*8);
+	kb_turbo 		<= softsw_regs(3*8+1 downto 3*8);
 	kb_swap_fdd 	<= '0';
-	kb_joy_type_l 	<= softsw_regs(5*8+2 downto 5*8);
-	kb_joy_type_r 	<= softsw_regs(6*8+2 downto 6*8);
-	kb_screen_mode <= softsw_regs(7*8+1 downto 7*8);
-	kb_divmmc_en 	<= softsw_regs(8*8);
-	kb_nemoide_en 	<= softsw_regs(9*8);
-	kb_type 			<= softsw_regs(10*8);
-	kb_pause 		<= softsw_regs(11*8);
-	kb_gs_reset 	<= softsw_regs(12*8);
-	kb_nmi 			<= softsw_regs(13*8);
-	kb_reset 		<= softsw_regs(14*8);
+	kb_joy_type_l 	<= softsw_regs(4*8+2 downto 4*8);
+	kb_joy_type_r 	<= softsw_regs(5*8+2 downto 5*8);
+	kb_screen_mode <= softsw_regs(6*8+1 downto 6*8);
+	kb_divmmc_en 	<= softsw_regs(7*8);
+	kb_type 		<= softsw_regs(8*8);
+	kb_pause 		<= softsw_regs(9*8);
+	kb_gs_reset 	<= softsw_regs(10*8);
+	kb_nmi 			<= softsw_regs(11*8);
+	kb_reset 		<= softsw_regs(12*8);
 end generate;
 
 kb_video <= '0';
@@ -1285,7 +1286,7 @@ port map(
 	clk 				=> clk_bus,
 	clk_8 			=> clk_8,
 	reset 			=> reset,
-	turbo_fdc      => not(turbo_fdc_off),
+	turbo_fdc      => '0',
 
 	a 					=> cpu_a_bus,
 	d 					=> cpu_do_bus,
@@ -1624,8 +1625,8 @@ cs_028b <='1' when cpu_a_bus(15 downto 0)=X"028B" and cpu_iorq_n='0' and cpu_m1_
 
 hdd_off <= port_028b_reg(0);										-- 0 	- HDD_off
 hdd_type <= port_028b_reg(1);										-- 1 	- HDD type Profi/Nemo
-turbo_fdc_off <= not port_028b_reg(2) and kb_turbofdc;	-- 2 	- TURBO_FDC_off
-fdc_swap <= port_028b_reg(3) or kb_swap_fdd;					-- 3 	- Floppy Disk Drive Selector Change
+turbo_fdc_off <= '1';	-- TURBO_FDC forced off
+fdc_swap <= port_028b_reg(3);					-- 3 	- Floppy Disk Drive Selector Change
 sound_off <= port_028b_reg(4);									-- 4 	- Sound_off
 turbo_mode <= port_028b_reg(6 downto 5);				      -- 6,5 - Turbo Mode Selector 
 lock_dffd <= port_028b_reg(7);								 	-- 7 	- Lock port DFFD
@@ -1950,7 +1951,7 @@ end process;
 
 vid_scandoubler_enable <= not(kb_video);
 divmmc_en   <= kb_divmmc_en;
-nemoide_en  <= kb_nemoide_en;
+nemoide_en  <= '1';
 
 -- midi clk and reset
 MIDI_RESET_N <= not reset;
