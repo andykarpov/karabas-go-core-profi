@@ -26,6 +26,8 @@
         {"type": "S", "name": "DivMMC", "options": ["Off", "On"], "default": 0, "hotkey": "Menu+D"},
         {"type": "S", "name": "HDD", "options": ["CF card", "Image"], "default": 0, "hotkey": "Menu+N"},
         {"type": "F", "name": "HDF0", "slot": 4, "extensions": ".img .hdf .vhd", "hotkey": "Menu+F5"},
+        {"type": "F", "name": "DF0", "slot": 0, "extensions": ".trd .scl .fdi", "physical": 1, "hotkey": "Menu+F2"},
+        {"type": "F", "name": "DF1", "slot": 1, "extensions": ".trd .scl .fdi", "physical": 1, "hotkey": "Menu+F3"},
         {"type": "S", "name": "Keyboard", "options": ["Profi XT", "Spectrum"], "default": 0, "hotkey": "Menu+K"},
         {"type": "N", "name": "Pause", "options": ["Off", "On"], "default": 0, "hotkey": "Menu+P"},
         {"type": "T", "name": "GS Reset", "hotkey": "Menu+G"},

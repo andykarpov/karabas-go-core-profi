@@ -40,7 +40,7 @@ generic(
 	ENABLE_FDD: integer := 1;
 	ENABLE_GS : integer := 1;
 	ENABLE_OPL3 : integer := 1;
-	ENABLE_SAA : integer := 1;
+	ENABLE_SAA : integer := 0;
 	ENABLE_SERIAL_MOUSE : integer :=1;
 	NUM_KEYS : integer := 4;
 	USE_T80s : integer := 1;
@@ -322,6 +322,36 @@ signal hdf_sdc_busy       : std_logic;
 signal hdf_sdc_done       : std_logic;
 signal hdf_sdc_byte_in_strobe : std_logic;
 signal ata_rst            : std_logic;
+
+-- Virtual FDD (slots 0 and 1)
+signal fdd_v_rd               : std_logic_vector(1 downto 0);
+signal fdd_v_wr               : std_logic_vector(1 downto 0);
+signal fdd_v_sector           : std_logic_vector(31 downto 0);
+signal fdd_v_out_data         : std_logic_vector(7 downto 0);
+signal fdd_v_led              : std_logic;
+signal fdd_own                : std_logic;
+signal fdd_sdc_busy           : std_logic;
+signal fdd_sdc_done           : std_logic;
+signal fdd_sdc_error          : std_logic;
+signal fdd_sdc_byte_in_strobe : std_logic;
+
+signal v_rdata                : std_logic;
+signal v_tr00                 : std_logic;
+signal v_index                : std_logic;
+signal v_wprt                 : std_logic;
+signal v_active               : std_logic;
+
+signal hrdy_fdc_side1         : std_logic;
+signal hrdy_fdc_rdata         : std_logic;
+signal hrdy_fdc_wprt          : std_logic;
+signal hrdy_fdc_tr00          : std_logic;
+signal hrdy_fdc_index         : std_logic;
+signal hrdy_fdc_wg            : std_logic;
+signal hrdy_fdc_wr_data       : std_logic;
+signal hrdy_fdc_step          : std_logic;
+signal hrdy_fdc_dir           : std_logic;
+signal hrdy_fdc_motor         : std_logic;
+signal hrdy_fdc_ds            : std_logic_vector(1 downto 0);
 
 -- Internal IDE signals
 signal ide_a              : std_logic_vector(2 downto 0);
@@ -914,7 +944,7 @@ port map (
 	FRAME_SYNC		=> vid_lock,
 
 	-- icons
-	STATUS_FD		=> not(fdd_cs_n) and (not(cpu_rd_n) or not(cpu_wr_n)),
+	STATUS_FD		=> (not(fdd_cs_n) and (not(cpu_rd_n) or not(cpu_wr_n))) or fdd_v_led or (sdc_active and fdd_own),
 	STATUS_SD 		=> zc_spi_start and zc_wr_en,
 	STATUS_CF 		=> hdd_active or sdc_active or hdf_led,
 	
@@ -1064,13 +1094,62 @@ port map (
 	active             => sdc_active
 );
 
--- HDF ATA device 0 and 1 (slots 4 and 5)
+-- Shared img_sdc arbitration between FDD (slots 0..1) and HDF (slots 4..5)
+fdd_own <= '1' when sdc_slot(2 downto 1) = "00" else '0';
 hdf_own <= '1' when sdc_slot(2 downto 1) = "10" else '0';
-sdc_rd <= "00" & hdf_rd & "0000";
-sdc_wr <= "00" & hdf_wr & "0000";
-sdc_sector <= hdf_sector;
-sdc_byte_out_data <= hdf_out_data;
 
+sdc_rd <= "00" & hdf_rd & "00" & fdd_v_rd;
+sdc_wr <= "00" & hdf_wr & "00" & fdd_v_wr;
+sdc_sector <= fdd_v_sector when (fdd_v_rd /= "00" or fdd_v_wr /= "00" or fdd_own = '1') else hdf_sector;
+sdc_byte_out_data <= fdd_v_out_data when fdd_own = '1' else hdf_out_data;
+
+fdd_sdc_busy <= sdc_busy and fdd_own;
+fdd_sdc_done <= sdc_done and fdd_own;
+fdd_sdc_error <= sdc_error and fdd_own;
+fdd_sdc_byte_in_strobe <= sdc_byte_in_strobe and fdd_own;
+
+-- Virtual FDD (slots 0 and 1: DF0 and DF1)
+u_fdd_virtual: entity work.fdd_virtual
+generic map (
+	OUT_LATENCY => 3
+)
+port map (
+	clk_bus            => clk_bus,
+	reset_bus          => areset,
+
+	sdc_img_mounted    => sdc_img_mounted(1 downto 0),
+	sdc_img_size       => sdc_img_size,
+	sdc_rd             => fdd_v_rd,
+	sdc_wr             => fdd_v_wr,
+	sdc_sector         => fdd_v_sector,
+	sdc_busy           => fdd_sdc_busy,
+	sdc_done           => fdd_sdc_done,
+	sdc_error          => fdd_sdc_error,
+	sdc_byte_in_strobe => fdd_sdc_byte_in_strobe,
+	sdc_byte_addr      => sdc_byte_addr,
+	sdc_byte_in_data   => sdc_byte_in_data,
+	sdc_byte_out_data  => fdd_v_out_data,
+
+	clk_8              => clk_8,
+	reset_8            => areset,
+
+	fdc_ds             => hrdy_fdc_ds,
+	fdc_motor          => hrdy_fdc_motor,
+	fdc_side1          => hrdy_fdc_side1,
+	fdc_step           => hrdy_fdc_step,
+	fdc_dir            => hrdy_fdc_dir,
+	fdc_wg             => hrdy_fdc_wg,
+	fdc_wr_data        => hrdy_fdc_wr_data,
+
+	v_rdata            => v_rdata,
+	v_tr00             => v_tr00,
+	v_index            => v_index,
+	v_wprt             => v_wprt,
+	v_active           => v_active,
+	led                => fdd_v_led
+);
+
+-- HDF ATA device 0 and 1 (slots 4 and 5)
 dev0_en <= '1' when sw_hdd = '1' else '0';
 cf_sel  <= '1' when (sw_hdd = '0' and hdf_dev = '0') else '0';
 
@@ -1300,6 +1379,11 @@ port map(
 	out_r				=> saa_out_r
 );
 end generate;
+
+G_NOSAA: if ENABLE_SAA=0 generate
+	saa_out_l <= (others => '0');
+	saa_out_r <= (others => '0');
+end generate;
 	
 -- Serial mouse emulation
 G_SERIAL_MOUSE: if ENABLE_SERIAL_MOUSE=1 generate
@@ -1453,6 +1537,11 @@ ide_d <= WD when (cf_sel = '1' and ide_rd_n = '0') else
 
 -- FDD controller
 G_FDD: if ENABLE_FDD=1 generate
+hrdy_fdc_rdata <= v_rdata when v_active = '1' else FDC_RDATA;
+hrdy_fdc_tr00  <= v_tr00  when v_active = '1' else FDC_TR00;
+hrdy_fdc_index <= v_index when v_active = '1' else FDC_INDEX;
+hrdy_fdc_wprt  <= v_wprt  when v_active = '1' else FDC_WPRT;
+
 U20: entity work.hrdy_fdc
 port map(
 	clk 				=> clk_bus,
@@ -1473,18 +1562,29 @@ port map(
 	oe_n 				=> fdd_oe_n,
 	dout 				=> fdd_do_bus,
 	
-	FDC_SIDE1 		=> FDC_SIDE_N,
-	FDC_RDATA 		=> FDC_RDATA,
-	FDC_WPRT 		=> FDC_WPRT,
-	FDC_TR00 		=> FDC_TR00,
-	FDC_INDEX 		=> FDC_INDEX,
-	FDC_WG 			=> FDC_WGATE,
-	FDC_WR_DATA 	=> FDC_WDATA,
-	FDC_STEP 		=> FDC_STEP,
-	FDC_DIR 			=> FDC_DIR,
-	FDC_MOTOR 		=> FDC_MOTOR,
-	FDC_DS 			=> FDC_DRIVE
+	FDC_SIDE1 		=> hrdy_fdc_side1,
+	FDC_RDATA 		=> hrdy_fdc_rdata,
+	FDC_WPRT 		=> hrdy_fdc_wprt,
+	FDC_TR00 		=> hrdy_fdc_tr00,
+	FDC_INDEX 		=> hrdy_fdc_index,
+	FDC_WG 			=> hrdy_fdc_wg,
+	FDC_WR_DATA 	=> hrdy_fdc_wr_data,
+	FDC_STEP 		=> hrdy_fdc_step,
+	FDC_DIR 			=> hrdy_fdc_dir,
+	FDC_MOTOR 		=> hrdy_fdc_motor,
+	FDC_DS 			=> hrdy_fdc_ds
 );
+
+FDC_DRIVE(0) <= hrdy_fdc_ds(0) when sdc_img_mounted(0) = '0' else '0';
+FDC_DRIVE(1) <= hrdy_fdc_ds(1) when sdc_img_mounted(1) = '0' else '0';
+FDC_MOTOR    <= hrdy_fdc_motor when ((hrdy_fdc_ds(0) = '1' and sdc_img_mounted(0) = '0') or
+                                     (hrdy_fdc_ds(1) = '1' and sdc_img_mounted(1) = '0')) else '0';
+FDC_DIR      <= hrdy_fdc_dir;
+FDC_STEP     <= hrdy_fdc_step;
+FDC_WDATA    <= hrdy_fdc_wr_data;
+FDC_WGATE    <= hrdy_fdc_wg;
+FDC_SIDE_N   <= not hrdy_fdc_side1;
+
 end generate G_FDD;
 
 G_NOFDD: if ENABLE_FDD=0 generate

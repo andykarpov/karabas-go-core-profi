@@ -31,12 +31,15 @@ JSON_mini = core_mini.json
 JSON_minig = core_minig.json
 
 # map / par options (as the .xise projects had them)
-MAP_go = -logic_opt off -ol high -t 1 -xt 0 -register_duplication off -r 4 -global_opt off -mt 2 -ir off -pr b -lc auto -power off
+MAP_T_go ?= 1
+MAP_T_mini ?= 2
+MAP_T_minig ?= 2
+
+MAP_go = -logic_opt off -ol high -t $(MAP_T_go) -xt 0 -register_duplication off -r 4 -global_opt off -mt 2 -ir off -pr b -lc auto -power off
 PAR_go = -ol high -mt off
-MAP_mini = -logic_opt off -ol high -xe n -t 1 -xt 0 -register_duplication off -r 4 -global_opt off -mt 2 -detail -ir off -pr b -lc off -power off
+MAP_mini = -logic_opt off -ol high -xe n -t $(MAP_T_mini) -xt 0 -register_duplication off -r 4 -global_opt off -mt 2 -detail -ir off -pr b -lc off -power off
 PAR_mini = -ol high -xe n -mt 4
-# Mini G: cost table 3 (with 1 the placement of 26102512 missed TS_SRAM_OUT by 0.5 ns; 2, 3, 4 met it, 3 with the most slack)
-MAP_minig = $(subst -t 1 ,-t 3 ,$(MAP_mini))
+MAP_minig = $(subst -t $(MAP_T_mini) ,-t $(MAP_T_minig) ,$(MAP_mini))
 PAR_minig = $(PAR_mini)
 
 # included by the sources, not in the prj
