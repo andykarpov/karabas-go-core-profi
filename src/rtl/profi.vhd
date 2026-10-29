@@ -1072,7 +1072,7 @@ sdc_sector <= hdf_sector;
 sdc_byte_out_data <= hdf_out_data;
 
 dev0_en <= '1' when sw_hdd = '1' else '0';
-cf_sel  <= '1' when (sw_hdd = '0' and hdf_dev = '0') else '0';
+cf_sel  <= '1' when sw_hdd = '0' else '0';
 
 hdf_sdc_busy <= sdc_busy and hdf_own;
 hdf_sdc_done <= sdc_done and hdf_own;
@@ -1438,18 +1438,28 @@ port map(
 	IDE_BUSY 		=> ide_busy
 );
 
--- IDE bus multiplexer (CF card vs HDF virtual image)
-WA <= ide_a;
-WCS_N <= ide_cs_n when cf_sel = '1' else "11";
-WRD_N <= ide_rd_n when cf_sel = '1' else '1';
-WWR_N <= ide_wr_n when cf_sel = '1' else '1';
-WRESET_N <= ide_reset_n;
+-- IDE bus: the CF card (device 0 with HDD = CF card) and hdf_ata
+U_IDE_MUX: entity work.ide_mux
+port map(
+	CLK 				=> clk_bus,
+	CF 				=> cf_sel,
+	HDF_DEV 			=> hdf_dev,
+	HDF_DOUT 		=> hdf_dout,
 
-WD <= ide_d when (cf_sel = '1' and ide_wr_n = '0') else (others => 'Z');
+	IDE_A 			=> ide_a,
+	IDE_D 			=> ide_d,
+	IDE_CS_N 		=> ide_cs_n,
+	IDE_RD_N 		=> ide_rd_n,
+	IDE_WR_N 		=> ide_wr_n,
+	IDE_RESET_N 	=> ide_reset_n,
 
-ide_d <= WD when (cf_sel = '1' and ide_rd_n = '0') else
-         hdf_dout when (cf_sel = '0' and ide_rd_n = '0') else
-         (others => 'Z');
+	WA 				=> WA,
+	WD 				=> WD,
+	WCS_N 			=> WCS_N,
+	WRD_N 			=> WRD_N,
+	WWR_N 			=> WWR_N,
+	WRESET_N 		=> WRESET_N
+);
 
 -- FDD controller
 G_FDD: if ENABLE_FDD=1 generate
