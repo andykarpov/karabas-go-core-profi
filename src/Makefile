@@ -32,7 +32,8 @@ JSON_minig = core_minig.json
 
 # map / par options (as the .xise projects had them)
 # cost table of map (2 first, another one only if 2 misses the timing)
-MAP_T_go ?= 2
+# Go: 1 (26102901 with 2 missed TS_SRAM_OUT by 0.14 ns)
+MAP_T_go ?= 1
 MAP_T_mini ?= 2
 MAP_T_minig ?= 2
 
