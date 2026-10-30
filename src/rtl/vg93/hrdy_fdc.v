@@ -11,6 +11,12 @@
 // the sector and the command register of TR-DOS faster than that and the second byte overwrote the first: busy
 // holds the CPU (WAIT) on an access to a VG93 register for 9..10 us after a write to one, and the model does not
 // see the access until then (a held write would load REG_DAL_IN); port #FF does not wait.
+// The DOS polls the ports in loops that count their own time out: TR-DOS 5.04T waits for INTRQ / DRQ at #3FD5 in
+// 4 x 65536 turns of 51 T (3.8 s at 3.5 MHz), 0.5 s at 28 MHz, less than a stopped drive needs to spin up (NO
+// DISC). busy keeps the time between two accesses to the ports (#1F..#7F, #FF) at least that of the 3.5 MHz CPU:
+// every T state of the CPU (ena_cpu) between them adds 8 clocks of clk_bus (a T state at 3.5 MHz, 3 MHz in DS80)
+// to pace, each clock takes one off, and the next access waits until pace is down to 8; at 3.5 MHz pace stays
+// below 8 and the CPU never waits. pace is limited to 1016 clocks (36 us, 127 T at 3.5 MHz).
 `default_nettype none
 
 module hrdy_fdc (
@@ -18,6 +24,7 @@ module hrdy_fdc (
 	input wire         clk,        // clk_bus, 28 / 24 MHz
 	input wire         ds80,       // 1: clk is 24 MHz
 	input wire         reset,
+	input wire         ena_cpu,    // clock enable of the CPU: a T state
 
 	// cpu signals
 	input	wire [15:0] 	a,
@@ -49,15 +56,6 @@ module hrdy_fdc (
 	output reg	[1:0]	FDC_DS = 2'b00
 );
 
-// BDI system port #FF: bits 1..0 drive, 2 /MR (0 = reset), 3 HLT, 4 side (0 = side 1)
-reg [7:0] port_ff_reg = 8'b0;
-always @(posedge clk) begin
-	if (reset)
-		port_ff_reg <= 8'b0;
-	else if (~csff_n & ~wr_n & ~iorq_n)
-		port_ff_reg <= d;
-end
-
 // CLK of the model: 1 MHz square wave, clk_bus / 28 (28 MHz) or / 24 (24 MHz, DS80)
 reg [3:0] cdiv = 4'd0;
 reg fdc_clk = 1'b0;
@@ -72,18 +70,38 @@ end
 // a VG93 register was written: the model takes the byte within two microwords; count 10 CLK periods
 reg vg_wr = 1'b0;
 reg [3:0] guard = 4'd0;
-reg [1:0] guard_d = 2'b00;
+reg [1:0] hold_d = 2'b00;
 wire fdc_clk_rise = ~fdc_clk & (cdiv == (ds80 ? 4'd11 : 4'd13));
-wire vg_cs_n = cs_n | (guard != 4'd0);
+wire port_sel = (~cs_n | ~csff_n) & (~rd_n | ~wr_n);   // not INTA (IORQ with M1, the decoders take any IORQ)
+// the time of the 3.5 MHz CPU still owed before the next access to the ports
+reg [9:0] pace = 10'd0;
+wire pace_wait = (pace > 10'd8);
+wire hold = (guard != 4'd0) | pace_wait;
+wire vg_cs_n = cs_n | hold;
 always @(posedge clk) begin
-	guard_d <= {guard_d[0], guard != 4'd0};
+	hold_d <= {hold_d[0], hold};
 	vg_wr <= ~vg_cs_n & ~wr_n;
 	if (vg_wr & (vg_cs_n | wr_n))
 		guard <= 4'd10;
 	else if (fdc_clk_rise && guard != 4'd0)
 		guard <= guard - 4'd1;
+	if (reset)
+		pace <= 10'd0;
+	else if (~port_sel & ena_cpu)
+		pace <= (pace > 10'd1009) ? 10'd1016 : pace + 10'd7;
+	else if (pace != 10'd0)
+		pace <= pace - 10'd1;
 end
-assign busy = ~cs_n & (guard != 4'd0 || guard_d != 2'b00);   // the model sees a held access 2 clocks at least
+assign busy = port_sel & (hold | hold_d != 2'b00);   // the model sees a held access 2 clocks at least
+
+// BDI system port #FF: bits 1..0 drive, 2 /MR (0 = reset), 3 HLT, 4 side (0 = side 1)
+reg [7:0] port_ff_reg = 8'b0;
+always @(posedge clk) begin
+	if (reset)
+		port_ff_reg <= 8'b0;
+	else if (~csff_n & ~wr_n & ~iorq_n & ~pace_wait)
+		port_ff_reg <= d;
+end
 
 // data output
 wire drq, intrq;

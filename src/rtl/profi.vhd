@@ -1465,6 +1465,7 @@ port map(
 	clk 				=> clk_bus,
 	ds80 				=> ds80,
 	reset 			=> reset,
+	ena_cpu 			=> ena_cpu,
 
 	a 					=> cpu_a_bus,
 	d 					=> cpu_do_bus,
