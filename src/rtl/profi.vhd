@@ -609,10 +609,6 @@ signal matrix_cmd: std_logic_vector(23 downto 0);
 signal matrix_cmd_wr : std_logic := '0';
 
 -- wait signal
-signal WAIT_C			:std_logic_vector(1 downto 0);
-signal WAIT_IO			:std_logic;
-signal WAIT_EN			:std_logic;
-signal WAIT_C_STOP	:std_logic;
 
 component zxunoregs
 port (
@@ -1737,29 +1733,8 @@ cpu_wait_n <= '0' when zc_busy = '1' or
 							ide_busy = '1' or 
 							fdd_busy = '1' or 
 							kb_pause = '1' or  
-							(kb_screen_mode = "01" and memory_contention = '1' and automap = '0' and DS80 = '0') or 
-							WAIT_IO = '0'
+							(kb_screen_mode = "01" and memory_contention = '1' and automap = '0' and DS80 = '0')
 							else '1';
-
--- одновибратор - по спаду /IORQ отсчитывает 400нс вейта проца 
--- для работы периферии в турбе или в режиме расширенного экрана 
-WAIT_IO <= WAIT_C(1);
-WAIT_C_STOP <=WAIT_C(1) and not WAIT_C(0);
-WAIT_EN <= reset or not turbo_mode(1);
-process (clk_bus) 	
-	begin
-		if rising_edge(clk_bus) and ena_div2='0' then
-			if WAIT_EN = '1' then	
-				WAIT_C <= "11";
-			elsif cpu_mreq_n='1' then
-				WAIT_C <= "11"; --WAIT MREQ = 0
-			elsif WAIT_C_STOP='0' then
-				WAIT_C <= WAIT_C + "01"; --COUNT
-			elsif WAIT_C_STOP='1' then
-				WAIT_C <= WAIT_C; --STOP
-			end if;
-		end if;
-	end process;
 
 -------------------------------------------------------------------------------
 -- SD Card
