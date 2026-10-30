@@ -207,7 +207,6 @@ signal lock_dffd			: std_logic;
 signal sound_off			: std_logic;
 signal hdd_type			: std_logic;
 signal fdc_swap			: std_logic;
-signal turbo_fdc_off		: std_logic;
 signal hdd_off				: std_logic;
 signal hdd_active			: std_logic;
 
@@ -254,6 +253,7 @@ signal vid_pix_start 	: std_logic;
 signal vid_int				: std_logic;
 signal vid_pff_cs			: std_logic;
 signal vid_int_n        : std_logic;
+signal vid_int_ack      : std_logic := '0';
 signal vid_attr			: std_logic_vector(7 downto 0);
 signal vid_rgb				: std_logic_vector(8 downto 0);
 signal vid_rgb_osd 		: std_logic_vector(8 downto 0);
@@ -576,7 +576,6 @@ signal kb_keycode 		: std_logic_vector(7 downto 0) := x"FF";
 signal kb_rom_bank 		: std_logic_vector(1 downto 0) := "00";
 signal prev_kb_rom_bank : std_logic_vector(1 downto 0) := "00";
 signal rom_bank_reset 	: std_logic := '0';
-signal kb_turbofdc 		: std_logic := '0'; -- disabled in mini go
 signal kb_covox 			: std_logic := '0';
 signal kb_psg_mix 		: std_logic_vector(1 downto 0) := "00";
 signal kb_psg_type 		: std_logic := '0';
@@ -597,6 +596,7 @@ signal ide_busy 			: std_logic := '0';
 -- FDD signals
 signal fdd_do_bus 		: std_logic_vector(7 downto 0);
 signal fdd_oe_n 			: std_logic := '1';
+signal fdd_busy 			: std_logic := '0';
 signal fdd_mode 			: std_logic_vector(1 downto 0);
 
 signal loa 					: std_logic_vector(7 downto 0);
@@ -876,7 +876,6 @@ port map (
 	VMODE				=> vmode,
 	
 	BORDER 			=> port_xxfe_reg(7 downto 0),
-	TURBO 			=> turbo_mode,	-- turbo signal for int length
 	INTA 				=> cpu_inta_n,
 	INT 				=> vid_int_n,
 	pFF_CS			=> vid_pff_cs, -- port FF select
@@ -1169,7 +1168,6 @@ with softsw_regs(2*8+2 downto 2*8) select kb_psg_mix <=
 
 G_SOFTSW_GO: if SOFTSW_LAYOUT = 0 generate
 	kb_rom_bank 	<= softsw_regs(0*8+1 downto 0*8);
-	kb_turbofdc 	<= '0';
 	kb_covox 		<= softsw_regs(1*8);
 	kb_vsync 		<= softsw_regs(3*8);
 	kb_turbo 		<= softsw_regs(4*8+1 downto 4*8);
@@ -1189,7 +1187,6 @@ end generate;
 
 G_SOFTSW_MINI: if SOFTSW_LAYOUT = 1 generate
 	kb_rom_bank 	<= softsw_regs(0*8+1 downto 0*8);
-	kb_turbofdc 	<= '0';
 	kb_covox 		<= softsw_regs(1*8);
 	kb_vsync 		<= '0';
 	kb_turbo 		<= softsw_regs(3*8+1 downto 3*8);
@@ -1466,13 +1463,11 @@ G_FDD: if ENABLE_FDD=1 generate
 U20: entity work.hrdy_fdc
 port map(
 	clk 				=> clk_bus,
-	clk_8 			=> clk_8,
+	ds80 				=> ds80,
 	reset 			=> reset,
-	turbo_fdc      => '0',
 
 	a 					=> cpu_a_bus,
 	d 					=> cpu_do_bus,
-	m1_n 				=> cpu_m1_n,
 	wr_n 				=> cpu_wr_n,
 	rd_n 				=> cpu_rd_n,
 	iorq_n 			=> cpu_iorq_n,
@@ -1482,6 +1477,7 @@ port map(
 
 	oe_n 				=> fdd_oe_n,
 	dout 				=> fdd_do_bus,
+	busy 				=> fdd_busy,
 	
 	FDC_SIDE1 		=> FDC_SIDE_N,
 	FDC_RDATA 		=> FDC_RDATA,
@@ -1506,6 +1502,7 @@ G_NOFDD: if ENABLE_FDD=0 generate
 	FDC_WGATE      <= 'Z';
 	FDC_SIDE_N     <= 'Z';
 	fdd_oe_n       <= '1';
+	fdd_busy       <= '0';
 end generate G_NOFDD;
 
 -- Audio mixer
@@ -1706,7 +1703,22 @@ end process;
 cpu_inta_n <= cpu_iorq_n or cpu_m1_n;	-- INTA
 
 -- int signal
-cpu_int_n <= vid_int_n and serial_ms_int_n;
+-- The frame INT of the video is as long as on the 3.5 MHz machine (32 T at 3.5 MHz, 9 us) in every turbo mode and
+-- ends early at the INT acknowledge cycle: with the CPU at 28 MHz an INT of 32 of its T states (1.1 us) was
+-- shorter than an instruction with the SRAM wait states and the CPU missed it, while a 9 us INT without the
+-- acknowledge would be taken twice by a short interrupt routine. At 3.5 MHz the acknowledge comes too late to
+-- change anything (19 T of the acknowledge + EI + RET > 32 T).
+process (clk_bus)
+begin
+	if rising_edge(clk_bus) then
+		if vid_int_n = '1' then
+			vid_int_ack <= '0';
+		elsif cpu_inta_n = '0' then
+			vid_int_ack <= '1';
+		end if;
+	end if;
+end process;
+cpu_int_n <= (vid_int_n or vid_int_ack) and serial_ms_int_n;
 
 -- nmi signal
 cpu_nmi_n <= mapcond when (kb_nmi = '1' or hw_btn(1) = '1') and divmmc_en = '1' else 
@@ -1722,6 +1734,7 @@ cpu_wait_n <= '0' when zc_busy = '1' or
 							cpu_wait_zifi_usb = '1' or
 							cpu_wait_gs_io = '1' or
 							ide_busy = '1' or 
+							fdd_busy = '1' or 
 							kb_pause = '1' or  
 							(kb_screen_mode = "01" and memory_contention = '1' and automap = '0' and DS80 = '0') or 
 							WAIT_IO = '0'
@@ -1807,7 +1820,7 @@ cs_028b <='1' when cpu_a_bus(15 downto 0)=X"028B" and cpu_iorq_n='0' and cpu_m1_
 
 hdd_off <= port_028b_reg(0);										-- 0 	- HDD_off
 hdd_type <= port_028b_reg(1);										-- 1 	- HDD type Profi/Nemo
-turbo_fdc_off <= '1';	-- TURBO_FDC forced off
+-- port_028b_reg(2)														-- 2 	- TurboFDC off: ignored, TurboFDC is always on (hrdy_fdc)
 fdc_swap <= port_028b_reg(3);					-- 3 	- Floppy Disk Drive Selector Change
 sound_off <= port_028b_reg(4);									-- 4 	- Sound_off
 turbo_mode <= port_028b_reg(6 downto 5);				      -- 6,5 - Turbo Mode Selector 

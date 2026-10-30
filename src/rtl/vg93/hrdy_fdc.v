@@ -1,19 +1,27 @@
 //------------------------------------------------------------
 // HRDY FDC Top Level
 //------------------------------------------------------------
+// Beta Disk glue around the VG93 model (vg93_top, github.com/demyanenko-d/FD1793_1818VG93), after its
+// epm570/bdi_top.v: the model and the drive glue (fdd_glue) run on clk_bus, the clock of the CPU (28 MHz, 24 MHz
+// in the DS80 mode), so the host bus, port #FF, DRQ and INTRQ need no clock domain crossing. CLK of the model is
+// 1 MHz in both modes (clk_bus / 28 or / 24), a square wave; TurboFDC (fast step rate and head delays) is the
+// VG93_TURBO_STEP build of the model (vg93_config.vh), always on.
+// The model takes a written byte as the chip does: the end of /WE arms the register, which loads REG_DAL_IN (one
+// latch for all four registers) within the next two microwords (4 us each at CLK 1 MHz). A CPU in turbo writes
+// the sector and the command register of TR-DOS faster than that and the second byte overwrote the first: busy
+// holds the CPU (WAIT) on an access to a VG93 register for 9..10 us after a write to one, and the model does not
+// see the access until then (a held write would load REG_DAL_IN); port #FF does not wait.
 `default_nettype none
 
 module hrdy_fdc (
 	// clocks
-	input wire         clk,
-	input wire         clk_8,
+	input wire         clk,        // clk_bus, 28 / 24 MHz
+	input wire         ds80,       // 1: clk is 24 MHz
 	input wire         reset,
-	input wire         turbo_fdc,
 
 	// cpu signals
 	input	wire [15:0] 	a,
 	input	wire [7:0]		d,
-	input	wire			m1_n,
 	input	wire			wr_n,
 	input	wire			rd_n,
 	input	wire			iorq_n,
@@ -25,178 +33,124 @@ module hrdy_fdc (
 	// controller output signals
 	output wire         oe_n,
 	output wire [7:0]   dout,
+	output wire         busy,      // WAIT for the CPU
 
 	// physical floppy signals
-	output wire			FDC_SIDE1,
+	output reg			FDC_SIDE1 = 1'b1,
 	input	wire			FDC_RDATA,
 	input	wire			FDC_WPRT,
 	input	wire			FDC_TR00,
 	input	wire			FDC_INDEX,
-	output wire			FDC_WG,
+	output reg			FDC_WG = 1'b0,
 	output wire			FDC_WR_DATA,
-	output wire			FDC_STEP,
-	output wire			FDC_DIR,
-	output wire			FDC_MOTOR,
-	output wire	[1:0]	FDC_DS
+	output reg			FDC_STEP = 1'b0,
+	output reg			FDC_DIR = 1'b0,
+	output reg			FDC_MOTOR = 1'b0,
+	output reg	[1:0]	FDC_DS = 2'b00
 );
 
-// BDI status port #FF
-reg [7:0] port_ff_reg;
+// BDI system port #FF: bits 1..0 drive, 2 /MR (0 = reset), 3 HLT, 4 side (0 = side 1)
+reg [7:0] port_ff_reg = 8'b0;
 always @(posedge clk) begin
 	if (reset)
 		port_ff_reg <= 8'b0;
-	else if (~csff_n & ~wr_n & ~iorq_n) 
+	else if (~csff_n & ~wr_n & ~iorq_n)
 		port_ff_reg <= d;
 end
 
-// CDC for drq, intrq
-reg drq_m1, drq_sync;
-reg intrq_m1, intrq_sync;
+// CLK of the model: 1 MHz square wave, clk_bus / 28 (28 MHz) or / 24 (24 MHz, DS80)
+reg [3:0] cdiv = 4'd0;
+reg fdc_clk = 1'b0;
 always @(posedge clk) begin
-    drq_m1     <= drq;
-    drq_sync   <= drq_m1;
-    intrq_m1   <= intrq;
-    intrq_sync <= intrq_m1;
+	if (cdiv == (ds80 ? 4'd11 : 4'd13)) begin
+		cdiv <= 4'd0;
+		fdc_clk <= ~fdc_clk;
+	end else
+		cdiv <= cdiv + 4'd1;
 end
+
+// a VG93 register was written: the model takes the byte within two microwords; count 10 CLK periods
+reg vg_wr = 1'b0;
+reg [3:0] guard = 4'd0;
+reg [1:0] guard_d = 2'b00;
+wire fdc_clk_rise = ~fdc_clk & (cdiv == (ds80 ? 4'd11 : 4'd13));
+wire vg_cs_n = cs_n | (guard != 4'd0);
+always @(posedge clk) begin
+	guard_d <= {guard_d[0], guard != 4'd0};
+	vg_wr <= ~vg_cs_n & ~wr_n;
+	if (vg_wr & (vg_cs_n | wr_n))
+		guard <= 4'd10;
+	else if (fdc_clk_rise && guard != 4'd0)
+		guard <= guard - 4'd1;
+end
+assign busy = ~cs_n & (guard != 4'd0 || guard_d != 2'b00);   // the model sees a held access 2 clocks at least
 
 // data output
+wire drq, intrq;
+wire [7:0] dal = (~vg_cs_n & ~wr_n) ? d : 8'bZ;   // DAL of the model: the CPU drives it on a write
 assign oe_n = ~((~cs_n | ~csff_n) & ~rd_n);
-assign dout = (~cs_n & ~rd_n)  ? dal : 
-              (~csff_n & ~rd_n) ? {intrq_sync, drq_sync, 6'b111111} : 
+assign dout = (~cs_n & ~rd_n)  ? dal :
+              (~csff_n & ~rd_n) ? {intrq, drq, 6'b111111} :
               8'b11111111;
 
-// Reset from port #FF clocked by clk8
-reg mr_n_sync;
-always @(posedge clk_8) begin
-    mr_n_sync <= port_ff_reg[2];
-end
-
 // vg93
-wire [7:0] dal = (~cs_n & ~wr_n) ? d : 8'bZ;
-wire drq, intrq, motor, vfoe, wg, wd, rg, rclk, tr43, early, late, rawread_n;
-wire fdc_re_n = rd_n | cs_n;
-wire fdc_we_n = wr_n | cs_n;
+wire motor, wg, wd, step, dirc, rclk, tg43, early, late, rawread_n;
 vg93_top vg93_top(
-	.SYSCLK (clk_8),
+	.SYSCLK (clk),
 	.CLK(fdc_clk),
-	.MR_n(mr_n_sync),
-	
-	.CS_n(cs_n),
-	.RE_n(fdc_re_n),
-	.WE_n(fdc_we_n),
+	.MR_n(port_ff_reg[2] & ~reset),
+
+	.CS_n(vg_cs_n),
+	.RE_n(rd_n),
+	.WE_n(wr_n),
 	.A(a[6:5]),
 	.DAL(dal),
 	.DRQ(drq),
 	.INTRQ(intrq),
 
-	.STEP(FDC_STEP),
-	.DIRC(FDC_DIR),
+	.STEP(step),
+	.DIRC(dirc),
 	.EARLY(early),
 	.LATE(late),
 	.HLD(motor),
-	.TG43(tr43),
-	
+	.TG43(tg43),
+
 	.WG(wg),
 	.WD(wd),
-	.RG(rg),
 	.RCLK(rclk),
 	.RAWREAD_n(rawread_n),
 	.READY(motor),
 	.TR00_n(~FDC_TR00),
 	.IP_n(~FDC_INDEX),
 	.WPRT_n(~FDC_WPRT),
-	.WF_n_VFOE_n(vfoe),
-	.HLT(port_ff_reg[3]),
-	.TEST_n(1'b1),
-	.DDEN_n(1'b0)
+	.HLT(port_ff_reg[3])
 );
 
-assign FDC_SIDE1 = ~port_ff_reg[4];
-assign FDC_DS[0] = motor & (port_ff_reg[1:0] == 2'b00);
-assign FDC_DS[1] = motor & (port_ff_reg[1:0] == 2'b01);
-assign FDC_MOTOR = motor;
-assign FDC_WG = wg;
+// drive: data separator and write precompensation
+wire wdata_n;
+fdd_glue fdd_glue(
+	.clk(clk),
+	.ds80(ds80),
+	.rdata_n(~FDC_RDATA),
+	.rclk(rclk),
+	.rawread_n(rawread_n),
+	.wd(wd & wg),
+	.early(early),
+	.late(late),
+	.tg43(tg43),
+	.wdata_n(wdata_n)
+);
+assign FDC_WR_DATA = ~wdata_n;
 
-// fdc_clk generator (1 MHz / 2 MHz)
-reg [2:0] f;
-always @(negedge clk_8) begin
-	f <= f + 1'b1;
+// drive outputs through flip-flops (WD and the decoders are combinational, their glitches would reach the drive)
+always @(posedge clk) begin
+	FDC_STEP  <= step;
+	FDC_DIR   <= dirc;
+	FDC_WG    <= wg;
+	FDC_MOTOR <= motor;
+	FDC_SIDE1 <= ~port_ff_reg[4];
+	FDC_DS[0] <= motor & (port_ff_reg[1:0] == 2'b00);
+	FDC_DS[1] <= motor & (port_ff_reg[1:0] == 2'b01);
 end
-
-wire f4 = f[0]; // 4 MHz
-
-reg turbo_fdc_sync;
-always @(posedge clk_8) begin
-	turbo_fdc_sync <= turbo_fdc;
-end
-
-// выбор клока для ВГшки (турбирование)
-reg f_sel;
-always @(posedge reset, posedge clk_8) begin
-	if (reset) begin
-		f_sel <= 1'b0;
-	end else begin
-		if (turbo_fdc_sync) begin // логика выбора скорости для турбо
-			if (FDC_STEP) begin
-				f_sel <= 1'b1; // Шаг головки -> 2 МГц
-			end else if (wg || rg) begin
-				f_sel <= 1'b0; // Реальное чтение или запись на дискету -> 1 МГц
-			end else begin
-				f_sel <= 1'b1; // Между секторами и во время ожидания команд -> 2 МГц
-			end
-		end else begin // обычная скорость
-			f_sel <= 1'b0;
-		end
-	end
-end
-
-reg fdc_clk;
-always @(posedge clk_8) begin
-    if (f_sel) 
-        fdc_clk <= f[1]; // 8 MHz / 4 = 2 MHz
-    else 
-        fdc_clk <= f[2]; // 8 MHz / 8 = 1 MHz
-end
-	
-// RAW Read
-reg [1:0] rd_reg;
-always @(posedge clk_8) begin
-	rd_reg <= {rd_reg[0], FDC_RDATA};
-end
-assign rawread_n = ~(~rd_reg[1] & rd_reg[0]); // Detect 125 ns pulse
-
-// PLL VG93
-reg [4:0] fa;
-always @(posedge clk_8) begin
-    if (~rawread_n) begin
-        if (fa[3:0] < 3)       fa[3:0] <= fa[3:0] + 4;
-        else if (fa[3:0] < 5)  fa[3:0] <= fa[3:0] + 3;
-        else if (fa[3:0] < 7)  fa[3:0] <= fa[3:0] + 2;
-        else if (fa[3:0] == 7) fa[3:0] <= fa[3:0] + 1;
-        else if (fa[3:0] > 12) fa[3:0] <= fa[3:0] - 3;
-        else if (fa[3:0] > 9)  fa[3:0] <= fa[3:0] - 2;
-        else if (fa[3:0] > 8)  fa[3:0] <= fa[3:0] - 1;
-        else                   fa <= fa + 1'b1;
-    end else begin
-        fa <= fa + 1'b1;
-    end
-end
-assign rclk = ~fa[4];
-
-// Write pre-compensation
-reg [3:0] wdata;
-always @(posedge clk_8) begin
-	if (f4) begin
-		if (wd) begin
-			wdata[0] <= tr43 & late;
-			wdata[1] <= !((tr43 & late) | (tr43 & early));
-			wdata[2] <= tr43 & early;
-			wdata[3] <= 1'b0;
-		end else begin
-			wdata <= {wdata[2:0], 1'b0};
-		end
-	end
-end
-assign FDC_WR_DATA = wdata[3];
 
 endmodule
