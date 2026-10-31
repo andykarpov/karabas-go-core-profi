@@ -495,6 +495,8 @@ signal ce_8					: std_logic := '0';
 --signal reset				: std_logic; -- outer
 --signal areset				: std_logic; -- outer
 signal dos_act				: std_logic := '1';
+signal dos_pre				: std_logic := '0';
+signal dos_rom				: std_logic;
 signal selector			: std_logic_vector(7 downto 0);
 signal mux					: std_logic_vector(3 downto 0);
 signal speaker 			: std_logic := '0';
@@ -831,7 +833,7 @@ port map (
 	RAM_EXT 			=> port_dffd_reg(2 downto 0), -- seg A3 - seg A5
 
 	-- TRDOS 
-	TRDOS 			=> dos_act,	
+	TRDOS 			=> dos_rom,	
 
 	-- video
 	VA 				=> vid_a_bus,
@@ -1972,6 +1974,25 @@ begin
 				
 	end if;
 end process;
+
+-- ROM page of the M1 cycle that enters TR-DOS (#3Dxx in the 48 ROM).
+-- dos_act is set at the end of the first clock of /MREQ, the T80s samples the opcode at the end of T2:
+-- with the CPU at 28 MHz (ENA_CPU on every clk_bus) /MREQ of the M1 cycle is one clock long, both happen
+-- on the same edge and the opcode came from the old ROM page (the WAIT_C one-shot removed in 26103003 hid it).
+-- dos_pre is registered at the end of T1 (A and /M1 are valid in T1, /MREQ comes at T2), so the DOS page
+-- is on the SRAM address in T2 behind a 3-input function of registers (TS_SRAM_OUT); /MREQ keeps the
+-- INT acknowledge (/M1 without /MREQ) out. dos_act takes over from the next clock.
+process (clk_bus)
+begin
+	if rising_edge(clk_bus) then
+		if cpu_m1_n = '0' and hia = X"3D" and (rom14 = '1' or unlock_128 = '1') and port_dffd_reg(4) = '0' then
+			dos_pre <= '1';
+		else
+			dos_pre <= '0';
+		end if;
+	end if;
+end process;
+dos_rom <= dos_act or (dos_pre and not cpu_mreq_n);
 
 -------------------------------------------------------------------------------
 -- Audio 
