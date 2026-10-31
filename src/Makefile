@@ -33,10 +33,11 @@ JSON_minig = core_minig.json
 # map / par options (as the .xise projects had them)
 # cost table of map (2 first, another one only if 2 misses the timing)
 # TS_SRAM_OUT (CPU -> SRAM address / data pads, 12 ns) misses by 0.05..0.35 ns with some tables, by placement:
-# Go: 2 (26102901 with 2 missed TS_SRAM_OUT by 0.14 ns, 26103002 with 1 by 0.14 ns, 26103003 with 3 by 0.05 ns)
+# Go: 3 (26102901 with 2 missed TS_SRAM_OUT by 0.14 ns, 26103002 with 1 by 0.14 ns, 26103003 with 3 by 0.05 ns,
+#     26103101 with 2 by 0.10 ns)
 # Mini: 1 (26103001 with 2 missed clk_bus -> clk_sdr of the GS SDRAM by 0.55 ns)
 # Mini G: 3 (26103003 with 2 missed TS_SRAM_OUT by 0.34 ns, with 1 by 0.88 ns)
-MAP_T_go ?= 2
+MAP_T_go ?= 3
 MAP_T_mini ?= 1
 MAP_T_minig ?= 3
 

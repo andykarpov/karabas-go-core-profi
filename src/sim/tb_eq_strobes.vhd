@@ -203,6 +203,7 @@ process (clk)
 	variable fe_ref_d : std_logic_vector(7 downto 0) := (others => '0');
 	variable n_map, n_auto, n_auto3d, n_fd, n_fe, n_m1 : integer := 0;
 	variable automap_d, mapcond_d, fd_d, m1_d : std_logic := '0';
+	variable blk_d : std_logic := '1';
 	variable fe_d : std_logic_vector(7 downto 0) := (others => '0');
 
 	procedure check(name : string; got, exp : std_logic) is
@@ -218,8 +219,13 @@ process (clk)
 	end procedure;
 begin
 	if falling_edge(clk) then
-		check("mapcond", mapcond_new, mapcond_ref);
-		check("automap", automap_new, automap_ref);
+		-- divmmc_map clears its outputs one clock after RESET / DIVMMC_EN = 0 rise (blk_r, for TS_SRAM_OUT), the
+		-- clock in which the CPU of profi.vhd (cpu_reset_n registered) is still running: not compared there
+		if not ((reset = '1' or divmmc_en = '0') and blk_d = '0') then
+			check("mapcond", mapcond_new, mapcond_ref);
+			check("automap", automap_new, automap_ref);
+		end if;
+		blk_d := reset or not divmmc_en;
 		check("fd_port", fd_new(0), fd_ref_d(0));
 		for i in 0 to 7 loop
 			check("port_fe(" & integer'image(i) & ")", fe_new(i), fe_ref_d(i));

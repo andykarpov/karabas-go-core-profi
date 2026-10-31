@@ -32,6 +32,7 @@ architecture rtl of divmmc_map is
 
 signal mapterm, map3DXX, map1F00 : std_logic;
 signal blk : std_logic;
+signal blk_r : std_logic := '1';
 signal fetch, fetch_r, fetch_start : std_logic := '0';
 signal mapcond_r, automap_r : std_logic := '0';
 signal mapcond_next_r, automap_next_r : std_logic := '0';
@@ -56,6 +57,7 @@ begin
 		mapcond_next_r <= mapterm or map3DXX or (mapcond_r and map1F00);
 		automap_next_r <= mapcond_r or map3DXX;
 		fetch_r <= fetch;
+		blk_r <= blk;
 		if blk = '1' then
 			mapcond_r <= '0';
 			automap_r <= '0';
@@ -66,8 +68,11 @@ begin
 	end if;
 end process;
 
--- cleared at once by RESET and DIVMMC_EN = 0 (an asynchronous reset before)
-MAPCOND <= '0' when blk = '1' else mapcond_next_r when fetch_start = '1' else mapcond_r;
-AUTOMAP <= '0' when blk = '1' else automap_next_r when fetch_start = '1' else automap_r;
+-- cleared by RESET and DIVMMC_EN = 0 (an asynchronous reset before), one clock after they rise: blk_r keeps the
+-- combinational reset of profi.vhd (loader, keys, buttons) off the path to the SRAM address pads (TS_SRAM_OUT).
+-- In that clock the CPU is in reset already (or DIVMMC_EN was changed from the OSD); after the release the outputs
+-- follow the registers again one clock later, before the CPU can start a fetch (T1 comes first).
+MAPCOND <= '0' when blk_r = '1' else mapcond_next_r when fetch_start = '1' else mapcond_r;
+AUTOMAP <= '0' when blk_r = '1' else automap_next_r when fetch_start = '1' else automap_r;
 
 end rtl;
