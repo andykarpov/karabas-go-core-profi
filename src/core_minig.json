@@ -1,13 +1,13 @@
 {
     "id": "profi",
     "name": "Karabas Pro +",
-    "build": "26103101",
+    "build": "26110101",
     "bitstream": "karabas_minig.bin",
     "visible": true,
     "type": "osd",
     "order": 2,
     "eeprom_bank": 1,
-    "rtc_mode" : 2,
+    "rtc_mode": 0,
     "roms": [
         {"filename": "roms/ROMain_ramdisk_D.rom", "address": 1048576},
         {"filename": "roms/bios_pqdos.rom", "address": 1114112},
