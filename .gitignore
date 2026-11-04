@@ -72,3 +72,4 @@ _xmsgs/
 !src/karabas_*.prj
 !src/karabas_*.xst
 !src/karabas_*.ut
+src/kg_*.stamp
