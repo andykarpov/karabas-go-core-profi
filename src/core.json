@@ -1,7 +1,7 @@
 {
     "id": "profi",
     "name": "Karabas Pro +",
-    "build": "26110801",
+    "build": "26110802",
     "visible": true,
     "type": "osd",
     "order": 2,
@@ -21,7 +21,12 @@
         "minig": {"bitstream": "karabas_minig.bin"}
     },
     "osd": [
-    {"type": "S", "name": "ROM Bank", "options": ["ROMain", "PQ-DOS", "FDImage", "FATALL"], "default": 0, "hotkey": "Menu+F1"},
+    {"type": "R", "name": "ROM Bank", "default": 0, "page": 4, "options": [
+        {"name": "ROMain", "hotkey": "Menu+F1"},
+        {"name": "PQ-DOS", "hotkey": "Menu+F2"},
+        {"name": "FDImage", "hotkey": "Menu+F3"},
+        {"name": "FATALL", "hotkey": "Menu+F4"}
+    ]},
     {"type": "S", "name": "Covox", "options": ["Off", "On"], "default": 1, "hotkey": "Menu+F6", "page": 1},
     {"type": "S", "name": "PSG Mix", "options": ["AY ABC", "AY ACB", "AY Mono", "YM ABC", "YM ACB", "YM Mono"], "default": 1, "hotkey": "Menu+F7", "boards": ["go", "mini"], "page": 1},
     {"type": "S", "name": "VSync", "options": ["50 Hz", "60 Hz"], "default": 0, "hotkey": "Menu+F10", "boards": ["go"]},
@@ -39,6 +44,7 @@
     {"type": "T", "name": "NMI", "hotkey": "F11"},
     {"type": "T", "name": "Reset", "hotkey": "F12"},
     {"type": "-", "name": "-"},
+    {"type": "M", "name": "ROM", "open": 4},
     {"type": "M", "name": "Sound", "open": 1},
     {"type": "M", "name": "Disks", "open": 2},
     {"type": "M", "name": "Input", "open": 3}
