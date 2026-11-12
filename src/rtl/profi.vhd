@@ -45,7 +45,8 @@ generic(
 	NUM_KEYS : integer := 4;
 	USE_T80s : integer := 1;
 	BURST_MAX_MHZ : integer := 0; -- burst transfers from the mcu, see kg_mcu
-	SOFTSW_LAYOUT : integer := 0 -- OSD items: 0 Go (core.json), 1 Mini / Mini G (core_mini.json, core_minig.json)
+	SOFTSW_LAYOUT : integer := 0; -- OSD items: 0 Go (core.json), 1 Mini / Mini G (core_mini.json, core_minig.json)
+	LINK : integer := 1 -- the MCU link: 1 kg_mcu + the overlay of the core, 2 kg_mcu2 (karabas-go-firmware docs/link_v2.md): the OSD and the icons by kg_l2_osd_overlay in the top
 );
 port ( 
 	 
@@ -133,6 +134,23 @@ port (
 	MCU_IO : in  std_logic_vector(3 downto 0);
 	MCU_BURST_CS_N : in std_logic := '1';   -- burst transfers (karabas-go-firmware docs/burst_protocol.md)
 	MCU_BURST_READY : out std_logic;
+	-- link v2 (LINK 2): the interrupt line, the bitmap OSD and the activity icons for kg_l2_osd_overlay
+	MCU_INT : out std_logic;
+	OSD_WR : out std_logic;
+	OSD_WADDR : out std_logic_vector(11 downto 0);
+	OSD_WDATA : out std_logic_vector(7 downto 0);
+	OSD_EN : out std_logic;
+	OSD_FG : out std_logic_vector(23 downto 0);
+	OSD_BG : out std_logic_vector(23 downto 0);
+	OSD_ALPHA : out std_logic_vector(1 downto 0);
+	OSD_PX : out std_logic_vector(4 downto 0);
+	OSD_PY : out std_logic_vector(3 downto 0);
+	OSD_PW : out std_logic_vector(5 downto 0);
+	OSD_PH : out std_logic_vector(4 downto 0);
+	OSD_PLACE : out std_logic_vector(1 downto 0);
+	OSD_ZOOM : out std_logic;
+	ICON_ON : out std_logic_vector(7 downto 0);  -- 0 floppy, 1 SD card, 2 CF / HDD
+	ICON_ACT : out std_logic_vector(7 downto 0);
 
 	-- midi
 	MIDI_TX : out std_logic;
@@ -899,7 +917,8 @@ port map (
 	LOCK 				=> vid_lock	
 );
 
--- osd overlay
+-- osd overlay (link v1): the OSD of kg_mcu and the icons in the raster of the core
+G_OVERLAY1: if LINK = 1 generate
 U5: entity work.overlay
 port map (
 	CLK_BUS			=> clk_bus,
@@ -918,6 +937,17 @@ port map (
 	OSD_COMMAND 	=> osd_command
 );
 
+end generate G_OVERLAY1;
+
+-- link v2: no overlay here; the icons by kg_l2_osd_overlay in the top (their activity below)
+G_OVERLAY2: if LINK = 2 generate
+	vid_rgb_osd <= vid_rgb;
+	ICON_ON <= (others => '0');
+	ICON_ACT <= "00000" & (hdd_active or sdc_active or hdf_led) & (zc_spi_start and zc_wr_en) &
+		(not(fdd_cs_n) and (not(cpu_rd_n) or not(cpu_wr_n)));
+end generate G_OVERLAY2;
+
+G_MCU1: if LINK = 1 generate
 -- MCU (karabas-go-modules kg_mcu: the link fixes of nanomig, a chip select filter of 3 clocks)
 U7: entity work.kg_mcu
 generic map(
@@ -1015,6 +1045,13 @@ port map(
 	FLASHBOOT_START => '0',
 	FLASHBOOT_COREID => "00000",
 	
+	PS2_COMMAND		=> x"0000",
+	PS2_COMMAND_WR	=> '0',
+	FDD_CHNG_REQ	=> '0',
+	FDD_CHNG_DS		=> "00",
+	PRN_DATA			=> x"00",
+	PRN_WR			=> '0',
+
 	DVI_ONLY			=> DVI_ONLY,
 	
 	BUSY 				=> mcu_busy
@@ -1060,6 +1097,155 @@ port map (
 
 	active             => sdc_active
 );
+-- the outputs of link v2
+MCU_INT <= '0';
+OSD_WR <= '0'; OSD_WADDR <= (others => '0'); OSD_WDATA <= (others => '0'); OSD_EN <= '0';
+OSD_FG <= (others => '0'); OSD_BG <= (others => '0'); OSD_ALPHA <= "00"; OSD_PX <= (others => '0');
+OSD_PY <= (others => '0'); OSD_PW <= (others => '0'); OSD_PH <= (others => '0'); OSD_PLACE <= "00";
+OSD_ZOOM <= '0';
+ICON_ON <= (others => '0');
+ICON_ACT <= (others => '0');
+end generate G_MCU1;
+
+-- link v2: kg_mcu2 (HID, RTC, PORT 0 the USB serial port, AUX the dot matrix, the ROMs, the file
+-- mounter of the hard disks, the bitmap OSD); the switches are its SW registers
+G_MCU2: if LINK = 2 generate
+	signal kbd : std_logic_vector(55 downto 0);
+	signal joy_l16, joy_r16 : std_logic_vector(15 downto 0);
+	signal btns : std_logic_vector(5 downto 0);
+	signal ms_z8, ms_b8 : std_logic_vector(7 downto 0);
+	signal ms_wr, ms_upd : std_logic := '0';
+	signal ld_kind : std_logic_vector(1 downto 0);
+	signal ld_active, ld_wr : std_logic;
+	signal ld_addr : std_logic_vector(31 downto 0);
+	signal ld_data : std_logic_vector(7 downto 0);
+	signal port_out_data : std_logic_vector(31 downto 0);
+	signal port_out_wr : std_logic_vector(3 downto 0);
+	signal uart_idx : std_logic_vector(7 downto 0) := (others => '0');
+	signal uart_data : std_logic_vector(7 downto 0) := (others => '0');
+	signal port_in_data : std_logic_vector(31 downto 0);
+	signal port_in_wr : std_logic_vector(3 downto 0);
+	signal port_cfg : std_logic_vector(127 downto 0) := (others => '0');
+begin
+	port_in_data <= x"000000" & usb_uart_tx_data;
+	port_in_wr <= "000" & usb_uart_tx_wr;
+
+	U7: entity work.kg_mcu2
+	generic map(
+		CAPS => x"0000",
+		SW_N => 15,
+		CS_FILTER => 3,
+		ENABLE_OSD => 1,
+		ENABLE_IMG => 1,
+		IMG_OUT_LATENCY => 3,
+		ENABLE_PORTS => "0001",
+		ENABLE_RTC => 1,
+		ENABLE_AUX => 1,
+		ENABLE_FT => 0,
+		ENABLE_SD2 => 0
+	)
+	port map(
+		CLK => clk_bus,
+		N_RESET => not areset,
+		MCU_SCK => MCU_SCK,
+		MCU_MOSI => MCU_MOSI,
+		MCU_MISO => MCU_MISO,
+		MCU_SS => MCU_CS_N,
+		MCU_INT => MCU_INT,
+		MCU_SPI_FT_SS => '1',
+		MCU_SPI_SD2_SS => '1',
+
+		SW => softsw_regs,
+		SW_WR => open, SW_INDEX => open, SW_VALUE => open,
+		HW_ID => open,
+		DVI_ONLY => DVI_ONLY,
+		CORE_BUILD => open, FW_BUILD => open,
+		BUSY => mcu_busy,
+		BTNS => btns,
+		RELOAD_REQ => '0',
+		RELOAD_CORE => x"00",
+
+		KBD => kbd, KBD_WR => open,
+		PS2_CODE => open, PS2_KIND => open, PS2_WR => open,
+		MS_X => hid_ms_x, MS_Y => hid_ms_y, MS_Z => ms_z8, MS_B => ms_b8, MS_WR => ms_wr,
+		JOY_L => joy_l16, JOY_R => joy_r16, JOY_WR => open,
+		PS2_CMD => x"0000", PS2_CMD_WR => '0',
+
+		LD_KIND => ld_kind, LD_SLOT => open, LD_SIZE => open, LD_START => open,
+		LD_ACTIVE => ld_active, LD_END => open, LD_ADDR => ld_addr, LD_DATA => ld_data,
+		LD_WR => ld_wr, LD_READY => '1',
+
+		OSD_WR => OSD_WR, OSD_WADDR => OSD_WADDR, OSD_WDATA => OSD_WDATA, OSD_EN => OSD_EN,
+		OSD_FG => OSD_FG, OSD_BG => OSD_BG, OSD_ALPHA => OSD_ALPHA, OSD_PX => OSD_PX,
+		OSD_PY => OSD_PY, OSD_PW => OSD_PW, OSD_PH => OSD_PH, OSD_PLACE => OSD_PLACE,
+		OSD_ZOOM => OSD_ZOOM,
+
+		SDC_IMG_MOUNTED => sdc_img_mounted, SDC_IMG_SIZE => sdc_img_size,
+		SDC_RD => sdc_rd, SDC_WR => sdc_wr, SDC_SECTOR => sdc_sector,
+		SDC_BUSY => sdc_busy, SDC_DONE => sdc_done, SDC_ERROR => sdc_error, SDC_SLOT => sdc_slot,
+		SDC_BYTE_IN_STROBE => sdc_byte_in_strobe, SDC_BYTE_ADDR => sdc_byte_addr,
+		SDC_BYTE_IN_DATA => sdc_byte_in_data, SDC_BYTE_OUT_DATA => sdc_byte_out_data,
+		IMG_WP => open, IMG_PHYS_WR => open, IMG_PHYS => open, IMG_FLUSH => open,
+		FDD_CHNG_WR => open, FDD_CHNG => open, FDD_CHNG_REQ => '0', FDD_CHNG_DS => "00",
+		IMG_ACTIVE => sdc_active,
+
+		PORT_OUT_DATA => port_out_data, PORT_OUT_WR => port_out_wr, PORT_OUT_READY => "1111",
+		PORT_IN_DATA => port_in_data, PORT_IN_WR => port_in_wr,
+		PORT_IN_FULL => open, PORT_CFG => port_cfg, PORT_STAT => open, PORT_STAT_WR => open,
+
+		RTC_A => mc146818_a_bus,
+		RTC_DI => cpu_do_bus,
+		RTC_CS => '1',
+		RTC_WR_N => not mc146818_wr,
+		MATRIX_CMD => matrix_cmd,
+		MATRIX_CMD_WR => matrix_cmd_wr,
+		DEBUG_ADDR => x"0000",
+		DEBUG_DATA => x"0000",
+		RTC_DO => mc146818_do_bus,
+
+		FT_SPI_ON => open, FT_VGA_ON => open, FT_RESET => open, FT_SCK => open, FT_MOSI => open,
+		FT_MISO => '1', FT_CS_N => open,
+		SD2_SCK => open, SD2_MOSI => open, SD2_MISO => '1', SD2_CS_N => open
+	);
+	MCU_BURST_READY <= '0';
+
+	hid_kb_status <= kbd(7 downto 0);
+	hid_kb_dat0 <= kbd(15 downto 8);
+	hid_kb_dat1 <= kbd(23 downto 16);
+	hid_kb_dat2 <= kbd(31 downto 24);
+	hid_kb_dat3 <= kbd(39 downto 32);
+	hid_kb_dat4 <= kbd(47 downto 40);
+	hid_kb_dat5 <= kbd(55 downto 48);
+	joy_l <= joy_l16(12 downto 0);
+	joy_r <= joy_r16(12 downto 0);
+	hw_btn <= btns(1 downto 0);
+	hid_ms_z <= ms_z8(3 downto 0);
+	hid_ms_b <= ms_b8(2 downto 0);
+	hid_ms_upd <= ms_upd;
+
+	-- the ROMs of the core file (LD kind 0)
+	loader_act <= ld_active when ld_kind = "00" else '0';
+	loader_ram_wr <= ld_wr when ld_kind = "00" else '0';
+	loader_ram_a <= ld_addr;
+	loader_ram_do <= ld_data;
+
+	process (clk_bus)
+	begin
+		if rising_edge(clk_bus) then
+			-- the mouse of v1: a toggle per report
+			if ms_wr = '1' then
+				ms_upd <= not ms_upd;
+			end if;
+			-- the USB serial port of v1 (zifi_usb): a byte and a counter that changes with it
+			if port_out_wr(0) = '1' then
+				uart_data <= port_out_data(7 downto 0);
+				uart_idx <= uart_idx + 1;
+			end if;
+		end if;
+	end process;
+	usb_uart_rx_data <= uart_data;
+	usb_uart_rx_idx <= uart_idx;
+end generate G_MCU2;
 
 -- HDF ATA device 0 and 1 (slots 4 and 5)
 hdf_own <= '1' when sdc_slot(2 downto 1) = "10" else '0';
@@ -1145,6 +1331,7 @@ port map (
 	KEYCODE 			=> kb_keycode
 );
 
+G_SOFTSW1: if LINK = 1 generate
 -- Soft switches from MCU: register n = OSD item n of core.json (Go) / core_mini.json, core_minig.json
 U9: entity work.kg_soft_switches
 generic map(
@@ -1156,6 +1343,7 @@ port map (
 	regs 				=> softsw_regs,
 	upd 				=> open
 );
+end generate G_SOFTSW1;
 
 kb_psg_type <= '1' when softsw_regs(2*8+2 downto 2*8) >= "011" else '0';
 
