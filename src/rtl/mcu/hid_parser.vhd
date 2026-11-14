@@ -53,43 +53,195 @@ end hid_parser;
 
 architecture rtl of hid_parser is
 
-	type matrix IS (ZX_K_CS, ZX_K_A, ZX_K_Q, ZX_K_1, 
-						 ZX_K_0, ZX_K_P, ZX_K_ENT, ZX_K_SP,
-						 ZX_K_Z, ZX_K_S, ZX_K_W, ZX_K_2,
-						 ZX_K_9, ZX_K_O, ZX_K_L, ZX_K_SS,
-						 ZX_K_X, ZX_K_D, ZX_K_E, ZX_K_3,
-						 ZX_K_8, ZX_K_I, ZX_K_K, ZX_K_M,
-						 ZX_K_C, ZX_K_F, ZX_K_R, ZX_K_4,
-						 ZX_K_7, ZX_K_U, ZX_K_J, ZX_K_N,
-						 ZX_K_V, ZX_K_G, ZX_K_T, ZX_K_5,
-						 ZX_K_6, ZX_K_Y, ZX_K_H, ZX_K_B,
-						 ZX_BIT5
-						 );
+	-- the keys of the matrix: the bit of the 40 keys + the 5th bit (Profi) in kb_data
+	constant ZX_K_CS : natural := 0;
+	constant ZX_K_A : natural := 1;
+	constant ZX_K_Q : natural := 2;
+	constant ZX_K_1 : natural := 3;
+	constant ZX_K_0 : natural := 4;
+	constant ZX_K_P : natural := 5;
+	constant ZX_K_ENT : natural := 6;
+	constant ZX_K_SP : natural := 7;
+	constant ZX_K_Z : natural := 8;
+	constant ZX_K_S : natural := 9;
+	constant ZX_K_W : natural := 10;
+	constant ZX_K_2 : natural := 11;
+	constant ZX_K_9 : natural := 12;
+	constant ZX_K_O : natural := 13;
+	constant ZX_K_L : natural := 14;
+	constant ZX_K_SS : natural := 15;
+	constant ZX_K_X : natural := 16;
+	constant ZX_K_D : natural := 17;
+	constant ZX_K_E : natural := 18;
+	constant ZX_K_3 : natural := 19;
+	constant ZX_K_8 : natural := 20;
+	constant ZX_K_I : natural := 21;
+	constant ZX_K_K : natural := 22;
+	constant ZX_K_M : natural := 23;
+	constant ZX_K_C : natural := 24;
+	constant ZX_K_F : natural := 25;
+	constant ZX_K_R : natural := 26;
+	constant ZX_K_4 : natural := 27;
+	constant ZX_K_7 : natural := 28;
+	constant ZX_K_U : natural := 29;
+	constant ZX_K_J : natural := 30;
+	constant ZX_K_N : natural := 31;
+	constant ZX_K_V : natural := 32;
+	constant ZX_K_G : natural := 33;
+	constant ZX_K_T : natural := 34;
+	constant ZX_K_5 : natural := 35;
+	constant ZX_K_6 : natural := 36;
+	constant ZX_K_Y : natural := 37;
+	constant ZX_K_H : natural := 38;
+	constant ZX_K_B : natural := 39;
+	constant ZX_BIT5 : natural := 40;
+	constant NO_KEY : natural := 63;
 
 	constant SC_CTL_ON : natural := 0;
 	constant SC_BTN_UP : natural := 1;
 	constant SC_BTN_DOWN: natural := 2;
 	constant SC_BTN_LEFT: natural := 3;
-   constant	SC_BTN_RIGHT: natural := 4;
+	constant SC_BTN_RIGHT: natural := 4;
 	constant SC_BTN_START: natural := 5;
-   constant SC_BTN_A : natural := 6;
+	constant SC_BTN_A : natural := 6;
 	constant SC_BTN_B : natural := 7;
 	constant SC_BTN_C : natural := 8;
 	constant SC_BTN_X : natural := 9;
 	constant SC_BTN_Y : natural := 10;
 	constant SC_BTN_Z : natural := 11;
 	constant SC_BTN_MODE : natural := 12;
-						 
-	type kb_matrix is array(matrix) of std_logic;						 
+
+	subtype kb_matrix is std_logic_vector(40 downto 0);
 	signal kb_data, kb_data_latch : kb_matrix := (others => '0'); -- 40 keys + 5th bit
-	
+
+	-- the key map in a block ROM: the address { KB_TYPE, shift, scancode }, the word
+	-- [5:0] key 1 + 1 (0 = none), [11:6] key 2 + 1, [12] CS used, [13] SS used,
+	-- [14] macro (SS+CS, SS, then key 1 alone with CS)
+	subtype km_word is std_logic_vector(17 downto 0);
+	type km_rom is array(0 to 1023) of km_word;
+
+	function km(k1, k2 : natural; cs, ss, mac : std_logic) return km_word is
+		variable w : km_word := (others => '0');
+	begin
+		if k1 /= NO_KEY then w(5 downto 0) := std_logic_vector(to_unsigned(k1 + 1, 6)); end if;
+		if k2 /= NO_KEY then w(11 downto 6) := std_logic_vector(to_unsigned(k2 + 1, 6)); end if;
+		w(12) := cs; w(13) := ss; w(14) := mac;
+		return w;
+	end function;
+
+	function k1(ka : natural) return km_word is begin return km(ka, NO_KEY, '0', '0', '0'); end function;
+	function k2(ka, kb : natural) return km_word is begin return km(ka, kb, '0', '0', '0'); end function;
+	function k2cs(ka, kb : natural) return km_word is begin return km(ka, kb, '1', '0', '0'); end function;
+	function sel(c : boolean; ka, kb : natural) return natural is begin if c then return ka; else return kb; end if; end function;
+
+	-- one scancode: the same cases as the old case statement (kt 0 = Profi XT, 1 = Spectrum)
+	function km_entry(kt, shi, sc : natural) return km_word is
+		constant profi : boolean := kt = 0;
+		constant sh : boolean := shi = 1;
+		variable shl : std_logic;
+		constant none : km_word := (others => '0');
+		type nat_arr is array(natural range <>) of natural;
+		constant LK : nat_arr(0 to 25) := (ZX_K_A, ZX_K_B, ZX_K_C, ZX_K_D, ZX_K_E, ZX_K_F, ZX_K_G,
+			ZX_K_H, ZX_K_I, ZX_K_J, ZX_K_K, ZX_K_L, ZX_K_M, ZX_K_N, ZX_K_O, ZX_K_P, ZX_K_Q, ZX_K_R,
+			ZX_K_S, ZX_K_T, ZX_K_U, ZX_K_V, ZX_K_W, ZX_K_X, ZX_K_Y, ZX_K_Z);
+		constant DK : nat_arr(0 to 9) := (ZX_K_1, ZX_K_2, ZX_K_3, ZX_K_4, ZX_K_5, ZX_K_6, ZX_K_7,
+			ZX_K_8, ZX_K_9, ZX_K_0);
+		constant FK : nat_arr(0 to 9) := (ZX_K_A, ZX_K_B, ZX_K_C, ZX_K_D, ZX_K_E, ZX_K_F, ZX_K_G,
+			ZX_K_H, ZX_K_I, ZX_K_J);
+	begin
+		if sh then shl := '1'; else shl := '0'; end if;
+		-- letters, digits, numpad digits
+		if sc >= 16#04# and sc <= 16#1d# then return k1(LK(sc - 16#04#)); end if;
+		if sc >= 16#1e# and sc <= 16#27# then return k1(DK(sc - 16#1e#)); end if;
+		if sc >= 16#59# and sc <= 16#62# then return k1(DK(sc - 16#59#)); end if;
+		-- F1..F10 (Profi)
+		if sc >= 16#3a# and sc <= 16#43# then
+			if profi then return k2(FK(sc - 16#3a#), ZX_BIT5); else return none; end if;
+		end if;
+		case sc is
+			-- DEL -> SS + C (P + BIT5 for profi)
+			when 16#4c# => if sh then return none; elsif profi then return k2(ZX_K_P, ZX_BIT5); else return k2(ZX_K_SS, ZX_K_C); end if;
+			-- INS -> SS + A (O + BIT5 for profi)
+			when 16#49# => if sh then return none; elsif profi then return k2(ZX_K_O, ZX_BIT5); else return k2(ZX_K_SS, ZX_K_A); end if;
+			-- Cursor -> CS + 5,6,7,8
+			when 16#50# => if sh then return none; else return k2cs(ZX_K_CS, ZX_K_5); end if;
+			when 16#51# => if sh then return none; else return k2cs(ZX_K_CS, ZX_K_6); end if;
+			when 16#52# => if sh then return none; else return k2cs(ZX_K_CS, ZX_K_7); end if;
+			when 16#4f# => if sh then return none; else return k2cs(ZX_K_CS, ZX_K_8); end if;
+			-- ESC -> CS + Space (CS + 1 for profi)
+			when 16#29# => return k2cs(ZX_K_CS, sel(profi, ZX_K_1, ZX_K_SP));
+			-- Backspace -> CS + 0
+			when 16#2a# => return k2cs(ZX_K_CS, ZX_K_0);
+			-- Enter, keypad Enter, Space
+			when 16#28# | 16#58# => return k1(ZX_K_ENT);
+			when 16#2c# => return k1(ZX_K_SP);
+			-- '/" -> SS+P / SS+7 and the like: SS used when shifted
+			when 16#34# => return km(ZX_K_SS, sel(sh, ZX_K_P, ZX_K_7), '0', shl, '0');
+			when 16#36# => return km(ZX_K_SS, sel(sh, ZX_K_R, ZX_K_N), '0', shl, '0');
+			when 16#37# => return km(ZX_K_SS, sel(sh, ZX_K_T, ZX_K_M), '0', shl, '0');
+			when 16#33# => return km(ZX_K_SS, sel(sh, ZX_K_Z, ZX_K_O), '0', shl, '0');
+			when 16#38# => return km(ZX_K_SS, sel(sh, ZX_K_C, ZX_K_V), '0', shl, '0');
+			when 16#2E# => return km(ZX_K_SS, sel(sh, ZX_K_K, ZX_K_L), '0', shl, '0');
+			when 16#2D# => return km(ZX_K_SS, sel(sh, ZX_K_0, ZX_K_J), '0', shl, '0');
+			-- [,{ ],} \,| : SS + key for profi, a macro for Spectrum
+			when 16#2F# => if profi then return k2(ZX_K_SS, sel(sh, ZX_K_F, ZX_K_Y)); else return km(sel(sh, ZX_K_F, ZX_K_Y), NO_KEY, '0', '0', '1'); end if;
+			when 16#30# => if profi then return k2(ZX_K_SS, sel(sh, ZX_K_G, ZX_K_U)); else return km(sel(sh, ZX_K_G, ZX_K_U), NO_KEY, '0', '0', '1'); end if;
+			when 16#31# => if profi then return k2(ZX_K_SS, sel(sh, ZX_K_S, ZX_K_D)); else return km(sel(sh, ZX_K_S, ZX_K_D), NO_KEY, '0', '0', '1'); end if;
+			-- `,~ -> SS+X / macro SS+A
+			when 16#35# => if sh then return km(ZX_K_A, NO_KEY, '0', '1', '1'); else return km(ZX_K_SS, ZX_K_X, '0', '1', '0'); end if;
+			-- Keypad * - +
+			when 16#55# => return k2(ZX_K_SS, ZX_K_B);
+			when 16#56# => return k2(ZX_K_SS, ZX_K_J);
+			when 16#57# => return k2(ZX_K_SS, ZX_K_K);
+			-- Tab -> CS + I, CapsLock -> CS + SS
+			when 16#2B# => return k2cs(ZX_K_CS, ZX_K_I);
+			when 16#39# => return k2cs(ZX_K_SS, ZX_K_CS);
+			-- PgUp / PgDown -> CS+3 / CS+4 for ZX (M / N + BIT5 for profi)
+			when 16#4B# => if sh then return none; elsif profi then return k2(ZX_K_M, ZX_BIT5); else return k2cs(ZX_K_CS, ZX_K_3); end if;
+			when 16#4E# => if sh then return none; elsif profi then return k2(ZX_K_N, ZX_BIT5); else return k2cs(ZX_K_CS, ZX_K_4); end if;
+			-- Home / End -> K / L + BIT5 for profi
+			when 16#4a# => if profi and not sh then return k2(ZX_K_K, ZX_BIT5); else return none; end if;
+			when 16#4d# => if profi and not sh then return k2(ZX_K_L, ZX_BIT5); else return none; end if;
+			-- F11 / F12 (Profi)
+			when 16#44# => if profi then return k2(ZX_K_Q, ZX_K_SS); else return none; end if;
+			when 16#45# => if profi then return k2(ZX_K_W, ZX_K_SS); else return none; end if;
+			when others => return none;
+		end case;
+	end function;
+
+	function km_init return km_rom is
+		variable r : km_rom;
+	begin
+		for kt in 0 to 1 loop
+			for sh in 0 to 1 loop
+				for sc in 0 to 255 loop
+					r(kt * 512 + sh * 256 + sc) := km_entry(kt, sh, sc);
+				end loop;
+			end loop;
+		end loop;
+		return r;
+	end function;
+
+	signal km_mem : km_rom := km_init;
+	attribute rom_style : string;
+	attribute rom_style of km_mem : signal is "block";
+
+	signal km_q : km_word := (others => '0');
+	signal km_addr : std_logic_vector(9 downto 0);
+	signal shift_now, shift_r : std_logic := '0';
+	signal st_d : std_logic_vector(7 downto 0) := (others => '0');
+	signal kt_d : std_logic := '0';
+
 	signal is_macros : std_logic := '0';
 	type macros_machine is (MACRO_START, MACRO_CS_ON, MACRO_SS_ON, MACRO_SS_OFF, MACRO_KEY, MACRO_CS_OFF, MACRO_END);
-	signal macros_key : matrix;
+	signal macros_key : natural range 0 to 63 := 0;
 	signal macros_state : macros_machine := MACRO_START;
 	signal macro_cnt : std_logic_vector(21 downto 0) := (others => '0');
-	
-	signal usb_idx: std_logic_vector(2 downto 0) := "000";
+
+	-- usb_idx picks the scancode read from the ROM, usb_ph (a clock later) is the step that
+	-- applies it: the old one-clock steps, a clock later
+	signal usb_idx, usb_ph, rd_idx : std_logic_vector(2 downto 0) := "000";
+	signal cur_sc : std_logic_vector(7 downto 0);
 
 begin 
 
@@ -103,7 +255,7 @@ begin
 	);
 	end generate G_PS2_LUT;
 
-	process( kb_data, A)
+	process( kb_data_latch, A)
 	begin
 		KB_DO(0) <=	not(( kb_data_latch(ZX_K_CS)  and not( A(8)  ) ) 
 					or    ( kb_data_latch(ZX_K_A)  and not(   A(9)  ) ) 
@@ -153,19 +305,45 @@ begin
 		KB_DO(5) <= not(kb_data_latch(ZX_BIT5));
 	end process;
 
+	-- the scancode of the step and the shift of the round (taken at its first scancode); during a
+	-- macro the step that follows it (usb_idx has gone a step further)
+	rd_idx <= usb_ph when is_macros = '1' else usb_idx;
+	with rd_idx select cur_sc <=
+		KB_DAT0 when "000",
+		KB_DAT1 when "001",
+		KB_DAT2 when "010",
+		KB_DAT3 when "011",
+		KB_DAT4 when "100",
+		KB_DAT5 when others;
+	shift_now <= (KB_STATUS(1) or KB_STATUS(5)) when rd_idx = "000" else shift_r;
+	km_addr <= KB_TYPE & shift_now & cur_sc;
+
+	-- the ROM read (also during a macro: the step after it gets the scancode of that moment), and
+	-- the modifiers of the read step for the apply step
+	process (CLK)
+	begin
+		if rising_edge(CLK) then
+			km_q <= km_mem(to_integer(unsigned(km_addr)));
+			if rd_idx = "000" then
+				shift_r <= shift_now;
+			end if;
+			st_d <= KB_STATUS;
+			kt_d <= KB_TYPE;
+		end if;
+	end process;
+
 process (RESET, CLK)
 
-	variable is_shift : std_logic := '0';
 	variable is_cs_used : std_logic := '0';
 	variable is_ss_used : std_logic := '0';
-	variable current_scancode : std_logic_vector(7 downto 0) := (others => '0');
+	variable k1i, k2i : natural range 0 to 63;
 
 	begin
 		if RESET = '1' then
 			kb_data <= (others => '0');
 			kb_data_latch <= (others => '0');
 			usb_idx <= (others => '0');
-			is_shift := '0';
+			usb_ph <= (others => '0');
 			is_cs_used := '0';
 			is_ss_used := '0';
 			is_macros <= '0';
@@ -190,301 +368,76 @@ process (RESET, CLK)
 					end case;
 					end if;
 			else
-				if (usb_idx = "000") then
-					macro_cnt <= (others => '0');
-					kb_data_latch <= kb_data; -- latch processed kb_data
-					kb_data <= (others => '0');
-					is_shift := '0';
-					is_cs_used := '0';
-					is_ss_used := '0';
-				end if;
-				
+				-- the read step
 				if (usb_idx >= "101") then 
 					usb_idx <= "000";
 				else
 					usb_idx <= usb_idx + 1;
 				end if;
+				usb_ph <= usb_idx;
+
+				-- the apply step
+				if (usb_ph = "000") then
+					macro_cnt <= (others => '0');
+					kb_data_latch <= kb_data; -- latch processed kb_data
+					kb_data <= (others => '0');
+					is_cs_used := '0';
+					is_ss_used := '0';
+				end if;
 				
-				if (usb_idx = "000") then
+				if (usb_ph = "000") then
 					-- L Shift -> CS (SS for profi)
-					if KB_STATUS(1) = '1' then 
-						if KB_TYPE = '0' then kb_data(ZX_K_SS) <= '1'; else kb_data(ZX_K_CS) <= '1'; end if; 
-						is_shift := '1'; 
+					if st_d(1) = '1' then 
+						if kt_d = '0' then kb_data(ZX_K_SS) <= '1'; else kb_data(ZX_K_CS) <= '1'; end if; 
 					end if;
 
 					-- R Shift -> CS (SS for profi)
-					if KB_STATUS(5) = '1' then 
-						if KB_TYPE = '0' then kb_data(ZX_K_SS) <= '1'; else kb_data(ZX_K_CS) <= '1'; end if; 
-						is_shift := '1'; 
+					if st_d(5) = '1' then 
+						if kt_d = '0' then kb_data(ZX_K_SS) <= '1'; else kb_data(ZX_K_CS) <= '1'; end if; 
 					end if;
 								
 					-- L Ctrl -> SS (CS for profi)
-					if KB_STATUS(0) = '1' then 
-						if KB_TYPE = '0' then kb_data(ZX_K_CS) <= '1'; else kb_data(ZX_K_SS) <= '1'; end if; 
+					if st_d(0) = '1' then 
+						if kt_d = '0' then kb_data(ZX_K_CS) <= '1'; else kb_data(ZX_K_SS) <= '1'; end if; 
 					end if;
 					
 					-- R Ctrl -> SS (CS for profi)
-					if KB_STATUS(4) = '1' then 
-						if KB_TYPE = '0' then kb_data(ZX_K_CS) <= '1'; else kb_data(ZX_K_SS) <= '1'; end if; 
+					if st_d(4) = '1' then 
+						if kt_d = '0' then kb_data(ZX_K_CS) <= '1'; else kb_data(ZX_K_SS) <= '1'; end if; 
 					end if;
 								
 					-- L Alt -> SS+CS (SS+Enter for profi)
-					if KB_STATUS(2) = '1' then 
-						if KB_TYPE = '0' then kb_data(ZX_K_ENT) <= '1'; else kb_data(ZX_K_CS) <= '1'; end if; 
+					if st_d(2) = '1' then 
+						if kt_d = '0' then kb_data(ZX_K_ENT) <= '1'; else kb_data(ZX_K_CS) <= '1'; end if; 
 						kb_data(ZX_K_SS) <= '1'; 
 						is_cs_used := '1'; 
 					end if;
 
 					-- R Alt -> SS+CS (SS+Space for profi)
-					if KB_STATUS(6) = '1' then 
-						if KB_TYPE = '0' then kb_data(ZX_K_SP) <= '1'; else kb_data(ZX_K_CS) <= '1'; end if; 
+					if st_d(6) = '1' then 
+						if kt_d = '0' then kb_data(ZX_K_SP) <= '1'; else kb_data(ZX_K_CS) <= '1'; end if; 
 						kb_data(ZX_K_SS) <= '1'; 
 						is_cs_used := '1'; 
 					end if;
-					
-					-- Win
-					--if KB_STATUS(7) = '1' then end if;
 				end if;
-				
-				case usb_idx is
-                when "000"  => current_scancode := KB_DAT0;
-                when "001"  => current_scancode := KB_DAT1;
-                when "010"  => current_scancode := KB_DAT2;
-                when "011"  => current_scancode := KB_DAT3;
-                when "100"  => current_scancode := KB_DAT4;
-                when others => current_scancode := KB_DAT5;
-            end case;
 
-				case current_scancode is							
-
-					-- DEL -> SS + C (P + BIT5 for profi)
-					when X"4c" => 
-						if (is_shift = '0') then 
-							if KB_TYPE = '0' then
-								kb_data(ZX_K_P) <= '1';
-								kb_data(ZX_BIT5) <= '1';
-							else
-								kb_data(ZX_K_SS) <= '1'; 
-								kb_data(ZX_K_C) <= '1'; 
-							end if;
-						end if;	
-						
-					-- INS -> SS + A (O + BIT5 for profi)
-					when X"49" => 
-						if (is_shift = '0') then 
-							if KB_TYPE = '0' then
-								kb_data(ZX_K_O) <= '1';
-								kb_data(ZX_BIT5) <= '1';
-							else
-								kb_data(ZX_K_SS) <= '1'; 							
-								kb_data(ZX_K_A) <= '1'; 
-							end if;
-						end if; 
-					
-					-- Cursor -> CS + 5,6,7,8
-					when X"50" =>	if (is_shift = '0') then kb_data(ZX_K_CS) <= '1'; kb_data(ZX_K_5) <= '1'; is_cs_used := '1'; end if; 
-					when X"51" =>	if (is_shift = '0') then kb_data(ZX_K_CS) <= '1'; kb_Data(ZX_K_6) <= '1'; is_cs_used := '1'; end if; 
-					when X"52" =>	if (is_shift = '0') then kb_data(ZX_K_CS) <= '1'; kb_data(ZX_K_7) <= '1'; is_cs_used := '1'; end if; 
-					when X"4f" =>	if (is_shift = '0') then kb_data(ZX_K_CS) <= '1'; kb_data(ZX_K_8) <= '1'; is_cs_used := '1'; end if; 
-
-					-- ESC -> CS + Space (CS + 1 for profi)
-					when X"29" => 
-						kb_data(ZX_K_CS) <= '1'; 
-						if KB_TYPE = '0' then kb_data(ZX_K_1) <= '1'; else kb_data(ZX_K_SP) <= '1'; end if; 
-						is_cs_used := '1'; 
-						
-					-- Backspace -> CS + 0
-					when X"2a" => kb_data(ZX_K_CS) <= '1'; kb_data(ZX_K_0) <= '1'; is_cs_used := '1'; 
-
-					-- Enter
-					when X"28" =>	kb_data(ZX_K_ENT) <= '1'; -- normal
-					when X"58" =>  kb_data(ZX_K_ENT) <= '1'; -- keypad 					
-					
-					-- Space 
-					when X"2c" =>	kb_data(ZX_K_SP) <= '1';
-					
-					-- Letters
-					when X"04" =>	kb_data(ZX_K_A) <= '1'; -- A
-					when X"05" =>	kb_data(ZX_K_B) <= '1'; -- B								
-					when X"06" =>	kb_data(ZX_K_C) <= '1'; -- C
-					when X"07" =>	kb_data(ZX_K_D) <= '1'; -- D
-					when X"08" =>	kb_data(ZX_K_E) <= '1'; -- E
-					when X"09" =>	kb_data(ZX_K_F) <= '1'; -- F
-					when X"0a" =>	kb_data(ZX_K_G) <= '1'; -- G
-					when X"0b" =>	kb_data(ZX_K_H) <= '1'; -- H
-					when X"0c" =>	kb_data(ZX_K_I) <= '1'; -- I
-					when X"0d" =>	kb_data(ZX_K_J) <= '1'; -- J
-					when X"0e" =>	kb_data(ZX_K_K) <= '1'; -- K
-					when X"0f" =>	kb_data(ZX_K_L) <= '1'; -- L
-					when X"10" =>	kb_data(ZX_K_M) <= '1'; -- M
-					when X"11" =>	kb_data(ZX_K_N) <= '1'; -- N
-					when X"12" =>	kb_data(ZX_K_O) <= '1'; -- O
-					when X"13" =>	kb_data(ZX_K_P) <= '1'; -- P
-					when X"14" =>	kb_data(ZX_K_Q) <= '1'; -- Q
-					when X"15" =>	kb_data(ZX_K_R) <= '1'; -- R
-					when X"16" =>	kb_data(ZX_K_S) <= '1'; -- S
-					when X"17" =>	kb_data(ZX_K_T) <= '1'; -- T
-					when X"18" =>	kb_data(ZX_K_U) <= '1'; -- U
-					when X"19" =>	kb_data(ZX_K_V) <= '1'; -- V
-					when X"1a" =>	kb_data(ZX_K_W) <= '1'; -- W
-					when X"1b" =>	kb_data(ZX_K_X) <= '1'; -- X
-					when X"1c" =>	kb_data(ZX_K_Y) <= '1'; -- Y
-					when X"1d" =>	kb_data(ZX_K_Z) <= '1'; -- Z
-					
-					-- Digits
-					when X"1e" =>	kb_data(ZX_K_1) <= '1'; -- 1
-					when X"1f" =>	kb_data(ZX_K_2) <= '1'; -- 2
-					when X"20" =>	kb_data(ZX_K_3) <= '1'; -- 3
-					when X"21" =>	kb_data(ZX_K_4) <= '1'; -- 4
-					when X"22" =>	kb_data(ZX_K_5) <= '1'; -- 5
-					when X"23" =>	kb_data(ZX_K_6) <= '1'; -- 6
-					when X"24" =>	kb_data(ZX_K_7) <= '1'; -- 7
-					when X"25" =>	kb_data(ZX_K_8) <= '1'; -- 8
-					when X"26" =>	kb_data(ZX_K_9) <= '1'; -- 9
-					when X"27" =>	kb_data(ZX_K_0) <= '1'; -- 0
-					-- Numpad digits
-					when X"59" =>	kb_data(ZX_K_1) <= '1'; -- 1
-					when X"5A" =>	kb_data(ZX_K_2) <= '1'; -- 2
-					when X"5B" =>	kb_data(ZX_K_3) <= '1'; -- 3
-					when X"5C" =>	kb_data(ZX_K_4) <= '1'; -- 4
-					when X"5D" =>	kb_data(ZX_K_5) <= '1'; -- 5
-					when X"5E" =>	kb_data(ZX_K_6) <= '1'; -- 6
-					when X"5F" =>	kb_data(ZX_K_7) <= '1'; -- 7
-					when X"60" =>	kb_data(ZX_K_8) <= '1'; -- 8
-					when X"61" =>	kb_data(ZX_K_9) <= '1'; -- 9
-					when X"62" =>	kb_data(ZX_K_0) <= '1'; -- 0
-					
-					-- Special keys 					
-					-- '/" -> SS+P / SS+7
-					when X"34" => kb_data(ZX_K_SS) <= '1'; if is_shift = '1' then kb_data(ZX_K_P) <= '1'; else kb_data(ZX_K_7) <= '1'; end if; is_ss_used := is_shift;					
-					-- ,/< -> SS+N / SS+R
-					when X"36" => kb_data(ZX_K_SS) <= '1'; if is_shift = '1' then kb_data(ZX_K_R) <= '1'; else kb_data(ZX_K_N) <= '1'; end if; is_ss_used := is_shift;					
-					-- ./> -> SS+M / SS+T
-					when X"37" => kb_data(ZX_K_SS) <= '1'; if is_shift = '1' then kb_data(ZX_K_T) <= '1'; else kb_data(ZX_K_M) <= '1'; end if; is_ss_used := is_shift;					
-					-- ;/: -> SS+O / SS+Z
-					when X"33" => kb_data(ZX_K_SS) <= '1'; if is_shift = '1' then kb_data(ZX_K_Z) <= '1'; else kb_data(ZX_K_O) <= '1'; end if; is_ss_used := is_shift;					
-					
-					-- Macroses
-					
-					-- [,{ -> SS+Y / SS+F (Profi SS + F / Y)
-					when X"2F" => 
-						if KB_TYPE = '0' then
-							kb_data(ZX_K_SS) <= '1';
-							if is_shift = '1' then kb_data(ZX_K_F) <= '1'; else kb_data(ZX_K_Y) <= '1'; end if;
-						else
-							is_macros <= '1'; if is_shift = '1' then macros_key <= ZX_K_F; else macros_key <= ZX_K_Y; end if; 
-						end if;
-					
-					-- ],} -> SS+U / SS+G (Profi SS + U / G)
-					when X"30" => 
-						if KB_TYPE = '0' then
-							kb_data(ZX_K_SS) <= '1';
-							if is_shift = '1' then kb_data(ZX_K_G) <= '1'; else kb_data(ZX_K_U) <= '1'; end if;
-						else
-							is_macros <= '1'; if is_shift = '1' then macros_key <= ZX_K_G; else macros_key <= ZX_K_U; end if; 
-						end if;
-						
-					-- \,| -> SS+D / SS+S (Profi SS + D / S)
-					when X"31" => 
-						if KB_TYPE = '0' then 
-							kb_data(ZX_K_SS) <= '1';
-							if is_shift = '1' then kb_data(ZX_K_S) <= '1'; else kb_data(ZX_K_D) <= '1'; end if;
-						else
-							is_macros <= '1'; if is_shift = '1' then macros_key <= ZX_K_S; else macros_key <= ZX_K_D; end if; 					
-						end if;
-					
-					-- /,? -> SS+V / SS+C
-					when X"38" => kb_data(ZX_K_SS) <= '1'; if is_shift = '1' then kb_data(ZX_K_C) <= '1'; else kb_data(ZX_K_V) <= '1'; end if; is_ss_used := is_shift;					
-					-- =,+ -> SS+L / SS+K
-					when X"2E" => kb_data(ZX_K_SS) <= '1'; if is_shift = '1' then kb_data(ZX_K_K) <= '1'; else kb_data(ZX_K_L) <= '1'; end if; is_ss_used := is_shift;					
-					-- -,_ -> SS+J / SS+0
-					when X"2D" => kb_data(ZX_K_SS) <= '1'; if is_shift = '1' then kb_data(ZX_K_0) <= '1'; else kb_data(ZX_K_J) <= '1'; end if; is_ss_used := is_shift;
-					-- `,~ -> SS+X / SS+A
-					when X"35" => 
-						if (is_shift = '1') then 
-							is_macros <= '1'; macros_key <= ZX_K_A; 
-						else
-							kb_data(ZX_K_SS) <= '1'; kb_data(ZX_K_X) <= '1'; 
-						end if;
-						is_ss_used := '1';
-					-- Keypad * -> SS+B
-					when X"55" => kb_data(ZX_K_SS) <= '1'; kb_data(ZX_K_B) <= '1'; 					
-					-- Keypad - -> SS+J
-					when X"56" => kb_data(ZX_K_SS) <= '1'; kb_data(ZX_K_J) <= '1';					
-					-- Keypad + -> SS+K
-					when X"57" => kb_data(ZX_K_SS) <= '1'; kb_data(ZX_K_K) <= '1';					
-					-- Tab -> CS + I
-					when X"2B" => kb_data(ZX_K_CS) <= '1'; kb_data(ZX_K_I) <= '1'; is_cs_used := '1'; 				
-					-- CapsLock -> CS + SS
-					when X"39" => kb_data(ZX_K_SS) <= '1'; kb_data(ZX_K_CS) <= '1'; is_cs_used := '1';
-					
-					-- PgUp -> CS+3 for ZX (M+BIT5 for profi)
-					when X"4B" => 
-						if is_shift = '0' then
-							if KB_TYPE = '0' then
-								kb_data(ZX_K_M) <= '1';
-								kb_data(ZX_BIT5) <= '1';
-							else
-								kb_data(ZX_K_CS) <= '1'; 
-								kb_data(ZX_K_3) <= '1'; 
-								is_cs_used := '1'; 
-							end if;
-						end if;
-
-					-- PgDown -> CS+4 for ZX (N+BIT5 for profi)
-					when X"4E" => 
-						if is_shift = '0' then
-							if KB_TYPE = '0' then
-								kb_data(ZX_K_N) <= '1';
-								kb_data(ZX_BIT5) <= '1';
-							else
-								kb_data(ZX_K_CS) <= '1'; 
-								kb_data(ZX_K_4) <= '1'; 
-								is_cs_used := '1'; 
-							end if;
-						end if;
-						
-					-- Home -> K+BIT5 for profi
-					when X"4a" =>	
-						if (KB_TYPE = '0' and is_shift = '0') then
-							kb_data(ZX_K_K) <= '1';
-							kb_data(ZX_BIT5) <= '1';
-						end if;
-					
-					-- End -> L+BIT5 for profi
-					when X"4d" =>	
-						if (KB_TYPE = '0' and is_shift = '0') then
-							kb_data(ZX_K_L) <= '1';
-							kb_data(ZX_BIT5) <= '1';
-						end if;
-					
-					-- Fx keys
-					when X"3a" => if KB_TYPE = '0' then kb_data(ZX_K_A) <= '1'; kb_data(ZX_BIT5) <= '1'; end if; -- F1
-					when X"3b" => if KB_TYPE = '0' then kb_data(ZX_K_B) <= '1'; kb_data(ZX_BIT5) <= '1'; end if;	-- F2
-					when X"3c" => if KB_TYPE = '0' then kb_data(ZX_K_C) <= '1'; kb_data(ZX_BIT5) <= '1'; end if;	-- F3
-					when X"3d" => if KB_TYPE = '0' then kb_data(ZX_K_D) <= '1'; kb_data(ZX_BIT5) <= '1'; end if;	-- F4
-					when X"3e" => if KB_TYPE = '0' then kb_data(ZX_K_E) <= '1'; kb_data(ZX_BIT5) <= '1'; end if;	-- F5
-					when X"3f" => if KB_TYPE = '0' then kb_data(ZX_K_F) <= '1'; kb_data(ZX_BIT5) <= '1'; end if;	-- F6
-					when X"40" => if KB_TYPE = '0' then kb_data(ZX_K_G) <= '1'; kb_data(ZX_BIT5) <= '1'; end if;	-- F7
-					when X"41" => if KB_TYPE = '0' then kb_data(ZX_K_H) <= '1'; kb_data(ZX_BIT5) <= '1'; end if;	-- F8
-					when X"42" => if KB_TYPE = '0' then kb_data(ZX_K_I) <= '1'; kb_data(ZX_BIT5) <= '1'; end if;	-- F9
-					when X"43" => if KB_TYPE = '0' then kb_data(ZX_K_J) <= '1'; kb_data(ZX_BIT5) <= '1'; end if;	-- F10
-					when X"44" => if KB_TYPE = '0' then kb_data(ZX_K_Q) <= '1'; kb_data(ZX_K_SS) <= '1'; end if;	-- F11
-					when X"45" => if KB_TYPE = '0' then kb_data(ZX_K_W) <= '1'; kb_data(ZX_K_SS) <= '1'; end if;	-- F12
-	 
-					-- Soft-only keys
-					--when X"46" =>	-- PrtScr
-					--when X"47" =>	-- Scroll Lock
-					--when X"48" =>	-- Pause
-					--when X"65" =>	-- WinMenu
-					
-					when others => null;
-				end case;
+				-- the scancode of this step, from the ROM
+				k1i := to_integer(unsigned(km_q(5 downto 0)));
+				k2i := to_integer(unsigned(km_q(11 downto 6)));
+				if km_q(14) = '1' then
+					is_macros <= '1';
+					macros_key <= k1i - 1;
+				else
+					for i in 0 to 40 loop
+						if k1i = i + 1 or k2i = i + 1 then kb_data(i) <= '1'; end if;
+					end loop;
+				end if;
+				if km_q(12) = '1' then is_cs_used := '1'; end if;
+				if km_q(13) = '1' then is_ss_used := '1'; end if;
 							
 				-- map joysticks to keyboard
 				-- sega joy:  Mode Z Y X C B A Start R L D U On
-				if (usb_idx = "101") then
-				
+				if (usb_ph = "101") then
 					-- sinclair 1
 					if joy_type_l = "001" then 
 						if (joy_l(SC_BTN_UP) = '1') then kb_data(ZX_K_4) <= '1'; end if; -- up
@@ -568,7 +521,7 @@ process (RESET, CLK)
 
 				
 				-- cleanup CS key when SS is marked
-				if (is_ss_used = '1' and is_cs_used = '0' and usb_idx = "101") then 
+				if (is_ss_used = '1' and is_cs_used = '0' and usb_ph = "101") then 
 					kb_data(ZX_K_CS) <= '0';
 				end if;
 							

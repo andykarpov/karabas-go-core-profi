@@ -120,7 +120,7 @@ port (
 	MCU_SCK 				: in  STD_LOGIC;
 	MCU_MOSI 			: in  STD_LOGIC;
 	MCU_MISO 			: out  STD_LOGIC;
-	MCU_IO 			: inout  std_logic_vector(3 downto 0); -- [0] burst ready (N9), [1] burst cs_n (M11), [2] sd2 cs_n, [3] ft cs_n
+	MCU_IO 			: inout  std_logic_vector(3 downto 0); -- [0] INT of link v2 (N9), [1] unused (M11), [2] sd2 cs_n, [3] ft cs_n
 
 	MIDI_TX 				: out std_logic;
 	MIDI_CLK 			: out std_logic;
@@ -152,12 +152,23 @@ signal hdmi_rgb : std_logic_vector(23 downto 0);
 signal hdmi_hsync, hdmi_vsync, hdmi_blank : std_logic;
 
 
--- burst transfers from the mcu (karabas-go-firmware docs/burst_protocol.md)
-signal mcu_burst_ready : std_logic;
+-- MCU link v2 (karabas-go-firmware docs/link_v2.md): INT on IO1, the bitmap OSD, the icons
+signal mcu_int : std_logic;
+signal osd_wr, osd_en, osd_zoom : std_logic;
+signal osd_waddr : std_logic_vector(11 downto 0);
+signal osd_wdata : std_logic_vector(7 downto 0);
+signal osd_fg, osd_bg : std_logic_vector(23 downto 0);
+signal osd_alpha, osd_place : std_logic_vector(1 downto 0);
+signal osd_px, osd_ph : std_logic_vector(4 downto 0);
+signal osd_py : std_logic_vector(3 downto 0);
+signal osd_pw : std_logic_vector(5 downto 0);
+signal icon_act, icon_act2 : std_logic_vector(7 downto 0);
+signal osd_rgb : std_logic_vector(23 downto 0);
+signal osd_hs, osd_vs, osd_de, hdmi_de : std_logic;
 
 begin
 
-MCU_IO(0) <= mcu_burst_ready;
+MCU_IO(0) <= mcu_int;   -- INT of link v2 on N9 (IO1 of the firmware)
 MCU_IO(3 downto 1) <= (others => 'Z');
 
 U1: entity work.profi
@@ -167,7 +178,8 @@ generic map(
 	ENABLE_OPL3 => ENABLE_OPL3,
 	ENABLE_SAA => ENABLE_SAA,
 	ENABLE_SERIAL_MOUSE => ENABLE_SERIAL_MOUSE,
-	NUM_KEYS => NUM_KEYS
+	NUM_KEYS => NUM_KEYS,
+	LINK => 2
 )
 port map(
 	-- clock
@@ -246,8 +258,23 @@ port map(
 	MCU_MOSI 		=> MCU_MOSI,
 	MCU_MISO 		=> MCU_MISO,
 	MCU_IO 			=> MCU_IO,
-	MCU_BURST_CS_N	=> MCU_IO(1), -- firmware IO0 (GPIO14), M11
-	MCU_BURST_READY	=> mcu_burst_ready,
+	MCU_BURST_READY	=> open,
+	MCU_INT			=> mcu_int,
+	OSD_WR			=> osd_wr,
+	OSD_WADDR		=> osd_waddr,
+	OSD_WDATA		=> osd_wdata,
+	OSD_EN			=> osd_en,
+	OSD_FG			=> osd_fg,
+	OSD_BG			=> osd_bg,
+	OSD_ALPHA		=> osd_alpha,
+	OSD_PX			=> osd_px,
+	OSD_PY			=> osd_py,
+	OSD_PW			=> osd_pw,
+	OSD_PH			=> osd_ph,
+	OSD_PLACE		=> osd_place,
+	OSD_ZOOM			=> osd_zoom,
+	ICON_ON			=> open,
+	ICON_ACT			=> icon_act,
 
 	-- midi
 	MIDI_TX 			=> MIDI_TX,
@@ -286,6 +313,47 @@ port map(
 	hdmi_frame_reset => open
 );
 
+-- the bitmap OSD of link v2 and the activity icons (SD card, CF / HDD: no floppy drive here) over the
+-- picture of the scandoubler; its syncs and de go on to HDMI
+icon_act2 <= "00000" & icon_act(2 downto 0);   -- with the floppy drive of the Go
+hdmi_de <= not hdmi_blank;
+U_OSD: entity work.kg_l2_osd_overlay
+generic map(
+	ICONS_N 			=> 3,
+	ICON_SET			=> x"00000210",   -- floppy, SD card, CF / HDD
+	ICON_COLUMN		=> 1,   -- a column at the right edge: the border in every mode (Profi 600 px wide: ~44 px of
+	ICON_SCALE		=> 2,   -- border at the sides, none at the top / bottom at 60 Hz; Spectrum 720: 104 px)
+	ICON_MARGIN		=> 4,
+	ICON_BOX			=> 0    -- the picture around the icon pixels
+)
+port map(
+	wclk				=> clk_bus,
+	osd_wr			=> osd_wr,
+	osd_waddr		=> osd_waddr,
+	osd_wdata		=> osd_wdata,
+	osd_en			=> osd_en,
+	osd_fg			=> osd_fg,
+	osd_bg			=> osd_bg,
+	osd_alpha		=> osd_alpha,
+	osd_px			=> osd_px,
+	osd_py			=> osd_py,
+	osd_pw			=> osd_pw,
+	osd_ph			=> osd_ph,
+	osd_place		=> osd_place,
+	osd_zoom			=> osd_zoom,
+	icon_on			=> x"00",
+	icon_act			=> icon_act2,
+	clk				=> clk_vga,
+	rgb_i				=> hdmi_rgb,
+	hs_i				=> hdmi_hsync,
+	vs_i				=> hdmi_vsync,
+	de_i				=> hdmi_de,
+	rgb_o				=> osd_rgb,
+	hs_o				=> osd_hs,
+	vs_o				=> osd_vs,
+	de_o				=> osd_de
+);
+
 -- Audio I2S DAC
 U3: entity work.kg_pcm5102
 port map (
@@ -303,11 +371,12 @@ port map (
 DAC_MUTE 			<= '1';
 
 VCLK_buf: ODDR2 port map(Q => V_CLK, C0 => clk_vga, C1 => not clk_vga, D0 => '1', D1 => '0');
-VGA_R 				<= hdmi_rgb(23 downto 16) when hdmi_blank = '0' else "00000000";
-VGA_G 				<= hdmi_rgb(15 downto 8) when hdmi_blank = '0' else "00000000";
-VGA_B 				<= hdmi_rgb(7 downto 0) when hdmi_blank = '0' else "00000000";
-VGA_HS 				<= hdmi_hsync;
-VGA_VS 				<= hdmi_vsync;
+-- the picture of the OSD overlay (its syncs and de in step with it)
+VGA_R 				<= osd_rgb(23 downto 16) when osd_de = '1' else "00000000";
+VGA_G 				<= osd_rgb(15 downto 8) when osd_de = '1' else "00000000";
+VGA_B 				<= osd_rgb(7 downto 0) when osd_de = '1' else "00000000";
+VGA_HS 				<= osd_hs;
+VGA_VS 				<= osd_vs;
 
 ESP_RESET_N 		<= 'Z';
 ESP_BOOT_N 			<= 'Z';
