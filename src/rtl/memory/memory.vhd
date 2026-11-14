@@ -6,6 +6,8 @@ library IEEE;
 use IEEE.std_logic_1164.all;
 use IEEE.std_logic_arith.conv_integer;
 use IEEE.numeric_std.all;
+library UNISIM;
+use UNISIM.VComponents.all;
 
 entity memory is
 port (
@@ -112,6 +114,8 @@ architecture RTL of memory is
 	signal port1_di, port2_di : std_logic_vector(7 downto 0);
 	signal port1_rd, port1_wr, port1_rfsh, port2_rd, port2_wr, port2_rfsh : std_logic;
 	signal port2_a_sdr : std_logic_vector(20 downto 0);
+	signal port1_wr_n : std_logic;
+	signal md_oe : std_logic;
 	signal port2_di_sdr : std_logic_vector(7 downto 0);
 	signal port2_rd_sdr, port2_wr_sdr, port2_rfsh_sdr , n_mreq_sdr: std_logic;
 	signal sdr_wr, sdr_rfsh, sdr_idle, sdr_rd,sdr_gs_wait_n : std_logic;
@@ -252,9 +256,34 @@ begin
 
 	-- connect sram (chip1) interface with main cpu
 	MA <= port1_a;
-	MD(7 downto 0) <= port1_di when port1_wr = '1' else (others => 'Z');
+	-- The write strobe /WE comes from an ODDR2 in the IOB: low only in the second half of a CLK_BUS
+	-- period in which port1_wr is 1. The address (combinational, up to 12 ns after the rising edge,
+	-- TS_SRAM_OUT) has half a period to settle before /WE falls, the pulse is half a period (17.8 ns at
+	-- 28 MHz, 20.8 at 24; the -10 SRAM needs 8), and it ends at the next rising edge, before the T80
+	-- moves the address. Before, /WE and the MD drive went to the pads through the page decoders
+	-- (DIVMMC automap -> is_ramDIVMMC -> port1_wr): 12.4 ns, TS_SRAM_OUT missed on Go.
+	-- MD is driven in every write cycle of the CPU (MREQ_n and WR_n low) or of the loader to this
+	-- chip, without the page decoders: the SRAM drives MD only on a read (N_MRD), and whenever /WE is
+	-- low (port1_wr) md_oe is 1. (MD through ODDR2 on T + IOBUF gave no picture at all on Mini G.)
+	port1_wr_n <= not port1_wr;
+
+	ODDR2_MWR: ODDR2
+	port map(
+		Q => N_MWR(0),
+		C0 => CLK_BUS,
+		C1 => not CLK_BUS,
+		CE => '1',
+		D0 => '1',          -- first half: no write
+		D1 => port1_wr_n,   -- second half: write if port1_wr
+		R => '0',
+		S => '0'
+	);
+	N_MWR(1) <= '1';
+
+	md_oe <= (loader_ram_wr and not loader_ram_a(31)) when loader_act = '1' else
+				not (N_MREQ or N_WR);
+	MD(7 downto 0) <= port1_di when md_oe = '1' else (others => 'Z');
 	DO <= MD(7 downto 0);
-	N_MWR <= "10" when port1_wr = '1' else "11";
 	N_MRD <= "10" when port1_rd = '1' else "11";
 
 	-- shared port for profi cpu

@@ -1188,6 +1188,8 @@ begin
 		IMG_WP => open, IMG_PHYS_WR => open, IMG_PHYS => open, IMG_FLUSH => open,
 		FDD_CHNG_WR => open, FDD_CHNG => open, FDD_CHNG_REQ => '0', FDD_CHNG_DS => "00",
 		IMG_ACTIVE => sdc_active,
+		BK_MOUNT => '0', BK_FLUSHED => '0', BK_SLOT => "000", BK_SIZE => x"00000000",   -- no kg_bk_ram here
+		BK_KIND => x"00", BK_RESULT => x"00",
 
 		PORT_OUT_DATA => port_out_data, PORT_OUT_WR => port_out_wr, PORT_OUT_READY => "1111",
 		PORT_IN_DATA => port_in_data, PORT_IN_WR => port_in_wr,
@@ -1263,6 +1265,9 @@ hdf_sdc_byte_in_strobe <= sdc_byte_in_strobe and hdf_own;
 ata_rst <= not ide_reset_n;
 
 u_hdf_ata: entity work.hdf_ata
+generic map (
+	ENABLE_RDB => 0   -- not an Amiga: no RDB in sector 0, the default geometry (area)
+)
 port map (
 	clk                => clk_bus,
 	reset              => areset,

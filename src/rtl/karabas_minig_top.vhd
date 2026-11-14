@@ -307,7 +307,11 @@ hdmi_de <= not hdmi_blank;
 U_OSD: entity work.kg_l2_osd_overlay
 generic map(
 	ICONS_N 			=> 2,
-	ICON_SET			=> x"00000021"
+	ICON_SET			=> x"00000021",
+	ICON_COLUMN		=> 1,   -- a column at the right edge: the border in every mode (Profi 600 px wide: ~44 px of
+	ICON_SCALE		=> 2,   -- border at the sides, none at the top / bottom at 60 Hz; Spectrum 720: 104 px)
+	ICON_MARGIN		=> 4,
+	ICON_BOX			=> 0    -- the picture around the icon pixels
 )
 port map(
 	wclk				=> clk_bus,

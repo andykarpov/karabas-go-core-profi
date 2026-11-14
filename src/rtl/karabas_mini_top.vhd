@@ -107,7 +107,7 @@ port (
 	MCU_SCK 			: in  STD_LOGIC;
 	MCU_MOSI 		: in  STD_LOGIC;
 	MCU_MISO 		: out  STD_LOGIC;
-	MCU_IO 			: inout  std_logic_vector(3 downto 0); -- [0] burst cs_n, [1] burst ready, [2] sd2 cs_n, [3] ft cs_n
+	MCU_IO 			: inout  std_logic_vector(3 downto 0); -- [1] INT of link v2, [2] sd2 cs_n, [3] ft cs_n
 
 	MIDI_TX 			: out std_logic;
 	MIDI_CLK 		: out std_logic;
@@ -140,19 +140,31 @@ signal hdmi_hsync, hdmi_vsync, hdmi_blank : std_logic;
 signal dvi_only : std_logic;
 
 
--- burst transfers from the mcu (karabas-go-firmware docs/burst_protocol.md)
-signal mcu_burst_ready : std_logic;
+-- MCU link v2 (karabas-go-firmware docs/link_v2.md): INT on IO1, the bitmap OSD, the icons
+signal mcu_int : std_logic;
+signal osd_wr, osd_en, osd_zoom : std_logic;
+signal osd_waddr : std_logic_vector(11 downto 0);
+signal osd_wdata : std_logic_vector(7 downto 0);
+signal osd_fg, osd_bg : std_logic_vector(23 downto 0);
+signal osd_alpha, osd_place : std_logic_vector(1 downto 0);
+signal osd_px, osd_ph : std_logic_vector(4 downto 0);
+signal osd_py : std_logic_vector(3 downto 0);
+signal osd_pw : std_logic_vector(5 downto 0);
+signal icon_act, icon_act2 : std_logic_vector(7 downto 0);
+signal osd_rgb : std_logic_vector(23 downto 0);
+signal osd_hs, osd_vs, osd_de, hdmi_de : std_logic;
 
 begin
 
-MCU_IO(1) <= mcu_burst_ready;
+MCU_IO(1) <= mcu_int;
 MCU_IO(0) <= 'Z';
 MCU_IO(3 downto 2) <= (others => 'Z');
 
 U1: entity work.profi
 generic map(
 	ENABLE_FDD		=> 0,
-	SOFTSW_LAYOUT	=> 1
+	SOFTSW_LAYOUT	=> 1,
+	LINK				=> 2
 )
 port map(
 		-- clock
@@ -232,8 +244,23 @@ port map(
 	MCU_MOSI 		=> MCU_MOSI,
 	MCU_MISO 		=> MCU_MISO,
 	MCU_IO 			=> MCU_IO,
-	MCU_BURST_CS_N	=> MCU_IO(0), -- firmware IO0 (GPIO14), G6
-	MCU_BURST_READY	=> mcu_burst_ready,
+	MCU_BURST_READY	=> open,
+	MCU_INT			=> mcu_int,
+	OSD_WR			=> osd_wr,
+	OSD_WADDR		=> osd_waddr,
+	OSD_WDATA		=> osd_wdata,
+	OSD_EN			=> osd_en,
+	OSD_FG			=> osd_fg,
+	OSD_BG			=> osd_bg,
+	OSD_ALPHA		=> osd_alpha,
+	OSD_PX			=> osd_px,
+	OSD_PY			=> osd_py,
+	OSD_PW			=> osd_pw,
+	OSD_PH			=> osd_ph,
+	OSD_PLACE		=> osd_place,
+	OSD_ZOOM			=> osd_zoom,
+	ICON_ON			=> open,
+	ICON_ACT			=> icon_act,
 
 	-- midi
 	MIDI_TX 			=> MIDI_TX,
@@ -272,6 +299,47 @@ port map(
 	hdmi_frame_reset => open
 );
 
+-- the bitmap OSD of link v2 and the activity icons (SD card, CF / HDD: no floppy drive here) over the
+-- picture of the scandoubler; its syncs and de go on to HDMI
+icon_act2 <= "000000" & icon_act(2 downto 1);
+hdmi_de <= not hdmi_blank;
+U_OSD: entity work.kg_l2_osd_overlay
+generic map(
+	ICONS_N 			=> 2,
+	ICON_SET			=> x"00000021",
+	ICON_COLUMN		=> 1,   -- a column at the right edge: the border in every mode (Profi 600 px wide: ~44 px of
+	ICON_SCALE		=> 2,   -- border at the sides, none at the top / bottom at 60 Hz; Spectrum 720: 104 px)
+	ICON_MARGIN		=> 4,
+	ICON_BOX			=> 0    -- the picture around the icon pixels
+)
+port map(
+	wclk				=> clk_bus,
+	osd_wr			=> osd_wr,
+	osd_waddr		=> osd_waddr,
+	osd_wdata		=> osd_wdata,
+	osd_en			=> osd_en,
+	osd_fg			=> osd_fg,
+	osd_bg			=> osd_bg,
+	osd_alpha		=> osd_alpha,
+	osd_px			=> osd_px,
+	osd_py			=> osd_py,
+	osd_pw			=> osd_pw,
+	osd_ph			=> osd_ph,
+	osd_place		=> osd_place,
+	osd_zoom			=> osd_zoom,
+	icon_on			=> x"00",
+	icon_act			=> icon_act2,
+	clk				=> clk_vga,
+	rgb_i				=> hdmi_rgb,
+	hs_i				=> hdmi_hsync,
+	vs_i				=> hdmi_vsync,
+	de_i				=> hdmi_de,
+	rgb_o				=> osd_rgb,
+	hs_o				=> osd_hs,
+	vs_o				=> osd_vs,
+	de_o				=> osd_de
+);
+
 -- HDMI encoder
 U_HDMI: entity work.zhdmi_top
 generic map(
@@ -280,11 +348,11 @@ generic map(
 port map(
 	clk				=> clk_vga,
 	ds80 				=> vmode(3),
-	reset 			=> areset or kb_reset,
-	vga_rgb 			=> hdmi_rgb,
-	vga_hs 			=> hdmi_hsync,
-	vga_vs 			=> hdmi_vsync,
-	vga_de 			=> not hdmi_blank,
+	reset 			=> areset,
+	vga_rgb 			=> osd_rgb,
+	vga_hs 			=> osd_hs,
+	vga_vs 			=> osd_vs,
+	vga_de 			=> osd_de,
 	audio_en 		=> not dvi_only,
 	audio_l 			=> audio_mix_l,
 	audio_r 			=> audio_mix_r,
