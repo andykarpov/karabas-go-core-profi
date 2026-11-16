@@ -35,7 +35,7 @@ JSON = core.json
 # Mini: 1 (26103001 with 2 missed clk_bus -> clk_sdr of the GS SDRAM by 0.55 ns)
 # Mini G: 3 (26103003 with 2 missed TS_SRAM_OUT by 0.34 ns, with 1 by 0.88 ns)
 MAP_T_go ?= 3
-MAP_T_mini ?= 1
+MAP_T_mini ?= 2
 MAP_T_minig ?= 3
 
 MAP_go = -logic_opt off -ol high -t $(MAP_T_go) -xt 0 -register_duplication off -r 4 -global_opt off -mt 2 -ir off -pr b -lc auto -power off

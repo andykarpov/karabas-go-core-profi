@@ -6,6 +6,7 @@ module audio_mixer (
 	
 	input wire speaker,
 	input wire tape_in,
+	input wire signed [15:0] tape_mon,	// the tape monitor (kg_tape_monitor): 0, 2048, 4096 or 6144
 	
 	input wire [7:0] ssg0_a,
 	input wire [7:0] ssg0_b,
@@ -75,7 +76,9 @@ wire signed [15:0] mix_l = 	$signed({tsfm_l[11:0], 4'b0000}) +
 										$signed(opl3_l[15:0]) + 
 										$signed({2'b00, saa_l, 6'b000000}) +
 										$signed({covox_l[11:0], 4'b0000}) + 
-										$signed({2'b00, speaker, 7'b0000000, 6'b0000});
+										$signed(tape_mon) +
+										// the beeper 8192 as on the right (it was 14 bits here: 2048, the left a quarter of the right)
+										$signed({2'b00, speaker, 7'b0000000, 6'b000000});
 
 wire signed [15:0] mix_r = 	$signed({tsfm_r[11:0], 4'b0000}) + 
 										$signed({gs_r[14], gs_r[14:0]}) + 
@@ -84,6 +87,7 @@ wire signed [15:0] mix_r = 	$signed({tsfm_r[11:0], 4'b0000}) +
 										$signed(opl3_r[15:0]) + 
 										$signed({2'b00, saa_r, 6'b000000}) +										
 										$signed({covox_r[11:0], 4'b0000}) + 
+										$signed(tape_mon) +
 										$signed({2'b00, speaker, 7'b0000000, 6'b000000});
 
 // registered: the sum goes to the DACs, HDMI and the level meters from flip-flops
