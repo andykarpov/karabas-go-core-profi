@@ -290,7 +290,9 @@ signal osd_command 		: std_logic_vector(15 downto 0);
 
 -- SOFT switches command
 signal softsw_command	: std_logic_vector(15 downto 0);
-signal softsw_regs		: std_logic_vector(15*8-1 downto 0);
+signal softsw_regs		: std_logic_vector(21*8-1 downto 0);
+signal kb_tape_mon		: std_logic_vector(1 downto 0);   -- Tape monitor (index 20): 0 off, 1 in, 2 out, 3 both
+signal tape_mon_sample	: std_logic_vector(15 downto 0);
 
 -- MCU file mounter
 signal mcu_img_mounted    : std_logic_vector(7 downto 0);
@@ -1133,7 +1135,7 @@ begin
 	U7: entity work.kg_mcu2
 	generic map(
 		CAPS => x"0000",
-		SW_N => 15,
+		SW_N => 21,
 		CS_FILTER => 3,
 		ENABLE_OSD => 1,
 		ENABLE_IMG => 1,
@@ -1340,7 +1342,7 @@ G_SOFTSW1: if LINK = 1 generate
 -- Soft switches from MCU: register n = OSD item n of core.json (Go) / core_mini.json, core_minig.json
 U9: entity work.kg_soft_switches
 generic map(
-	N 					=> 15
+	N 					=> 21
 )
 port map (
 	clk 				=> clk_bus,
@@ -1707,6 +1709,7 @@ port map(
 
 	speaker 			=> speaker,
 	tape_in 			=> TAPE_IN,
+	tape_mon 		=> tape_mon_sample,
 
 	ssg0_a 			=> ssg_cn0_a,
 	ssg0_b 			=> ssg_cn0_b,
@@ -2192,6 +2195,19 @@ dos_rom <= dos_act or (dos_pre and not cpu_mreq_n);
 
 speaker <= port_xxfe_reg(4);
 TAPE_OUT <= port_xxfe_reg(3);
+
+-- the tape monitor (modules rtl/audio/kg_tape_monitor.v, OSD "Tape monitor", index 20 on every board):
+-- TAPE_IN and MIC (#FE bit 3) into the mix, a 1 held longer than 37 ms relaxes to 0 (an open input with
+-- its pullup, MIC left at 1 by the ROM)
+kb_tape_mon <= softsw_regs(20*8+1 downto 20*8);
+U_TAPE_MON: entity work.kg_tape_monitor
+generic map (
+	CLK_HZ => 28000000, HOLD_US => 37000, LEVEL_IN => 4096, LEVEL_OUT => 2048
+)
+port map (
+	clk => clk_bus, mode => kb_tape_mon, tape_in => TAPE_IN, tape_out => port_xxfe_reg(3),
+	in_on => open, out_on => open, sample => tape_mon_sample
+);
 				
 -- SAA1099
 saa_wr_n <= '0' when (cpu_iorq_n = '0' and cpu_wr_n = '0' and loa = x"FF" and dos_act = '0') else '1';

@@ -12,6 +12,7 @@ A port of the Karabas Pro main core to the Karabas Go hardware
 - SAA1099
 - OPL2
 - MIDI by Dream SAM2596
+- Tape monitor in the OSD (Menu+T: off / in / out / both): the tape input and the tape output (MIC) heard in the mix
 - RTC
 - DivMMC / ZC support
 - ESP8266 (ZXUNO, Zifi and ZXEVO standard)
