@@ -16,7 +16,7 @@ A port of the Karabas Pro main core to the Karabas Go hardware
 - RTC
 - DivMMC / ZC support
 - ESP8266 (ZXUNO, Zifi and ZXEVO standard)
-- RS232 over USB (Zifi and ZXEVO standard)
+- RS232 over USB (Zifi and ZXEVO standard), on the core serial port of the board (the second USB serial port, `/dev/serial/by-id/usb-Karabas_Go_<serial>-if02` on Linux)
 - OSD support
 - 2x Sega/Atari Joysticks (go)
 - USB keyboard, mouse, joystiks
