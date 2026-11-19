@@ -370,7 +370,8 @@ port map (
 
 DAC_MUTE 			<= '1';
 
-VCLK_buf: ODDR2 port map(Q => V_CLK, C0 => clk_vga, C1 => not clk_vga, D0 => '1', D1 => '0');
+-- the pixel clock of the VGA DAC, inverted: the DAC takes the pixel on the rising V_CLK, the middle of the pixel
+VCLK_buf: ODDR2 port map(Q => V_CLK, C0 => clk_vga, C1 => not clk_vga, D0 => '0', D1 => '1');
 -- the picture of the OSD overlay (its syncs and de in step with it)
 VGA_R 				<= osd_rgb(23 downto 16) when osd_de = '1' else "00000000";
 VGA_G 				<= osd_rgb(15 downto 8) when osd_de = '1' else "00000000";
