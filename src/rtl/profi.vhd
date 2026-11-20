@@ -405,6 +405,21 @@ signal cs_xxE7 			: std_logic := '0';
 signal cs_xx67 			: std_logic := '0';
 signal cs_rtc_ds 			: std_logic := '0';
 signal cs_rtc_as 			: std_logic := '0';
+-- Gluk (EFF7 bit 7, DFF7 / BFF7) and the I2C ports of ZX Next (103B / 113B) for esxDOS: on when the DivMMC memory is
+-- mapped (esxDOS runs) or outside the DOS / CP/M modes. dos_act stays 1 in BASIC (set by reset and NMI, cleared only by
+-- an M1 at >= 4000h), so then the short decoders of the FDC (RT_F1: xx3B, RT_F2: xxF7) are live: they do not answer
+-- these full addresses while spec_io = 1 (nx_take)
+signal spec_io			: std_logic;
+signal nx_take			: std_logic;
+signal rtc_dm_bin		: std_logic := '0';
+signal nx_oe			: std_logic;
+signal nx_do			: std_logic_vector(7 downto 0);
+signal nx_rtc_a		: std_logic_vector(7 downto 0);
+signal nx_rtc_di		: std_logic_vector(7 downto 0);
+signal nx_rtc_wr		: std_logic;
+signal rtc_a_mux		: std_logic_vector(7 downto 0);
+signal rtc_di_mux		: std_logic_vector(7 downto 0);
+signal rtc_wr_n		: std_logic;
 signal cs_008b				: std_logic := '0';
 signal cs_018b				: std_logic := '0';
 signal cs_028b				: std_logic := '0';
@@ -996,11 +1011,11 @@ port map(
 	JOY_R 			=> joy_r,
 	BTNS           => hw_btn,
 	
-	RTC_A 			=> mc146818_a_bus,
-	RTC_DI 			=> cpu_do_bus,
+	RTC_A 			=> rtc_a_mux,
+	RTC_DI 			=> rtc_di_mux,
 	RTC_DO 			=> mc146818_do_bus,
 	RTC_CS 			=> '1',
-	RTC_WR_N 		=> not mc146818_wr,
+	RTC_WR_N 		=> rtc_wr_n,
 	
 	UART_RX_DATA 	=> usb_uart_rx_data,
 	UART_RX_IDX		=> usb_uart_rx_idx,
@@ -1197,10 +1212,10 @@ begin
 		PORT_IN_DATA => port_in_data, PORT_IN_WR => port_in_wr,
 		PORT_IN_FULL => open, PORT_CFG => port_cfg, PORT_STAT => open, PORT_STAT_WR => open,
 
-		RTC_A => mc146818_a_bus,
-		RTC_DI => cpu_do_bus,
+		RTC_A => rtc_a_mux,
+		RTC_DI => rtc_di_mux,
 		RTC_CS => '1',
-		RTC_WR_N => not mc146818_wr,
+		RTC_WR_N => rtc_wr_n,
 		MATRIX_CMD => matrix_cmd,
 		MATRIX_CMD_WR => matrix_cmd_wr,
 		DEBUG_ADDR => x"0000",
@@ -2028,12 +2043,17 @@ cs_xxfd <= '1' when (cpu_iorq_n = '0' and cpu_m1_n = '1' and hia(15) = '0' and l
 
 -- RTC AS reg (address)
 cs_rtc_as <= '1' when cpu_iorq_n = '0' and cpu_m1_n = '1' and
-							((loa = x"FF" or loa = x"BF") and ((cpm='1' and rom14='1') or (dos_act='1' and rom14='0'))) --  
+							(((loa = x"FF" or loa = x"BF") and ((cpm='1' and rom14='1') or (dos_act='1' and rom14='0'))) or
+							 (cpu_a_bus = x"DFF7" and port_eff7_reg(7) = '1' and spec_io = '1')) -- Gluk: register number
 				     else '0';
 -- RTC DS reg (data)
 cs_rtc_ds <= '1' when cpu_iorq_n = '0' and cpu_m1_n = '1' and 
-							((loa = x"DF" or loa = x"9F") and ((cpm='1' and rom14='1') or (dos_act='1' and rom14='0'))) --  
+							(((loa = x"DF" or loa = x"9F") and ((cpm='1' and rom14='1') or (dos_act='1' and rom14='0'))) or
+							 (cpu_a_bus = x"BFF7" and port_eff7_reg(7) = '1' and spec_io = '1')) -- Gluk: data
 				     else '0';
+spec_io <= '1' when cpm = '0' and (dos_act = '0' or automap = '1') else '0';
+nx_take <= '1' when spec_io = '1' and (cpu_a_bus = x"103B" or cpu_a_bus = x"113B" or cpu_a_bus = x"EFF7" or
+                                      cpu_a_bus = x"DFF7" or cpu_a_bus = x"BFF7") else '0';
 					  
 -- port #7E - write by cpu_wr_n front
 U_PORT_FE: entity work.strobe_reg
@@ -2056,13 +2076,13 @@ port map(
 RT_F2_1 <='0' when (loa(7 downto 5)="001" and loa(1 downto 0)="11" and cpu_iorq_n='0') and ((cpm='1' and rom14='1') or (dos_act='1' and rom14='0')) else '1'; --6D
 RT_F2_2 <='0' when loa(7 downto 5)="101" and loa(1 downto 0)="11" and cpu_iorq_n='0' and cpm='1' and dos_act='0' and rom14='0' else '1'; --75
 RT_F2_3 <='0' when loa(7 downto 5)="111" and loa(1 downto 0)="11" and cpu_iorq_n='0' and cpm='0' and dos_act='1' and rom14='1' else '1'; --F3 and FB
-fdd_cs_pff_n <= RT_F2_1 and RT_F2_2 and RT_F2_3;
+fdd_cs_pff_n <= (RT_F2_1 and RT_F2_2 and RT_F2_3) or nx_take;
 
 RT_F1_1 <= '0' when loa(7)='0' and loa(1 downto 0)="11" and cpu_iorq_n='0' and cpm='1' and dos_act='0' and rom14='0' else '1';
 RT_F1_2 <= '0' when loa(7)='0' and loa(1 downto 0)="11" and cpu_iorq_n='0' and cpm='0' and dos_act='1' and rom14='1' else '1';
 RT_F1 <= RT_F1_1 and RT_F1_2;
 P0 <='0' when (loa(7)='1' and loa(4 downto 0)="00011" and cpu_iorq_n='0') and ((cpm='1' and rom14='1') or (dos_act='1' and rom14='0')) else '1';
-fdd_cs_n <= RT_F1 and P0;
+fdd_cs_n <= (RT_F1 and P0) or nx_take;
 
 -- Ports
 process (reset, areset, clk_bus, ena_cpu, cpu_a_bus, dos_act, cs_xxfe, cs_eff7, cs_7ffd, cs_xxfd, port_7ffd_reg, port_1ffd_reg, cpu_mreq_n, cpu_m1_n, cpu_wr_n, cpu_do_bus, fd_port, cs_008b, kb_turbo, kb_turbo_old)
@@ -2217,6 +2237,43 @@ saa_wr_n <= '0' when (cpu_iorq_n = '0' and cpu_wr_n = '0' and loa = x"FF" and do
 
 mc146818_wr <= '1' when (cs_rtc_ds = '1' and cpu_iorq_n = '0' and cpu_wr_n = '0' and cpu_m1_n = '1') else '0';
 
+-- the data mode of the MC146818 (register B bit 2) as the CPU sets it (the firmware default: BCD)
+process (clk_bus)
+begin
+	if rising_edge(clk_bus) then
+		if mc146818_wr = '1' and mc146818_a_bus = x"0B" then
+			rtc_dm_bin <= cpu_do_bus(2);
+		end if;
+	end if;
+end process;
+
+-- I2C of ZX Next with the DS1307 emulation: the RTC.SYS of esxDOS for the Next
+U_NX_RTC: entity work.next_i2c_rtc
+port map(
+	CLK      => clk_bus,
+	RESET    => reset,
+	EN       => spec_io,
+	A        => cpu_a_bus,
+	DI       => cpu_do_bus,
+	IORQ_N   => cpu_iorq_n,
+	M1_N     => cpu_m1_n,
+	RD_N     => cpu_rd_n,
+	WR_N     => cpu_wr_n,
+	DO       => nx_do,
+	OE       => nx_oe,
+	BIN_MODE => rtc_dm_bin,
+	RTC_A    => nx_rtc_a,
+	RTC_DI   => nx_rtc_di,
+	RTC_WR   => nx_rtc_wr,
+	RTC_DO   => mc146818_do_bus
+);
+
+-- the RTC registers: the CPU ports while it reads / writes the data port, the DS1307 otherwise (its accesses come
+-- with the CPU writes to 103B / 113B, never in the same IO cycle)
+rtc_a_mux <= mc146818_a_bus when cs_rtc_ds = '1' else nx_rtc_a;
+rtc_di_mux <= cpu_do_bus when cs_rtc_ds = '1' else nx_rtc_di;
+rtc_wr_n <= not (mc146818_wr or nx_rtc_wr);
+
 
 -- SPI Z-controller + DivMMC 
 zc_spi_start <= '1' when (loa = x"57" or (loa = x"EB" and cpm = '0' and divmmc_en = '1')) and cpu_iorq_n='0' and cpu_m1_n='1' and loader_act='0' else '0';
@@ -2302,6 +2359,7 @@ begin
 		when x"19" => cpu_di_bus <= ide_do_bus;
 		when x"1A" => cpu_di_bus <= gs_do_bus;
 		when x"1B" => cpu_di_bus <= opl3_do_bus;
+		when x"1C" => cpu_di_bus <= nx_do;
 		when others => cpu_di_bus <= (others => '1');
 	end case;
 end process;
@@ -2333,6 +2391,7 @@ selector <=
 	x"19" when (ide_oe_n = '0' and cpu_iorq_n = '0' and cpu_rd_n = '0' and cpu_m1_n = '1') else 		-- ide
 	x"1A" when (gs_oe = '1' and cpu_iorq_n = '0' and cpu_rd_n = '0' and ds80 = '0') else 				-- gs
 	x"1B" when (cpu_iorq_n = '0' and cpu_rd_n = '0' and cpm='0' and loa = x"C4") else 					-- opl status
+	x"1C" when (nx_oe = '1') else																					-- I2C of ZX Next (103B / 113B)
 	(others => '1');
 
 ext_rom_bank <= kb_rom_bank;
