@@ -22,3 +22,13 @@ A port of the Karabas Pro main core to the Karabas Go hardware
 - USB keyboard, mouse, joystiks
 - VGA 8-8-8 (go), HDMI output (mini/minig)
 
+## esxDOS 0.9.0 on SD card #2
+
+Since build 26112002 the DivMMC of the core has the [esxDOS 0.9.0](https://www.esxdos.org/) ROM (in `profi.kg`, OSD DivMMC = On). This ROM checks the version of `SYS/ESXDOS.SYS` and does not start with the system files of 0.8.x, so update SD card #2 together with the core:
+
+- copy the `SYS` and `BIN` folders of [esxdos090.zip](https://www.esxdos.org/files/esxdos090.zip) to the root of SD card #2 (the system commands are in `SYS/BIN` now; their old copies in `BIN` are not used any more);
+- long file names: take the new `SYS/CONFIG/ESXDOS.CFG` or add the line `LFN=1` to yours;
+- ZX Next on the same card: replace `machines/next/ESXMMC.BIN` with `ROMS/esxdos-0.9.0-divmmc.bin` of the archive, renamed to `ESXMMC.BIN` (the Next machines with DivMMC need the same version as `SYS`);
+- `NMI.SYS` / `RTC.SYS` made for older esxDOS versions must be rebuilt for the new addresses ($2000 / $2F00);
+- the ROM itself is in `profi.kg`: do not flash it with the `FLASHERS` tapes of the archive.
+
