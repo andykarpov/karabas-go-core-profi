@@ -16,9 +16,9 @@
     {"filename": "roms/gs105b.rom", "address": 2147483648}
     ],
     "boards": {
-        "go": {"link": 2, "build": "26112002", "bitstream": "karabas_go.bin"},
-        "mini": {"link": 2, "build": "26112002", "bitstream": "karabas_mini.bin"},
-        "minig": {"bitstream": "karabas_minig.bin", "link": 2, "build": "26112002"}
+        "go": {"link": 2, "build": "26112104", "bitstream": "karabas_go.bin"},
+        "mini": {"link": 2, "build": "26112104", "bitstream": "karabas_mini.bin"},
+        "minig": {"bitstream": "karabas_minig.bin", "link": 2, "build": "26112103"}
     },
     "osd": [
     {"type": "R", "name": "ROM Bank", "default": 0, "page": 4, "options": [
