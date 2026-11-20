@@ -12,13 +12,13 @@
     {"filename": "roms/bios_pqdos.rom", "address": 1114112},
     {"filename": "roms/FDImageGO.rom", "address": 1179648},
     {"filename": "roms/ROMain_fatall_ramdisk_D.rom", "address": 1245184},
-    {"filename": "roms/esxdos089.bin", "address": 1310720},
+    {"filename": "roms/esxdos090.bin", "address": 1310720},
     {"filename": "roms/gs105b.rom", "address": 2147483648}
     ],
     "boards": {
-        "go": {"link": 2, "build": "26111814", "bitstream": "karabas_go.bin"},
-        "mini": {"link": 2, "build": "26111814", "bitstream": "karabas_mini.bin"},
-        "minig": {"bitstream": "karabas_minig.bin", "link": 2, "build": "26111814"}
+        "go": {"link": 2, "build": "26112002", "bitstream": "karabas_go.bin"},
+        "mini": {"link": 2, "build": "26112002", "bitstream": "karabas_mini.bin"},
+        "minig": {"bitstream": "karabas_minig.bin", "link": 2, "build": "26112002"}
     },
     "osd": [
     {"type": "R", "name": "ROM Bank", "default": 0, "page": 4, "options": [
